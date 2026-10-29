@@ -257,7 +257,7 @@ export default function SettingsModal({
             aria-selected={activeSettingsTab === tab.id}
             aria-controls={tab.panelId}
             data-action={`switchSettingsTab('${tab.id}')`}
-            className={`flex min-h-12 items-center justify-center rounded-xl px-2 py-2 text-center leading-tight transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${
+            className={`flex min-h-10 items-center justify-center rounded-lg px-2 py-1.5 text-center leading-tight transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${
               activeSettingsTab === tab.id
                 ? "bg-teal-600 text-white shadow-sm"
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
