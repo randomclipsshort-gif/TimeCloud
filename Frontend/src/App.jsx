@@ -1662,8 +1662,13 @@ export default function App() {
       } catch (error) {
         if (error?.code === "23514") {
           showToast("Time Out requires an active cloud-recorded Time In and can only be recorded once.", "warning");
+        } else if (error?.code === "22023") {
+          showToast("The server rejected Time Out because the shift time is invalid or the clock-out window has ended. Use Manual Entry to correct a missed punch.", "error");
+        } else if (error?.code === "42702") {
+          showToast("The cloud clock-out function needs its latest Supabase migration. Contact the project administrator to apply pending migrations.", "error");
         } else {
-          showToast("Time Out could not be saved to the cloud. Check your connection and try again.", "error");
+          console.error("Time Out cloud save failed:", error);
+          showToast(`Time Out could not be saved to the cloud${error?.message ? `: ${error.message}` : ". Check your connection and try again."}`, "error");
         }
         return;
       }
