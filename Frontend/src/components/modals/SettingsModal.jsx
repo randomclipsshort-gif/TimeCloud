@@ -241,28 +241,31 @@ export default function SettingsModal({
           <i className="fa-solid fa-xmark text-lg"></i>
         </button>
       </div>
-      <div className="flex space-x-2 border-b border-slate-200 pb-3 mb-6 overflow-x-auto text-xs font-semibold">
-        <button data-action="switchSettingsTab(&#x27;earnings&#x27;)" id="tabBtnEarnings" className={activeSettingsTab === "earnings" ? "px-4 py-2 rounded-xl bg-teal-600 text-white transition cursor-pointer shadow-xs" : "px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer"}>
-          
-            Earnings &amp; Rates
-          
-        </button>
-        <button data-action="switchSettingsTab(&#x27;deductions&#x27;)" id="tabBtnDeductions" className={activeSettingsTab === "deductions" ? "px-4 py-2 rounded-xl bg-teal-600 text-white transition cursor-pointer shadow-xs" : "px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer"}>
-          
-            Deductions &amp; Leave Balances
-          
-        </button>
-        <button data-action="switchSettingsTab(&#x27;attendance&#x27;)" id="tabBtnAttendance" className={activeSettingsTab === "attendance" ? "px-4 py-2 rounded-xl bg-teal-600 text-white transition cursor-pointer shadow-xs" : "px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer"}>
-          Attendance &amp; Timekeeping
-        </button>
-        <button data-action="switchSettingsTab(&#x27;general&#x27;)" id="tabBtnGeneral" className={activeSettingsTab === "general" ? "px-4 py-2 rounded-xl bg-teal-600 text-white transition cursor-pointer shadow-xs" : "px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer"}>
-          
-            General Preferences
-          
-        </button>
-        <button data-action="switchSettingsTab(&#x27;holidays&#x27;)" id="tabBtnHolidays" className={activeSettingsTab === "holidays" ? "px-4 py-2 rounded-xl bg-teal-600 text-white transition cursor-pointer shadow-xs" : "px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer"}>
-          Manage Holidays
-        </button>
+      <div role="tablist" aria-label="System configuration sections" className="mb-6 grid grid-cols-2 gap-2 border-b border-slate-200 pb-4 text-xs font-semibold sm:grid-cols-3 lg:grid-cols-5">
+        {[
+          { id: "earnings", label: "Earnings & Rates", tabId: "tabBtnEarnings", panelId: "settingsTabEarnings" },
+          { id: "deductions", label: "Deductions & Leave", tabId: "tabBtnDeductions", panelId: "settingsTabDeductions" },
+          { id: "attendance", label: "Attendance & Timekeeping", tabId: "tabBtnAttendance", panelId: "settingsTabAttendance" },
+          { id: "general", label: "General Preferences", tabId: "tabBtnGeneral", panelId: "settingsTabGeneral" },
+          { id: "holidays", label: "Manage Holidays", tabId: "tabBtnHolidays", panelId: "settingsTabHolidays" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            id={tab.tabId}
+            aria-selected={activeSettingsTab === tab.id}
+            aria-controls={tab.panelId}
+            data-action={`switchSettingsTab('${tab.id}')`}
+            className={`flex min-h-12 items-center justify-center rounded-xl px-2 py-2 text-center leading-tight transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${
+              activeSettingsTab === tab.id
+                ? "bg-teal-600 text-white shadow-sm"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
       <div id="settingsTabEarnings" className={activeSettingsTab === "earnings" ? "space-y-5 text-xs" : "space-y-5 text-xs hidden"}>
         <section className="space-y-3 rounded-xl border border-teal-200 bg-teal-50 p-4" aria-labelledby="salaryVaultHeading">
@@ -647,20 +650,17 @@ export default function SettingsModal({
           </form>
         </section>
       </div>
-      <div className="flex items-center justify-between pt-6 border-t border-slate-200 mt-6 text-xs">
-        <span className="text-slate-500">
-          Salary data syncs only while the encrypted vault is unlocked; other workspace changes sync after saving.
-        </span>
-        <div className="space-x-2">
-          <button data-action="closeModal(&#x27;settingsModal&#x27;)" className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-xl transition cursor-pointer">
-            
-              Cancel
-            
+      <div className="mt-6 space-y-4 border-t border-slate-200 pt-4 text-xs">
+        <p className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 leading-relaxed text-slate-600">
+          <i className="fa-solid fa-circle-info mt-0.5 shrink-0 text-teal-600" aria-hidden="true" />
+          <span>Salary data syncs only while the encrypted vault is unlocked; other workspace changes sync after saving.</span>
+        </p>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" data-action="closeModal(&#x27;settingsModal&#x27;)" className="rounded-xl bg-slate-100 px-5 py-2.5 font-medium text-slate-700 transition hover:bg-slate-200">
+            Cancel
           </button>
-          <button type="button" onClick={handleSaveSettings} disabled={settingsSaving} className="bg-teal-600 hover:bg-teal-700 text-white font-medium px-5 py-2 rounded-xl shadow transition cursor-pointer disabled:opacity-60">
-            
-              {settingsSaving ? "Saving..." : "Save Configurations"}
-            
+          <button type="button" onClick={handleSaveSettings} disabled={settingsSaving} className="rounded-xl bg-teal-600 px-5 py-2.5 font-medium text-white shadow-sm transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60">
+            {settingsSaving ? "Saving..." : "Save Configurations"}
           </button>
         </div>
       </div>
