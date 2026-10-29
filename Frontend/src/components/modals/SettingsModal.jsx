@@ -252,6 +252,9 @@ export default function SettingsModal({
             Deductions &amp; Leave Balances
           
         </button>
+        <button data-action="switchSettingsTab(&#x27;attendance&#x27;)" id="tabBtnAttendance" className={activeSettingsTab === "attendance" ? "px-4 py-2 rounded-xl bg-teal-600 text-white transition cursor-pointer shadow-xs" : "px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer"}>
+          Attendance &amp; Timekeeping
+        </button>
         <button data-action="switchSettingsTab(&#x27;general&#x27;)" id="tabBtnGeneral" className={activeSettingsTab === "general" ? "px-4 py-2 rounded-xl bg-teal-600 text-white transition cursor-pointer shadow-xs" : "px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer"}>
           
             General Preferences
@@ -393,43 +396,18 @@ export default function SettingsModal({
             </p>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-100 pt-4">
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1" htmlFor="settingEarlyPunchWindow">
-              Allow early Time In (minutes)
-            </label>
-            <input
-              type="number"
-              id="settingEarlyPunchWindow"
-              min="0"
-              max="120"
-              step="1"
-              value={settingsDraft.earlyPunchWindowMinutes}
-              onChange={(event) => updateDraft("earlyPunchWindowMinutes", Math.min(120, Math.max(0, Number(event.target.value) || 0)))}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
-            />
-            <p className="mt-1 text-[11px] text-slate-500">Time In opens this many minutes before the scheduled start. Default: 15.</p>
-          </div>
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1" htmlFor="settingLateGracePeriod">
-              Late grace period (minutes)
-            </label>
-            <input
-              type="number"
-              id="settingLateGracePeriod"
-              min="0"
-              max="120"
-              step="1"
-              value={settingsDraft.lateGracePeriodMinutes}
-              onChange={(event) => updateDraft("lateGracePeriodMinutes", Math.min(120, Math.max(0, Number(event.target.value) || 0)))}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
-            />
-            <p className="mt-1 text-[11px] text-slate-500">Changes Late status only, not punch eligibility. Default: 15.</p>
-          </div>
-        </div>
         <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-600">
-          Holiday-pay estimates use the configured daily wage and recorded hours. Calculations run locally after unlocking the encrypted salary vault. Eligibility and company-specific rules must be confirmed separately.
+        Holiday-pay estimates use the configured daily wage and recorded hours. Calculations run locally after unlocking the encrypted salary vault. Confirm eligibility below; company-specific pay rules must be verified separately.
         </p>
+        <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <input
+          type="checkbox"
+          checked={settingsDraft.holidayEligibilityConfirmed}
+          onChange={(event) => updateDraft("holidayEligibilityConfirmed", event.target.checked)}
+          className="h-4 w-4 accent-teal-600"
+        />
+        <span className="text-[11px] text-slate-700">Confirm employee eligibility for unworked regular-holiday pay estimates</span>
+        </label>
       </div>
       <div id="settingsTabDeductions" className={activeSettingsTab === "deductions" ? "space-y-5 text-xs" : "space-y-5 text-xs hidden"}>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -491,6 +469,46 @@ export default function SettingsModal({
           </span>
         </div>
       </div>
+      <div id="settingsTabAttendance" className={activeSettingsTab === "attendance" ? "space-y-5 text-xs" : "space-y-5 text-xs hidden"}>
+        <div>
+          <h4 className="font-bold text-slate-800">Timekeeping rules</h4>
+          <p className="mt-1 text-[11px] text-slate-500">Control when punches are available and how late attendance is classified.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1" htmlFor="settingEarlyPunchWindow">
+              Allow early Time In (minutes)
+            </label>
+            <input
+              type="number"
+              id="settingEarlyPunchWindow"
+              min="0"
+              max="120"
+              step="1"
+              value={settingsDraft.earlyPunchWindowMinutes}
+              onChange={(event) => updateDraft("earlyPunchWindowMinutes", Math.min(120, Math.max(0, Number(event.target.value) || 0)))}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+            />
+            <p className="mt-1 text-[11px] text-slate-500">Time In opens this many minutes before the scheduled start. Default: 15.</p>
+          </div>
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1" htmlFor="settingLateGracePeriod">
+              Late grace period (minutes)
+            </label>
+            <input
+              type="number"
+              id="settingLateGracePeriod"
+              min="0"
+              max="120"
+              step="1"
+              value={settingsDraft.lateGracePeriodMinutes}
+              onChange={(event) => updateDraft("lateGracePeriodMinutes", Math.min(120, Math.max(0, Number(event.target.value) || 0)))}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+            />
+            <p className="mt-1 text-[11px] text-slate-500">Changes Late status only, not punch eligibility. Default: 15.</p>
+          </div>
+        </div>
+      </div>
       <div id="settingsTabGeneral" className={activeSettingsTab === "general" ? "space-y-5 text-xs" : "space-y-5 text-xs hidden"}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
@@ -521,6 +539,20 @@ export default function SettingsModal({
           </div>
           <input type="checkbox" disabled className="w-4 h-4 accent-teal-600 rounded cursor-not-allowed" aria-label="Session timeout managed by Supabase" />
         </div>
+        <section className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+          <h4 className="text-sm font-bold text-rose-800">Privacy and account</h4>
+          <p className="mt-1 text-xs leading-relaxed text-rose-700">
+            Attendance, leave, and expenses sync to your private cloud workspace. Salary contents in an initialized vault are encrypted client-side; older cloud salary fields are retained until a separately approved cleanup. Supabase administrators can access cloud workspace records and encrypted vault metadata, but should not be able to decrypt vault contents without your passphrase. Keep devices and exports private.
+          </p>
+          <button
+            type="button"
+            onClick={onDeleteAccount}
+            disabled={accountDeletionLoading}
+            className="mt-3 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {accountDeletionLoading ? "Deleting account..." : "Delete my account and data"}
+          </button>
+        </section>
       </div>
       <div id="settingsTabHolidays" className={activeSettingsTab === "holidays" ? "space-y-5 text-xs" : "space-y-5 text-xs hidden"}>
         <section className="space-y-3" aria-labelledby="manageHolidaysHeading">
@@ -539,15 +571,6 @@ export default function SettingsModal({
               placeholder="Enter locality to display configured local holidays"
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800"
             />
-          </label>
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <input
-              type="checkbox"
-              checked={settingsDraft.holidayEligibilityConfirmed}
-              onChange={(event) => updateDraft("holidayEligibilityConfirmed", event.target.checked)}
-              className="h-4 w-4 accent-teal-600"
-            />
-            <span className="text-[11px] text-slate-700">Confirm employee eligibility for unworked regular-holiday pay estimates</span>
           </label>
           <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
             {settingsDraft.holidays.map((holiday) => (
@@ -623,20 +646,6 @@ export default function SettingsModal({
             </button>
           </form>
         </section>
-      </div>
-      <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4">
-        <h4 className="text-sm font-bold text-rose-800">Privacy and account</h4>
-        <p className="mt-1 text-xs leading-relaxed text-rose-700">
-          Attendance, leave, and expenses sync to your private cloud workspace. Salary contents in an initialized vault are encrypted client-side; older cloud salary fields are retained until a separately approved cleanup. Supabase administrators can access cloud workspace records and encrypted vault metadata, but should not be able to decrypt vault contents without your passphrase. Keep devices and exports private.
-        </p>
-        <button
-          type="button"
-          onClick={onDeleteAccount}
-          disabled={accountDeletionLoading}
-          className="mt-3 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {accountDeletionLoading ? "Deleting account..." : "Delete my account and data"}
-        </button>
       </div>
       <div className="flex items-center justify-between pt-6 border-t border-slate-200 mt-6 text-xs">
         <span className="text-slate-500">
