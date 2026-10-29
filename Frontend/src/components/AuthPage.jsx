@@ -4,6 +4,13 @@ import { supabase, supabaseConfigured } from "../lib/supabase.js";
 const fieldClassName =
   "w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20";
 
+function getAuthErrorMessage(error, fallback) {
+  if (error?.message === "Failed to fetch") {
+    return "Could not reach Supabase. Check that VITE_SUPABASE_URL points to your active project and that your network can reach it.";
+  }
+  return error?.message || fallback;
+}
+
 function AuthField({ id, label, icon, ...inputProps }) {
   return (
     <div>
@@ -50,9 +57,14 @@ export default function AuthPage({ open, recoveryMode = false, onRecoveryComplet
     setError("");
     try {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError) setError(signInError.message);
-    } catch {
-      setError("Sign in failed because the authentication service could not be reached. Try again.");
+      if (signInError) {
+        setError(getAuthErrorMessage(signInError, "Sign in failed. Try again."));
+      }
+    } catch (signInError) {
+      setError(getAuthErrorMessage(
+        signInError,
+        "Sign in failed because the authentication service could not be reached. Try again.",
+      ));
     } finally {
       setLoading(false);
     }
@@ -72,17 +84,20 @@ export default function AuthPage({ open, recoveryMode = false, onRecoveryComplet
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: name } },
+        options: { data: name ? { full_name: name } : {} },
       });
       if (signUpError) {
-        setError(signUpError.message);
+        setError(getAuthErrorMessage(signUpError, "Registration failed. Try again."));
         return;
       }
       if (!data.session) {
         setMessage("Check your email to confirm your account, then sign in.");
       }
-    } catch {
-      setError("Registration failed because the authentication service could not be reached. Try again.");
+    } catch (signUpError) {
+      setError(getAuthErrorMessage(
+        signUpError,
+        "Registration failed because the authentication service could not be reached. Try again.",
+      ));
     } finally {
       setLoading(false);
     }
@@ -216,7 +231,7 @@ export default function AuthPage({ open, recoveryMode = false, onRecoveryComplet
         )}
 
         {recoveryMode ? (
-          <form onSubmit={handlePasswordUpdate} className="space-y-4">
+          <form key="set-password" onSubmit={handlePasswordUpdate} className="space-y-4">
             <AuthField
               id="newPassword"
               name="password"
@@ -244,7 +259,7 @@ export default function AuthPage({ open, recoveryMode = false, onRecoveryComplet
             </button>
           </form>
         ) : isRecovery ? (
-          <form onSubmit={handlePasswordReset} className="space-y-4">
+          <form key="recover" onSubmit={handlePasswordReset} className="space-y-4">
             <AuthField
               id="recoveryEmail"
               name="email"
@@ -264,6 +279,7 @@ export default function AuthPage({ open, recoveryMode = false, onRecoveryComplet
           </form>
         ) : isLogin ? (
           <form
+            key="login"
             id="auth-panel-login"
             role="tabpanel"
             aria-labelledby="auth-tab-login"
@@ -304,6 +320,7 @@ export default function AuthPage({ open, recoveryMode = false, onRecoveryComplet
           </form>
         ) : (
           <form
+            key="register"
             id="auth-panel-register"
             role="tabpanel"
             aria-labelledby="auth-tab-register"
@@ -313,11 +330,10 @@ export default function AuthPage({ open, recoveryMode = false, onRecoveryComplet
             <AuthField
               id="regName"
               name="name"
-              label="Full Name"
+              label="Display Name (optional)"
               icon="fa-user"
               type="text"
               autoComplete="name"
-              required
               placeholder="Alex Morgan"
             />
             <AuthField

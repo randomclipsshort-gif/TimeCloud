@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 export default function SettingsModal({
   open,
@@ -6,48 +6,217 @@ export default function SettingsModal({
   holidays,
   selectedLocality,
   holidayEligibilityConfirmed,
+  settingsBalances,
   dailyWage,
   dailyAllowance,
   overtimeMultiplier,
   earlyPunchWindowMinutes,
   lateGracePeriodMinutes,
-  onLocalityChange,
-  onHolidayEligibilityChange,
-  onDailyWageChange,
-  onDailyAllowanceChange,
-  onOvertimeMultiplierChange,
-  onEarlyPunchWindowChange,
-  onLateGracePeriodChange,
   nightDifferential,
-  onNightDifferentialChange,
-  onToggleHoliday,
-  onUpdateHolidayDate,
-  onAddHoliday,
   onDeleteAccount,
   accountDeletionLoading,
+  onSaveSettings,
+  salaryVaultStatus,
+  salaryVaultError,
+  salaryVaultConflict,
+  salaryVaultSyncing,
+  onUnlockSalaryVault,
+  onLockSalaryVault,
+  onRotateSalaryVault,
+  onReloadSalaryVault,
+  onSettingsValidationError,
 }) {
+  const [settingsDraft, setSettingsDraft] = useState(null);
   const [holidayName, setHolidayName] = useState("");
   const [holidayDate, setHolidayDate] = useState("");
   const [holidayType, setHolidayType] = useState("special-non-working");
   const [holidayLocality, setHolidayLocality] = useState("");
   const [holidayDescription, setHolidayDescription] = useState("");
+  const [vaultPassphrase, setVaultPassphrase] = useState("");
+  const [vaultPassphraseConfirmation, setVaultPassphraseConfirmation] = useState("");
+  const [vaultNextPassphrase, setVaultNextPassphrase] = useState("");
+  const [vaultNextPassphraseConfirmation, setVaultNextPassphraseConfirmation] = useState("");
+  const [rotationOpen, setRotationOpen] = useState(false);
+  const [vaultActionLoading, setVaultActionLoading] = useState(false);
+  const [vaultActionError, setVaultActionError] = useState("");
+  const [settingsSaving, setSettingsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setSettingsDraft(null);
+      setVaultPassphrase("");
+      setVaultPassphraseConfirmation("");
+      setVaultNextPassphrase("");
+      setVaultNextPassphraseConfirmation("");
+      setRotationOpen(false);
+      setVaultActionError("");
+      setSettingsSaving(false);
+      return;
+    }
+    setSettingsDraft({
+      holidays: holidays.map((holiday) => ({ ...holiday })),
+      selectedLocality,
+      holidayEligibilityConfirmed,
+      dailyWage,
+      dailyAllowance,
+      overtimeMultiplier,
+      earlyPunchWindowMinutes,
+      lateGracePeriodMinutes,
+      nightDifferential,
+      settingsBalances: { ...settingsBalances },
+    });
+  }, [open]);
+
+  const updateDraft = (key, value) => {
+    setSettingsDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const handleRotateVault = async (event) => {
+    event.preventDefault();
+    setVaultActionLoading(true);
+    setVaultActionError("");
+    try {
+      await onRotateSalaryVault(
+        vaultNextPassphrase,
+        vaultNextPassphraseConfirmation,
+      );
+      setVaultNextPassphrase("");
+      setVaultNextPassphraseConfirmation("");
+      setRotationOpen(false);
+    } catch (error) {
+      setVaultActionError(error instanceof Error
+        ? error.message
+        : "Unable to change the salary-vault passphrase.");
+    } finally {
+      setVaultActionLoading(false);
+    }
+  };
+
+  const handleVaultSubmit = async (event) => {
+    event.preventDefault();
+    setVaultActionLoading(true);
+    setVaultActionError("");
+    try {
+      const unlocked = await onUnlockSalaryVault(vaultPassphrase, vaultPassphraseConfirmation);
+      if (unlocked?.settings) {
+        setSettingsDraft((current) => ({
+          ...current,
+          dailyWage: unlocked.settings.dailyWage,
+          dailyAllowance: unlocked.settings.dailyAllowance,
+          overtimeMultiplier: unlocked.settings.overtimeMultiplier,
+          nightDifferential: unlocked.settings.nightDifferential,
+        }));
+      }
+      setVaultPassphrase("");
+      setVaultPassphraseConfirmation("");
+    } catch (error) {
+      setVaultActionError(error instanceof Error
+        ? error.message
+        : "Unable to unlock the encrypted salary vault.");
+    } finally {
+      setVaultActionLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setSettingsSaving(true);
+    try {
+      await onSaveSettings(settingsDraft);
+    } catch {
+      setVaultActionError("Settings could not be saved.");
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  const handleLockVault = async () => {
+    setVaultActionLoading(true);
+    setVaultActionError("");
+    try {
+      if ((await onLockSalaryVault()) === false) return;
+      setSettingsDraft((current) => ({
+        ...current,
+        dailyWage: "",
+        dailyAllowance: "0",
+        overtimeMultiplier: "1.25",
+        nightDifferential: "10",
+      }));
+    } finally {
+      setVaultActionLoading(false);
+    }
+  };
 
   const handleAddHoliday = (event) => {
     event.preventDefault();
-    if (onAddHoliday({
-      name: holidayName,
-      date: holidayDate,
-      type: holidayType,
-      locality: holidayLocality,
-      description: holidayDescription,
-    })) {
-      setHolidayName("");
-      setHolidayDate("");
-      setHolidayType("special-non-working");
-      setHolidayLocality("");
-      setHolidayDescription("");
+    const typeDetails = {
+      "regular-holiday": { classification: "Regular Holiday" },
+      "special-non-working": { classification: "Special Non-Working Day" },
+      "special-working": { classification: "Special Working Day" },
+      "local-holiday": { classification: "Local Holiday" },
+      "ordinary-working": { classification: "Ordinary Working Day" },
+      "company-break": { classification: "Company Break" },
+    }[holidayType];
+    const name = holidayName.trim();
+    const locality = holidayLocality.trim();
+    const parsedDate = new Date(`${holidayDate}T00:00:00`);
+    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(holidayDate) &&
+      !Number.isNaN(parsedDate.getTime()) &&
+      `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, "0")}-${String(parsedDate.getDate()).padStart(2, "0")}` === holidayDate;
+
+    if (!name || !validDate || !typeDetails ||
+      (typeDetails.classification === "Local Holiday" && !locality) ||
+      settingsDraft.holidays.some((holiday) => holiday.date === holidayDate)) {
+      if (!name || !validDate) {
+        onSettingsValidationError("Enter a holiday name and a valid date.");
+      } else if (!typeDetails) {
+        onSettingsValidationError("Choose a valid holiday type.");
+      } else if (typeDetails.classification === "Local Holiday" && !locality) {
+        onSettingsValidationError("Enter the locality for a local holiday.");
+      } else {
+        onSettingsValidationError("A holiday is already configured for that date.");
+      }
+      return;
     }
+
+    updateDraft("holidays", [
+      ...settingsDraft.holidays,
+      {
+        id: `holiday-${holidayDate}-${Date.now()}`,
+        date: holidayDate,
+        name,
+        description: holidayDescription.trim(),
+        locality: locality || undefined,
+        ...typeDetails,
+        enabled: true,
+        custom: true,
+      },
+    ]);
+    setHolidayName("");
+    setHolidayDate("");
+    setHolidayType("special-non-working");
+    setHolidayLocality("");
+    setHolidayDescription("");
   };
+
+  const updateHolidayDate = (holidayId, date) => {
+    const parsedDate = new Date(`${date}T00:00:00`);
+    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+      !Number.isNaN(parsedDate.getTime()) &&
+      `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, "0")}-${String(parsedDate.getDate()).padStart(2, "0")}` === date;
+    if (!validDate) {
+      onSettingsValidationError("Enter a valid holiday date.");
+      return;
+    }
+    if (settingsDraft.holidays.some((holiday) => holiday.id !== holidayId && holiday.date === date)) {
+      onSettingsValidationError("A holiday is already configured for that date.");
+      return;
+    }
+    updateDraft("holidays", settingsDraft.holidays.map((holiday) =>
+      holiday.id === holidayId ? { ...holiday, date } : holiday,
+    ));
+  };
+
+  if (!settingsDraft) return null;
 
   return (
   <div id="settingsModal" className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-hidden={!open} style={{ display: open ? "flex" : "none" }}>
@@ -93,18 +262,109 @@ export default function SettingsModal({
         </button>
       </div>
       <div id="settingsTabEarnings" className={activeSettingsTab === "earnings" ? "space-y-5 text-xs" : "space-y-5 text-xs hidden"}>
+        <section className="space-y-3 rounded-xl border border-teal-200 bg-teal-50 p-4" aria-labelledby="salaryVaultHeading">
+          <div>
+            <h4 id="salaryVaultHeading" className="font-bold text-teal-900">Encrypted salary sync</h4>
+            <p className="mt-1 text-[11px] leading-relaxed text-teal-800">
+              A separate vault passphrase encrypts salary data in this browser before upload. It is never sent to Supabase or saved on this device. Use the same passphrase on each device. If you lose it and all unlocked devices, the vault cannot be recovered.
+            </p>
+          </div>
+          <p className="text-[11px] font-semibold text-teal-900" role="status">
+            {salaryVaultStatus === "unlocked" && (salaryVaultSyncing
+              ? "Encrypted salary changes are syncing or loading..."
+              : "Vault unlocked. Salary data is encrypted before cloud sync.")}
+            {salaryVaultStatus === "locked" && "Encrypted vault found. Unlock it to view or sync salary data."}
+            {salaryVaultStatus === "uninitialized" && "Create a vault to encrypt and sync existing salary settings and earnings."}
+            {salaryVaultStatus === "unavailable" && "The encrypted salary-vault table is not installed yet. Apply the pending Supabase migration before creating a vault."}
+            {salaryVaultStatus === "loading" && "Checking encrypted salary vault..."}
+          </p>
+          {salaryVaultStatus === "unlocked" ? (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={handleLockVault} disabled={vaultActionLoading} className="rounded-lg border border-teal-300 bg-white px-3 py-2 text-xs font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60">
+                  Lock salary vault
+                </button>
+                <button type="button" onClick={() => setRotationOpen((value) => !value)} disabled={vaultActionLoading} className="rounded-lg border border-teal-300 bg-white px-3 py-2 text-xs font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60">
+                  Change vault passphrase
+                </button>
+              </div>
+              {rotationOpen && (
+                <form onSubmit={handleRotateVault} className="space-y-2 rounded-lg border border-teal-200 bg-white p-3">
+                  <label className="block">
+                    <span className="mb-1 block font-semibold text-slate-700">New passphrase</span>
+                    <input type="password" autoComplete="new-password" minLength={12} required value={vaultNextPassphrase} onChange={(event) => setVaultNextPassphrase(event.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs" />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block font-semibold text-slate-700">Confirm new passphrase</span>
+                    <input type="password" autoComplete="new-password" minLength={12} required value={vaultNextPassphraseConfirmation} onChange={(event) => setVaultNextPassphraseConfirmation(event.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs" />
+                  </label>
+                  <button type="submit" disabled={vaultActionLoading} className="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
+                    {vaultActionLoading ? "Re-encrypting..." : "Change and sync passphrase"}
+                  </button>
+                </form>
+              )}
+            </div>
+          ) : ["locked", "uninitialized"].includes(salaryVaultStatus) && (
+            <form onSubmit={handleVaultSubmit} className="space-y-2">
+              <label className="block">
+                <span className="mb-1 block font-semibold text-slate-700">Vault passphrase (at least 12 characters)</span>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={12}
+                  required
+                  value={vaultPassphrase}
+                  onChange={(event) => setVaultPassphrase(event.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
+                />
+              </label>
+              {salaryVaultStatus === "uninitialized" && (
+                <label className="block">
+                  <span className="mb-1 block font-semibold text-slate-700">Confirm vault passphrase</span>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={12}
+                    required
+                    value={vaultPassphraseConfirmation}
+                    onChange={(event) => setVaultPassphraseConfirmation(event.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
+                  />
+                </label>
+              )}
+              <button type="submit" disabled={vaultActionLoading} className="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
+                {vaultActionLoading
+                  ? "Encrypting..."
+                  : salaryVaultStatus === "locked" ? "Unlock vault" : "Create and sync encrypted vault"}
+              </button>
+            </form>
+          )}
+          {salaryVaultConflict && (
+            <div className="space-y-2 rounded-lg border border-rose-200 bg-rose-50 p-3">
+              <p className="text-[11px] text-rose-800">
+                A newer cloud vault revision exists. This device has not overwritten it. Reloading discards this browser's unsaved salary changes.
+              </p>
+              <button type="button" onClick={onReloadSalaryVault} disabled={salaryVaultSyncing} className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60">
+                Reload latest encrypted vault
+              </button>
+            </div>
+          )}
+          {(vaultActionError || salaryVaultError) && (
+            <p className="text-[11px] text-rose-700" role="alert">{vaultActionError || salaryVaultError}</p>
+          )}
+        </section>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
               Daily Base Wage (PHP)
             </label>
-            <input type="number" id="settingBaseWage" min="0" step="0.01" value={dailyWage} onChange={(event) => onDailyWageChange(event.target.value)} placeholder="Enter daily wage" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none" />
+            <input type="number" id="settingBaseWage" min="0" step="0.01" disabled={salaryVaultStatus !== "unlocked"} value={settingsDraft.dailyWage} onChange={(event) => updateDraft("dailyWage", event.target.value)} placeholder="Enter daily wage" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none disabled:cursor-not-allowed disabled:opacity-60" />
           </div>
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
               Company Allowance (Daily) (₱)
             </label>
-            <input type="number" id="settingDailyAllowance" min="0" step="0.01" value={dailyAllowance} onChange={(event) => onDailyAllowanceChange(event.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none" />
+            <input type="number" id="settingDailyAllowance" min="0" step="0.01" disabled={salaryVaultStatus !== "unlocked"} value={settingsDraft.dailyAllowance} onChange={(event) => updateDraft("dailyAllowance", event.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none disabled:cursor-not-allowed disabled:opacity-60" />
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -117,16 +377,17 @@ export default function SettingsModal({
               id="settingNightDiff"
               min="0"
               step="0.1"
-              value={nightDifferential}
-              onChange={(event) => onNightDifferentialChange(event.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+              disabled={salaryVaultStatus !== "unlocked"}
+              value={settingsDraft.nightDifferential}
+              onChange={(event) => updateDraft("nightDifferential", event.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none disabled:cursor-not-allowed disabled:opacity-60"
             />
           </div>
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
               Overtime Multiplier
             </label>
-            <input type="number" id="settingOtMultiplier" min="0.01" step="0.05" value={overtimeMultiplier} onChange={(event) => onOvertimeMultiplierChange(event.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none" />
+            <input type="number" id="settingOtMultiplier" min="0.01" step="0.05" disabled={salaryVaultStatus !== "unlocked"} value={settingsDraft.overtimeMultiplier} onChange={(event) => updateDraft("overtimeMultiplier", event.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none disabled:cursor-not-allowed disabled:opacity-60" />
             <p className="mt-1 text-[11px] text-slate-500">
               Overtime pay = hourly rate × overtime hours × this multiplier.
             </p>
@@ -143,8 +404,8 @@ export default function SettingsModal({
               min="0"
               max="120"
               step="1"
-              value={earlyPunchWindowMinutes}
-              onChange={(event) => onEarlyPunchWindowChange(event.target.value)}
+              value={settingsDraft.earlyPunchWindowMinutes}
+              onChange={(event) => updateDraft("earlyPunchWindowMinutes", Math.min(120, Math.max(0, Number(event.target.value) || 0)))}
               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
             />
             <p className="mt-1 text-[11px] text-slate-500">Time In opens this many minutes before the scheduled start. Default: 15.</p>
@@ -159,15 +420,15 @@ export default function SettingsModal({
               min="0"
               max="120"
               step="1"
-              value={lateGracePeriodMinutes}
-              onChange={(event) => onLateGracePeriodChange(event.target.value)}
+              value={settingsDraft.lateGracePeriodMinutes}
+              onChange={(event) => updateDraft("lateGracePeriodMinutes", Math.min(120, Math.max(0, Number(event.target.value) || 0)))}
               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
             />
             <p className="mt-1 text-[11px] text-slate-500">Changes Late status only, not punch eligibility. Default: 15.</p>
           </div>
         </div>
         <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-600">
-          Holiday-pay estimates use the configured daily wage and recorded hours. Eligibility and company-specific rules must be confirmed separately.
+          Holiday-pay estimates use the configured daily wage and recorded hours. Calculations run locally after unlocking the encrypted salary vault. Eligibility and company-specific rules must be confirmed separately.
         </p>
       </div>
       <div id="settingsTabDeductions" className={activeSettingsTab === "deductions" ? "space-y-5 text-xs" : "space-y-5 text-xs hidden"}>
@@ -204,19 +465,19 @@ export default function SettingsModal({
               <label className="block font-semibold text-slate-700 mb-1">
                 Vacation Leave (VL)
               </label>
-              <input type="number" id="settingLeaveVL" value={settingsBalances.VL} min="0" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none" />
+              <input type="number" id="settingLeaveVL" value={settingsDraft.settingsBalances.VL} onChange={(event) => updateDraft("settingsBalances", { ...settingsDraft.settingsBalances, VL: event.target.value })} min="0" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none" />
             </div>
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
                 Sick Leave (SL)
               </label>
-              <input type="number" id="settingLeaveSL" value={settingsBalances.SL} min="0" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none" />
+              <input type="number" id="settingLeaveSL" value={settingsDraft.settingsBalances.SL} onChange={(event) => updateDraft("settingsBalances", { ...settingsDraft.settingsBalances, SL: event.target.value })} min="0" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none" />
             </div>
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
                 Emergency Leave (EL)
               </label>
-              <input type="number" id="settingLeaveEL" value={settingsBalances.EL} min="0" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none" />
+              <input type="number" id="settingLeaveEL" value={settingsDraft.settingsBalances.EL} onChange={(event) => updateDraft("settingsBalances", { ...settingsDraft.settingsBalances, EL: event.target.value })} min="0" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none" />
             </div>
           </div>
         </div>
@@ -273,8 +534,8 @@ export default function SettingsModal({
             <span className="mb-1 block font-semibold text-slate-700">Active locality (optional)</span>
             <input
               type="text"
-              value={selectedLocality}
-              onChange={(event) => onLocalityChange(event.target.value)}
+              value={settingsDraft.selectedLocality}
+              onChange={(event) => updateDraft("selectedLocality", event.target.value)}
               placeholder="Enter locality to display configured local holidays"
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800"
             />
@@ -282,14 +543,14 @@ export default function SettingsModal({
           <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
             <input
               type="checkbox"
-              checked={holidayEligibilityConfirmed}
-              onChange={(event) => onHolidayEligibilityChange(event.target.checked)}
+              checked={settingsDraft.holidayEligibilityConfirmed}
+              onChange={(event) => updateDraft("holidayEligibilityConfirmed", event.target.checked)}
               className="h-4 w-4 accent-teal-600"
             />
             <span className="text-[11px] text-slate-700">Confirm employee eligibility for unworked regular-holiday pay estimates</span>
           </label>
           <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-            {holidays.map((holiday) => (
+            {settingsDraft.holidays.map((holiday) => (
               <div key={holiday.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                 <span className="min-w-0">
                   <span className={`block truncate font-semibold ${holiday.enabled ? "text-slate-800" : "text-slate-400 line-through"}`}>
@@ -304,14 +565,16 @@ export default function SettingsModal({
                     aria-label={`Update ${holiday.name} date`}
                     type="date"
                     value={holiday.date}
-                    onChange={(event) => onUpdateHolidayDate(holiday.id, event.target.value)}
+                    onChange={(event) => updateHolidayDate(holiday.id, event.target.value)}
                     className="w-32 shrink-0 rounded border border-slate-200 px-1.5 py-1 text-[10px]"
                   />
                 )}
                 <input
                   type="checkbox"
                   checked={holiday.enabled}
-                  onChange={() => onToggleHoliday(holiday.id)}
+                  onChange={() => updateDraft("holidays", settingsDraft.holidays.map((item) =>
+                    item.id === holiday.id ? { ...item, enabled: !item.enabled } : item,
+                  ))}
                   aria-label={`${holiday.enabled ? "Disable" : "Enable"} ${holiday.name}`}
                   className="h-4 w-4 shrink-0 cursor-pointer accent-teal-600"
                 />
@@ -364,7 +627,7 @@ export default function SettingsModal({
       <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4">
         <h4 className="text-sm font-bold text-rose-800">Privacy and account</h4>
         <p className="mt-1 text-xs leading-relaxed text-rose-700">
-          Your workspace contains personal attendance and compensation information. It is protected by account-scoped database policies, but is not end-to-end encrypted. Exported files should be kept private.
+          Attendance, leave, and expenses sync to your private cloud workspace. Salary contents in an initialized vault are encrypted client-side; older cloud salary fields are retained until a separately approved cleanup. Supabase administrators can access cloud workspace records and encrypted vault metadata, but should not be able to decrypt vault contents without your passphrase. Keep devices and exports private.
         </p>
         <button
           type="button"
@@ -377,7 +640,7 @@ export default function SettingsModal({
       </div>
       <div className="flex items-center justify-between pt-6 border-t border-slate-200 mt-6 text-xs">
         <span className="text-slate-500">
-          Changes sync to your private cloud workspace.
+          Salary data syncs only while the encrypted vault is unlocked; other workspace changes sync after saving.
         </span>
         <div className="space-x-2">
           <button data-action="closeModal(&#x27;settingsModal&#x27;)" className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-xl transition cursor-pointer">
@@ -385,9 +648,9 @@ export default function SettingsModal({
               Cancel
             
           </button>
-          <button data-action="saveSettings()" className="bg-teal-600 hover:bg-teal-700 text-white font-medium px-5 py-2 rounded-xl shadow transition cursor-pointer">
+          <button type="button" onClick={handleSaveSettings} disabled={settingsSaving} className="bg-teal-600 hover:bg-teal-700 text-white font-medium px-5 py-2 rounded-xl shadow transition cursor-pointer disabled:opacity-60">
             
-              Save Configurations
+              {settingsSaving ? "Saving..." : "Save Configurations"}
             
           </button>
         </div>

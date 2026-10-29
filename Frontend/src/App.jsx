@@ -17,9 +17,29 @@ import {
   clockInForShift,
   clockOutForShift,
   emptyWorkspace,
+  loadPrivateSalaryVault,
   loadWorkspace,
+  savePrivateSalaryVault,
   saveWorkspace,
 } from "./lib/workspace.js";
+import {
+  clearLegacyPrivateFinancialData,
+  extractPrivateFinancialAttendance,
+  extractPrivateFinancialSettings,
+  findPrivateFinancialConflicts,
+  getLegacyPrivateFinancialData,
+  hasLegacyPrivateFinancialData,
+  localPrivateFinancialDefaults,
+  mergeLocalPrivateAttendance,
+  mergeLocalPrivateAttendanceRecord,
+  mergePrivateFinancialData,
+  serializeWorkspaceForCloud,
+} from "./lib/privateFinancialData.js";
+import {
+  createSalaryVault,
+  encryptSalaryVault,
+  unlockSalaryVault,
+} from "./lib/privateSalaryVault.js";
 
 const months = [
   "January", "February", "March", "April", "May", "June",
@@ -51,14 +71,6 @@ const originalShiftTemplates = [
   { id: "night", name: "Night Shift", label: "Night", range: "10:00 PM - 06:00 AM", assigned: "10:00 PM - 6:00 AM", startTime: "22:00", endTime: "06:00", icon: "fa-moon", iconColor: "text-indigo-600" },
   { id: "rest-day", name: "Rest Day", label: "Rest Day", range: "No working hours", assigned: "Rest Day", icon: "fa-calendar-xmark", iconColor: "text-slate-600", protected: true },
 ];
-const customHolidayTypes = {
-  "regular-holiday": { classification: "Regular Holiday" },
-  "special-non-working": { classification: "Special Non-Working Day" },
-  "special-working": { classification: "Special Working Day" },
-  "local-holiday": { classification: "Local Holiday" },
-  "ordinary-working": { classification: "Ordinary Working Day" },
-  "company-break": { classification: "Company Break" },
-};
 const leaveTypes = {
   VL: {
     name: "Vacation Leave",
@@ -99,6 +111,29 @@ function getRecord(records, monthIndex, day, year) {
 function getAmount(value) {
   const amount = Number(String(value).replace(/[^\d.-]/g, ""));
   return Number.isFinite(amount) ? amount : 0;
+}
+
+function getManilaTimestamp(date, minuteOffset) {
+  const [yearValue, monthValue, dayValue] = date.split("-").map(Number);
+  const utcMilliseconds = Date.UTC(yearValue, monthValue - 1, dayValue) +
+    minuteOffset * 60_000 -
+    8 * 60 * 60_000;
+  return new Date(utcMilliseconds).toISOString();
+}
+
+function getWorkspaceLoadErrorMessage(error) {
+  const detail = typeof error?.message === "string"
+    ? error.message
+    : "The Supabase request failed without an error message.";
+  const code = typeof error?.code === "string" ? error.code : "";
+
+  if (code === "PGRST205" || code === "42P01") {
+    return `A required cloud table is missing in the configured Supabase project. Apply all migrations in supabase/migrations to the project used by VITE_SUPABASE_URL, then retry. (${code}: ${detail})`;
+  }
+  if (error?.name === "TypeError" && /fetch/i.test(detail)) {
+    return `Could not reach the configured Supabase project. Check your connection and VITE_SUPABASE_URL, then retry. (${detail})`;
+  }
+  return `Cloud data could not be loaded${code ? ` (${code})` : ""}: ${detail}`;
 }
 
 function formatPayAmount(amount) {
@@ -488,6 +523,11 @@ export default function App() {
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspaceSaveError, setWorkspaceSaveError] = useState("");
+  const [salaryVaultStatus, setSalaryVaultStatus] = useState("loading");
+  const [salaryVaultError, setSalaryVaultError] = useState("");
+  const [salaryVaultConflict, setSalaryVaultConflict] = useState(false);
+  const [salaryVaultRecord, setSalaryVaultRecord] = useState(null);
+  const [salaryVaultSyncing, setSalaryVaultSyncing] = useState(false);
   const [workspaceLoadAttempt, setWorkspaceLoadAttempt] = useState(0);
   const [saveRequest, setSaveRequest] = useState(0);
   const [recoveryMode, setRecoveryMode] = useState(false);
@@ -507,8 +547,9 @@ export default function App() {
   const [selectedLocality, setSelectedLocality] = useState("");
   const [holidayEligibilityConfirmed, setHolidayEligibilityConfirmed] = useState(false);
   const [dailyWage, setDailyWage] = useState("");
-  const [dailyAllowance, setDailyAllowance] = useState(emptyWorkspace.dailyAllowance);
-  const [overtimeMultiplier, setOvertimeMultiplier] = useState("1.25");
+  const [dailyAllowance, setDailyAllowance] = useState(localPrivateFinancialDefaults.dailyAllowance);
+  const [overtimeMultiplier, setOvertimeMultiplier] = useState(localPrivateFinancialDefaults.overtimeMultiplier);
+  const [salaryVaultExtraSettings, setSalaryVaultExtraSettings] = useState({});
   const [expenses, setExpenses] = useState([]);
   const [expenseName, setExpenseName] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
@@ -528,7 +569,7 @@ export default function App() {
   const [selectedIcon, setSelectedIcon] = useState("fa-moon");
   const [leaveBalances, setLeaveBalances] = useState(emptyWorkspace.leaveBalances);
   const [settingsBalances, setSettingsBalances] = useState(emptyWorkspace.settingsBalances);
-  const [nightDifferential, setNightDifferential] = useState("10");
+  const [nightDifferential, setNightDifferential] = useState(localPrivateFinancialDefaults.nightDifferential);
   const [earlyPunchWindowMinutes, setEarlyPunchWindowMinutes] = useState(defaultEarlyPunchWindowMinutes);
   const [lateGracePeriodMinutes, setLateGracePeriodMinutes] = useState(defaultLateGracePeriodMinutes);
   const workspaceLoadedRef = useRef(false);
@@ -537,6 +578,12 @@ export default function App() {
   const pendingExpenseClearRef = useRef(false);
   const saveQueueRef = useRef(Promise.resolve());
   const workspaceRevisionRef = useRef(0);
+  const salaryVaultKeyRef = useRef(null);
+  const salaryVaultRevisionRef = useRef(0);
+  const salaryVaultQueueRef = useRef(Promise.resolve());
+  const salaryVaultSkipNextSyncRef = useRef(false);
+  const preserveLegacyLocalRef = useRef(false);
+  const salaryVaultSyncTimerRef = useRef(null);
 
   const selectedDate = formatDate(year, monthIndex, selectedDay);
   const monthLabel = `${months[monthIndex]} ${year}`;
@@ -703,19 +750,15 @@ export default function App() {
     ? Math.min(Math.max((totalExpenses / netPay) * 100, 0), 100)
     : 0;
   const workspaceData = useMemo(() => ({
-    attendance,
+    attendance: serializeWorkspaceForCloud({ attendance }).attendance,
     activeTimeEntry,
     holidays,
     selectedLocality,
     holidayEligibilityConfirmed,
-    dailyWage,
-    dailyAllowance,
-    overtimeMultiplier,
     expenses,
     shiftTemplates,
     leaveBalances,
     settingsBalances,
-    nightDifferential,
     earlyPunchWindowMinutes,
     lateGracePeriodMinutes,
   }), [
@@ -724,14 +767,10 @@ export default function App() {
     holidays,
     selectedLocality,
     holidayEligibilityConfirmed,
-    dailyWage,
-    dailyAllowance,
-    overtimeMultiplier,
     expenses,
     shiftTemplates,
     leaveBalances,
     settingsBalances,
-    nightDifferential,
     earlyPunchWindowMinutes,
     lateGracePeriodMinutes,
   ]);
@@ -771,6 +810,281 @@ export default function App() {
     return operation;
   }, [addToast]);
 
+  const persistPrivateSalaryVault = useCallback((payload) => {
+    const vaultKey = salaryVaultKeyRef.current;
+    if (!user?.id || !vaultKey) {
+      return Promise.reject(new Error("Unlock the encrypted salary vault before syncing salary data."));
+    }
+
+    const operation = salaryVaultQueueRef.current.then(async () => {
+      if (userRef.current !== user.id) {
+        throw new Error("The signed-in account changed before the encrypted salary vault could be saved.");
+      }
+      const encryptedRecord = await encryptSalaryVault(payload, vaultKey.key, vaultKey.salt);
+      if (userRef.current !== user.id) {
+        throw new Error("The signed-in account changed before the encrypted salary vault could be saved.");
+      }
+      const revision = await savePrivateSalaryVault(
+        encryptedRecord,
+        salaryVaultRevisionRef.current,
+        user.id,
+      );
+      if (userRef.current === user.id) {
+        salaryVaultRevisionRef.current = revision;
+        setSalaryVaultRecord({
+          ...encryptedRecord,
+          revision,
+          updated_at: new Date().toISOString(),
+        });
+        if (!preserveLegacyLocalRef.current) {
+          try {
+            clearLegacyPrivateFinancialData(user.id);
+            setSalaryVaultError("");
+          } catch {
+            setSalaryVaultError("Vault saved, but the prior unencrypted browser copy could not be removed. Keep this browser secure and retry cleanup.");
+          }
+          setSalaryVaultConflict(false);
+        }
+      }
+      return revision;
+    });
+    salaryVaultQueueRef.current = operation.catch((error) => {
+      if (userRef.current === user.id && error?.code === "40001") {
+        setSalaryVaultConflict(true);
+      }
+    });
+    return operation;
+  }, [user?.id]);
+
+  const unlockOrCreateSalaryVault = useCallback(async (passphrase, confirmation) => {
+    if (!user?.id) throw new Error("Sign in before unlocking the salary vault.");
+
+    if (!salaryVaultRecord) {
+      if (passphrase !== confirmation) {
+        throw new Error("The vault passphrases do not match.");
+      }
+      const payload = {
+        settings: {
+          ...salaryVaultExtraSettings,
+          dailyWage,
+          dailyAllowance,
+          overtimeMultiplier,
+          nightDifferential,
+        },
+        attendance: extractPrivateFinancialAttendance(attendance),
+      };
+      const { record, key } = await createSalaryVault(payload, passphrase);
+      const revision = await savePrivateSalaryVault(record, 0, user.id);
+      let localCopyRemains = hasLegacyPrivateFinancialData(user.id);
+      salaryVaultKeyRef.current = {
+        key,
+        salt: Uint8Array.from(atob(record.salt), (character) => character.charCodeAt(0)),
+      };
+      salaryVaultRevisionRef.current = revision;
+      setSalaryVaultRecord({
+        ...record,
+        revision,
+        updated_at: new Date().toISOString(),
+      });
+      try {
+        clearLegacyPrivateFinancialData(user.id);
+        localCopyRemains = false;
+      } catch {
+        setSalaryVaultError("Vault created, but the prior unencrypted browser copy could not be removed. Keep this browser secure and retry cleanup.");
+      }
+      preserveLegacyLocalRef.current = localCopyRemains;
+      salaryVaultSkipNextSyncRef.current = true;
+      setSalaryVaultStatus("unlocked");
+      if (!localCopyRemains) setSalaryVaultError("");
+      setSalaryVaultConflict(false);
+      return { settings: payload.settings };
+    }
+
+    const unlocked = await unlockSalaryVault(salaryVaultRecord, passphrase);
+    let payload = unlocked.payload;
+    let revision = salaryVaultRecord.revision;
+    let localCopyRemains = hasLegacyPrivateFinancialData(user.id);
+    if (localCopyRemains) {
+      const legacyLocalData = getLegacyPrivateFinancialData(user.id, null);
+      const conflicts = findPrivateFinancialConflicts(legacyLocalData, payload);
+      if (conflicts.length > 0) {
+        setSalaryVaultError("This browser has older local salary values that differ from the cloud vault. The cloud copy was not overwritten and the local copy was preserved; export or reconcile it before removing browser data.");
+      } else {
+        payload = mergePrivateFinancialData(legacyLocalData, payload);
+        const encryptedRecord = await encryptSalaryVault(
+          payload,
+          unlocked.key,
+          unlocked.salt,
+        );
+        revision = await savePrivateSalaryVault(encryptedRecord, revision, user.id);
+        setSalaryVaultRecord({
+          ...encryptedRecord,
+          revision,
+          updated_at: new Date().toISOString(),
+        });
+        try {
+          clearLegacyPrivateFinancialData(user.id);
+          localCopyRemains = false;
+        } catch {
+          setSalaryVaultError("Vault synced, but the prior unencrypted browser copy could not be removed. Keep this browser secure and retry cleanup.");
+        }
+      }
+    }
+    preserveLegacyLocalRef.current = localCopyRemains;
+
+    salaryVaultKeyRef.current = { key: unlocked.key, salt: unlocked.salt };
+    salaryVaultRevisionRef.current = revision;
+    setDailyWage(payload.settings.dailyWage);
+    setDailyAllowance(payload.settings.dailyAllowance);
+    setOvertimeMultiplier(payload.settings.overtimeMultiplier);
+    setNightDifferential(payload.settings.nightDifferential);
+    setSalaryVaultExtraSettings(extractPrivateFinancialSettings(payload.settings));
+    setAttendance((current) => mergeLocalPrivateAttendance(current, payload.attendance));
+    salaryVaultSkipNextSyncRef.current = true;
+    setSalaryVaultStatus("unlocked");
+    if (!localCopyRemains) setSalaryVaultError("");
+    setSalaryVaultConflict(false);
+    return { settings: payload.settings };
+  }, [
+    user?.id,
+    salaryVaultRecord,
+    dailyWage,
+    dailyAllowance,
+    overtimeMultiplier,
+    nightDifferential,
+    salaryVaultExtraSettings,
+    attendance,
+  ]);
+
+  const rotateSalaryVaultPassphrase = useCallback(async (
+    nextPassphrase,
+    confirmation,
+  ) => {
+    if (nextPassphrase !== confirmation) {
+      throw new Error("The new vault passphrases do not match.");
+    }
+    if (salaryVaultStatus !== "unlocked" || !salaryVaultRecord || !salaryVaultKeyRef.current) {
+      throw new Error("Unlock the salary vault before changing its passphrase.");
+    }
+    const payload = {
+      settings: {
+        ...salaryVaultExtraSettings,
+        dailyWage,
+        dailyAllowance,
+        overtimeMultiplier,
+        nightDifferential,
+      },
+      attendance: extractPrivateFinancialAttendance(attendance),
+    };
+    await persistPrivateSalaryVault(payload);
+    const nextVersion = salaryVaultRecord.key_version + 1;
+    const { record, key } = await createSalaryVault(payload, nextPassphrase, nextVersion);
+    const revision = await savePrivateSalaryVault(
+      record,
+      salaryVaultRevisionRef.current,
+      user.id,
+    );
+    salaryVaultKeyRef.current = {
+      key,
+      salt: Uint8Array.from(atob(record.salt), (character) => character.charCodeAt(0)),
+    };
+    salaryVaultRevisionRef.current = revision;
+    setSalaryVaultRecord({
+      ...record,
+      revision,
+      updated_at: new Date().toISOString(),
+    });
+    setSalaryVaultError("");
+  }, [
+    salaryVaultStatus,
+    salaryVaultRecord,
+    dailyWage,
+    dailyAllowance,
+    overtimeMultiplier,
+    nightDifferential,
+    salaryVaultExtraSettings,
+    attendance,
+    persistPrivateSalaryVault,
+    user?.id,
+  ]);
+
+  const reloadSalaryVault = useCallback(async () => {
+    if (!user?.id) return;
+    const confirmed = window.confirm(
+      "Reload the encrypted cloud vault? Any salary changes in this browser that were not saved will be discarded. Export them first if you need to keep them.",
+    );
+    if (!confirmed) return;
+    setSalaryVaultSyncing(true);
+    try {
+      const latestVault = await loadPrivateSalaryVault(user.id);
+      if (!latestVault) {
+        throw new Error("No encrypted salary vault was found for this account.");
+      }
+      salaryVaultKeyRef.current = null;
+      salaryVaultRevisionRef.current = latestVault.revision;
+      setSalaryVaultRecord(latestVault);
+      setSalaryVaultStatus("locked");
+      setDailyWage("");
+      setDailyAllowance(localPrivateFinancialDefaults.dailyAllowance);
+      setOvertimeMultiplier(localPrivateFinancialDefaults.overtimeMultiplier);
+      setNightDifferential(localPrivateFinancialDefaults.nightDifferential);
+      setSalaryVaultExtraSettings({});
+      setAttendance((current) => serializeWorkspaceForCloud({ attendance: current }).attendance);
+      setSalaryVaultConflict(false);
+      setSalaryVaultError("");
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : "Unable to reload the encrypted salary vault.";
+      setSalaryVaultError(message);
+      addToast(message, "error");
+    } finally {
+      setSalaryVaultSyncing(false);
+    }
+  }, [user?.id, addToast]);
+
+  const lockSalaryVault = useCallback(async () => {
+    window.clearTimeout(salaryVaultSyncTimerRef.current);
+    try {
+      await persistPrivateSalaryVault({
+        settings: {
+          ...salaryVaultExtraSettings,
+          dailyWage,
+          dailyAllowance,
+          overtimeMultiplier,
+          nightDifferential,
+        },
+        attendance: extractPrivateFinancialAttendance(attendance),
+      });
+    } catch (error) {
+      const message = error?.code === "40001"
+        ? "Encrypted salary data changed on another device. Reload the vault before locking."
+        : "Encrypted salary data could not be saved. The vault remains unlocked so you can retry.";
+      setSalaryVaultError(message);
+      addToast(message, "error");
+      return false;
+    }
+    salaryVaultKeyRef.current = null;
+    setSalaryVaultStatus(salaryVaultRecord ? "locked" : "uninitialized");
+    setDailyWage("");
+    setDailyAllowance(localPrivateFinancialDefaults.dailyAllowance);
+    setOvertimeMultiplier(localPrivateFinancialDefaults.overtimeMultiplier);
+    setNightDifferential(localPrivateFinancialDefaults.nightDifferential);
+    setSalaryVaultExtraSettings({});
+    setAttendance((current) => serializeWorkspaceForCloud({ attendance: current }).attendance);
+    return true;
+  }, [
+    salaryVaultRecord,
+    dailyWage,
+    dailyAllowance,
+    overtimeMultiplier,
+    nightDifferential,
+    salaryVaultExtraSettings,
+    attendance,
+    persistPrivateSalaryVault,
+    addToast,
+  ]);
+
   const dismissToast = useCallback((id) => {
     window.clearTimeout(timers.current.get(id));
     timers.current.delete(id);
@@ -808,6 +1122,15 @@ export default function App() {
       userRef.current = null;
       workspaceLoadedRef.current = false;
       workspaceRevisionRef.current = 0;
+      salaryVaultKeyRef.current = null;
+      salaryVaultRevisionRef.current = 0;
+      salaryVaultSkipNextSyncRef.current = false;
+      preserveLegacyLocalRef.current = false;
+      setSalaryVaultStatus("loading");
+      setSalaryVaultRecord(null);
+      setSalaryVaultError("");
+      setSalaryVaultConflict(false);
+      setSalaryVaultSyncing(false);
       setWorkspaceLoadedForUser(null);
       setWorkspaceLoading(false);
       pendingSuccessToasts.current = [];
@@ -818,13 +1141,13 @@ export default function App() {
       setSelectedLocality("");
       setHolidayEligibilityConfirmed(false);
       setDailyWage("");
-      setDailyAllowance(emptyWorkspace.dailyAllowance);
-      setOvertimeMultiplier(emptyWorkspace.overtimeMultiplier);
+      setDailyAllowance(localPrivateFinancialDefaults.dailyAllowance);
+      setOvertimeMultiplier(localPrivateFinancialDefaults.overtimeMultiplier);
       setExpenses([]);
       setShiftTemplates(originalShiftTemplates);
       setLeaveBalances(emptyWorkspace.leaveBalances);
       setSettingsBalances(emptyWorkspace.settingsBalances);
-      setNightDifferential(emptyWorkspace.nightDifferential);
+      setNightDifferential(localPrivateFinancialDefaults.nightDifferential);
       setEarlyPunchWindowMinutes(emptyWorkspace.earlyPunchWindowMinutes);
       setLateGracePeriodMinutes(emptyWorkspace.lateGracePeriodMinutes);
       setExpenseName("");
@@ -840,10 +1163,43 @@ export default function App() {
     setWorkspaceLoading(true);
     setWorkspaceError("");
 
-    loadWorkspace(user.id).then(({ workspace, revision }) => {
+    loadWorkspace(user.id).then(({
+      workspace,
+      revision,
+      legacyPrivateFinancialData,
+      salaryVault,
+      salaryVaultTableAvailable,
+    }) => {
       if (!active) return;
+      let localPrivateData;
+      try {
+        localPrivateData = getLegacyPrivateFinancialData(
+          user.id,
+          legacyPrivateFinancialData,
+        );
+      } catch (privateDataError) {
+        const detail = privateDataError instanceof Error
+          ? privateDataError.message
+          : "Browser storage is unavailable.";
+        setWorkspaceError(`Private salary settings could not be preserved in this browser. ${detail}`);
+        setWorkspaceLoading(false);
+        return;
+      }
+      salaryVaultKeyRef.current = null;
+      salaryVaultRevisionRef.current = salaryVault?.revision ?? 0;
+      setSalaryVaultRecord(salaryVault);
+      setSalaryVaultStatus(!salaryVaultTableAvailable
+        ? "unavailable"
+        : salaryVault ? "locked" : "uninitialized");
+      setSalaryVaultError(!salaryVaultTableAvailable
+        ? "Apply the pending Supabase migration to enable encrypted salary sync. Other workspace data remains available."
+        : "");
+      setSalaryVaultConflict(false);
       const attendance = Object.fromEntries(
-        Object.entries(workspace.attendance).map(([date, record]) => [
+        Object.entries(mergeLocalPrivateAttendance(
+          workspace.attendance,
+          salaryVault ? {} : localPrivateData.attendance,
+        )).map(([date, record]) => [
           date,
           record.punchSource === "ordinary"
             ? applyAttendanceTiming(
@@ -865,14 +1221,23 @@ export default function App() {
       setHolidays(workspace.holidays || holidayCalendarByYear[2026].map((holiday) => ({ ...holiday, enabled: true })));
       setSelectedLocality(workspace.selectedLocality);
       setHolidayEligibilityConfirmed(workspace.holidayEligibilityConfirmed);
-      setDailyWage(workspace.dailyWage);
-      setDailyAllowance(workspace.dailyAllowance);
-      setOvertimeMultiplier(workspace.overtimeMultiplier);
+      setDailyWage(salaryVault ? "" : localPrivateData.settings.dailyWage);
+      setDailyAllowance(salaryVault
+        ? localPrivateFinancialDefaults.dailyAllowance
+        : localPrivateData.settings.dailyAllowance);
+      setOvertimeMultiplier(salaryVault
+        ? localPrivateFinancialDefaults.overtimeMultiplier
+        : localPrivateData.settings.overtimeMultiplier);
       setExpenses(workspace.expenses);
       setShiftTemplates(workspace.shiftTemplates || originalShiftTemplates);
       setLeaveBalances(workspace.leaveBalances);
       setSettingsBalances(workspace.settingsBalances);
-      setNightDifferential(workspace.nightDifferential);
+      setNightDifferential(salaryVault
+        ? localPrivateFinancialDefaults.nightDifferential
+        : localPrivateData.settings.nightDifferential);
+      setSalaryVaultExtraSettings(salaryVault
+        ? {}
+        : extractPrivateFinancialSettings(localPrivateData.settings));
       setEarlyPunchWindowMinutes(workspace.earlyPunchWindowMinutes);
       setLateGracePeriodMinutes(workspace.lateGracePeriodMinutes);
       workspaceRevisionRef.current = revision;
@@ -880,9 +1245,9 @@ export default function App() {
       workspaceLoadedRef.current = true;
       setWorkspaceSaveError("");
       setWorkspaceLoading(false);
-    }).catch(() => {
+    }).catch((loadError) => {
       if (!active) return;
-      setWorkspaceError("Cloud data could not be loaded. Check your connection and database migration, then retry.");
+      setWorkspaceError(getWorkspaceLoadErrorMessage(loadError));
       setWorkspaceLoading(false);
     });
 
@@ -890,6 +1255,61 @@ export default function App() {
       active = false;
     };
   }, [user?.id, workspaceLoadAttempt]);
+
+  useEffect(() => {
+    if (
+      !user?.id ||
+      workspaceLoadedForUser !== user.id ||
+      !workspaceLoadedRef.current ||
+      salaryVaultStatus !== "unlocked" ||
+      !salaryVaultKeyRef.current
+    ) return;
+    if (salaryVaultSkipNextSyncRef.current) {
+      salaryVaultSkipNextSyncRef.current = false;
+      return;
+    }
+    const payload = {
+      settings: {
+        ...salaryVaultExtraSettings,
+        dailyWage,
+        dailyAllowance,
+        overtimeMultiplier,
+        nightDifferential,
+      },
+      attendance: extractPrivateFinancialAttendance(attendance),
+    };
+    salaryVaultSyncTimerRef.current = window.setTimeout(() => {
+      salaryVaultSyncTimerRef.current = null;
+      setSalaryVaultSyncing(true);
+      persistPrivateSalaryVault(payload).then(() => {
+        setSalaryVaultSyncing(false);
+      }).catch((error) => {
+        setSalaryVaultSyncing(false);
+        const conflict = error?.code === "40001";
+        const message = conflict
+          ? "Encrypted salary data changed on another device. Lock and unlock the vault again before retrying."
+          : "Encrypted salary data could not be saved to Supabase. Your changes remain in memory; retry after checking your connection.";
+        setSalaryVaultError(message);
+        addToast(message, "error");
+      });
+    }, 500);
+    return () => {
+      window.clearTimeout(salaryVaultSyncTimerRef.current);
+      salaryVaultSyncTimerRef.current = null;
+    };
+  }, [
+    user?.id,
+    workspaceLoadedForUser,
+    salaryVaultStatus,
+    dailyWage,
+    dailyAllowance,
+    overtimeMultiplier,
+    nightDifferential,
+    salaryVaultExtraSettings,
+    attendance,
+    persistPrivateSalaryVault,
+    addToast,
+  ]);
 
   useEffect(() => {
     if (
@@ -974,10 +1394,6 @@ export default function App() {
     setSelectedDay(1);
   };
 
-  const updateNightDifferential = (value) => {
-    setNightDifferential(value);
-  };
-
   const changeMonth = (offset) => {
     const next = new Date(year, monthIndex + offset, 1);
     changeMonthTo(next.getFullYear(), next.getMonth());
@@ -1022,78 +1438,6 @@ export default function App() {
     showToast("Expense item removed.", "success");
   };
 
-  const toggleHoliday = (id) => {
-    setHolidays((current) => current.map((holiday) =>
-      holiday.id === id ? { ...holiday, enabled: !holiday.enabled } : holiday,
-    ));
-  };
-
-  const addHoliday = ({ name, date, type, locality, description }) => {
-    const holidayType = customHolidayTypes[type];
-    const trimmedName = name.trim();
-    const trimmedLocality = String(locality || "").trim();
-    const parsedDate = new Date(`${date}T00:00:00`);
-    const isValidDate =
-      /^\d{4}-\d{2}-\d{2}$/.test(date) &&
-      !Number.isNaN(parsedDate.getTime()) &&
-      formatDate(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate()) === date;
-    if (!trimmedName || !isValidDate) {
-      showToast("Enter a holiday name and a valid date.", "warning");
-      return false;
-    }
-    if (!holidayType) {
-      showToast("Choose a valid holiday type.", "warning");
-      return false;
-    }
-    if (!holidayType) {
-      showToast("Choose a valid holiday type.", "warning");
-      return false;
-    }
-    if (holidayType.classification === "Local Holiday" && !trimmedLocality) {
-      showToast("Enter the locality for a local holiday.", "warning");
-      return false;
-    }
-    if (holidays.some((holiday) => holiday.date === date)) {
-      showToast("A holiday is already configured for that date.", "warning");
-      return false;
-    }
-    const id = `holiday-${date}-${Date.now()}`;
-    setHolidays((current) => [
-      ...current,
-      {
-        id,
-        date,
-        name: trimmedName,
-        description: String(description || "").trim(),
-        locality: trimmedLocality || undefined,
-        ...holidayType,
-        enabled: true,
-        custom: true,
-      },
-    ]);
-    showToast(`"${trimmedName}" was added to the holiday calendar.`, "success");
-    return true;
-  };
-
-  const updateHolidayDate = (id, date) => {
-    const parsedDate = new Date(`${date}T00:00:00`);
-    const isValidDate =
-      /^\d{4}-\d{2}-\d{2}$/.test(date) &&
-      !Number.isNaN(parsedDate.getTime()) &&
-      formatDate(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate()) === date;
-    if (!isValidDate) {
-      showToast("Enter a valid holiday date.", "warning");
-      return;
-    }
-    if (holidays.some((holiday) => holiday.id !== id && holiday.date === date)) {
-      showToast("A holiday is already configured for that date.", "warning");
-      return;
-    }
-    setHolidays((current) => current.map((holiday) =>
-      holiday.id === id ? { ...holiday, date } : holiday,
-    ));
-  };
-
   const flushWorkspace = async () => {
     if (!user?.id || !workspaceLoadedRef.current) return true;
     const operation = queueWorkspaceSave(user.id, workspaceData);
@@ -1114,12 +1458,50 @@ export default function App() {
     }
   };
 
+  const flushSalaryVault = async () => {
+    if (salaryVaultStatus !== "unlocked") return true;
+    window.clearTimeout(salaryVaultSyncTimerRef.current);
+    salaryVaultSyncTimerRef.current = null;
+    setSalaryVaultSyncing(true);
+    try {
+      await persistPrivateSalaryVault({
+        settings: {
+          ...salaryVaultExtraSettings,
+          dailyWage,
+          dailyAllowance,
+          overtimeMultiplier,
+          nightDifferential,
+        },
+        attendance: extractPrivateFinancialAttendance(attendance),
+      });
+      setSalaryVaultSyncing(false);
+      return true;
+    } catch (error) {
+      setSalaryVaultSyncing(false);
+      const message = error?.code === "40001"
+        ? "Encrypted salary data changed on another device. Unlock the vault again before signing out."
+        : "Encrypted salary data could not be saved. Stay signed in and retry before signing out.";
+      setSalaryVaultError(message);
+      addToast(message, "error");
+      return false;
+    }
+  };
+
   const exportWorkspace = async () => {
     if (!(await flushWorkspace())) return;
     const exportData = {
       exportedAt: new Date().toISOString(),
-      user: { email: user?.email, name: user?.name },
       workspace: workspaceData,
+      deviceOnlyFinancialData: {
+        dailyWage,
+        dailyAllowance,
+        overtimeMultiplier,
+        nightDifferential,
+        attendance: Object.fromEntries(Object.entries(attendance).map(([date, record]) => [
+          date,
+          mergeLocalPrivateAttendanceRecord({}, record),
+        ])),
+      },
     };
     const objectUrl = URL.createObjectURL(new Blob(
       [JSON.stringify(exportData, null, 2)],
@@ -1142,6 +1524,7 @@ export default function App() {
 
     setAccountDeletionLoading(true);
     try {
+      if (!(await flushSalaryVault())) return;
       const { error } = await supabase.functions.invoke("delete-account");
       if (error) {
         showToast("Account deletion could not be confirmed. Check your account status before retrying.", "error");
@@ -1153,6 +1536,12 @@ export default function App() {
       setAuthSession(null);
       setWorkspaceLoadedForUser(null);
       setActiveModal(null);
+      try {
+        clearLegacyPrivateFinancialData(user.id);
+      } catch {
+        addToast("Account deleted, but an older unencrypted salary copy remains in this browser's storage. Clear it manually after preserving any needed data.", "error");
+      }
+      salaryVaultKeyRef.current = null;
       if (signOutError) {
         showToast("Your account was deleted, but this browser could not clear its saved session. Reload the page.", "error");
         return;
@@ -1191,15 +1580,7 @@ export default function App() {
       setActiveModal("assignShiftModal");
     } else if (action === "addExpense()") addExpense();
     else if (action.startsWith("switchSettingsTab(")) setActiveSettingsTab(actionArgument(action));
-    else if (action === "saveSettings()") {
-      setLeaveBalances({
-        VL: Number(settingsBalances.VL) || 0,
-        SL: Number(settingsBalances.SL) || 0,
-        EL: Number(settingsBalances.EL) || 0,
-      });
-      setActiveModal(null);
-      showToast("Leave credit balances and configurations saved!", "success");
-    } else if (action.startsWith("selectShiftIcon(")) {
+    else if (action.startsWith("selectShiftIcon(")) {
       setSelectedIcon(actionArgument(action).replace(/\bfa-solid\b/g, "").trim());
     } else if (action.startsWith("selectShiftCard(")) {
       setSelectedShiftTemplate(actionArgument(action));
@@ -1262,7 +1643,7 @@ export default function App() {
         const recordedTimeIn = punch.record.workStartTime || timeIn;
         const inValue = formatTime(recordedTimeIn);
         const outValue = formatTime(timeOut);
-        const completedRecord = applyAttendanceTiming({
+        const completedRecord = applyAttendanceTiming(mergeLocalPrivateAttendanceRecord({
           ...punch.record,
           assigned: punch.record.hasAssignedShift
             ? punch.record.assigned
@@ -1274,7 +1655,7 @@ export default function App() {
           clockedIn: false,
           dots: [{ title: "Present", color: "bg-emerald-500" }],
           badges: [{ text: "Present", color: "bg-emerald-100 text-emerald-800" }],
-        }, recordedTimeIn, timeOut, lateGracePeriodMinutes);
+        }, activeRecord), recordedTimeIn, timeOut, lateGracePeriodMinutes);
         setAttendance((state) => ({ ...state, [date]: completedRecord }));
         setActiveTimeEntry(null);
         showToast(`Timed out at ${outValue}. Attendance saved for ${date}.`, "success");
@@ -1357,13 +1738,14 @@ export default function App() {
         badges: [{ text: "Clocked In", color: "bg-amber-100 text-amber-800" }],
     };
     try {
+      if (!(await flushWorkspace())) return;
       const punch = await clockInForShift(targetDate, punchRecord);
       const time = punch.record.workStartTime;
       const inValue = formatTime(time);
-      const clockedInRecord = applyAttendanceTiming({
+      const clockedInRecord = applyAttendanceTiming(mergeLocalPrivateAttendanceRecord({
         ...punch.record,
         assigned: hasScheduledShift ? currentRecord.assigned : `${inValue} - Tracking`,
-      }, time, "", lateGracePeriodMinutes);
+      }, currentRecord), time, "", lateGracePeriodMinutes);
       setAttendance((state) => ({ ...state, [targetDate]: clockedInRecord }));
       setActiveTimeEntry({ date: targetDate, time });
       showToast(`Timed in at ${inValue}. Remember to time out when your shift ends.`, "success");
@@ -1381,10 +1763,6 @@ export default function App() {
     if (id === "customShiftName") setCustomShiftName(value);
     else if (id === "customShiftStart") setCustomShiftStart(value);
     else if (id === "customShiftEnd") setCustomShiftEnd(value);
-    else if (id === "settingLeaveVL") setSettingsBalances((state) => ({ ...state, VL: value }));
-    else if (id === "settingLeaveSL") setSettingsBalances((state) => ({ ...state, SL: value }));
-    else if (id === "settingLeaveEL") setSettingsBalances((state) => ({ ...state, EL: value }));
-    else if (id === "settingNightDiff") setNightDifferential(value);
   };
 
   const handleSubmit = (event) => {
@@ -1539,6 +1917,7 @@ export default function App() {
         [key]: applyAttendanceTiming({
             ...assignedRecord,
             type: isAbsentEntry ? "Absent" : "Regular",
+        punchSource: "manual",
             shift,
             wageRate: isAbsentEntry ? "0%" : "100%",
             base,
@@ -1555,6 +1934,9 @@ export default function App() {
             clockedIn: false,
             workStartTime: isAbsentEntry ? "" : manualTimeIn,
             workEndTime: isAbsentEntry ? "" : manualTimeOut,
+            manualTimeInAt: isAbsentEntry ? null : getManilaTimestamp(targetDate, manualStart),
+            manualTimeOutAt: isAbsentEntry ? null : getManilaTimestamp(targetDate, manualEnd),
+            timeZone: "Asia/Manila",
             isHalfDay: entryType === "Half-day",
             overtimeAmount,
             overtimeMinutes,
@@ -1874,12 +2256,39 @@ export default function App() {
         clock={clock}
         user={user}
         onLogout={async () => {
+          if (!(await flushSalaryVault())) return;
           if (!(await flushWorkspace())) return;
           const { error } = await supabase.auth.signOut();
           if (error) showToast("Unable to sign out. Please try again.", "error");
           else addToast("Signed out successfully.", "info");
         }}
       />
+      {salaryVaultStatus !== "unlocked" && (
+        <div className="flex flex-col gap-2 border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between" role="status">
+          <span>
+            {salaryVaultStatus === "locked"
+              ? "Salary vault is locked. Unlock it in Settings to view and sync encrypted salary data."
+              : salaryVaultStatus === "unavailable"
+                ? "Apply the pending Supabase migration to enable encrypted salary sync. Other workspace data remains available."
+                : "Create an encrypted salary vault in Settings to sync salary settings and earnings across devices."}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveSettingsTab("earnings");
+              setActiveModal("settingsModal");
+            }}
+            className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold hover:bg-amber-100"
+          >
+            Open salary vault
+          </button>
+        </div>
+      )}
+      {salaryVaultError && (
+        <div className="border-b border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800" role="alert">
+          {salaryVaultError}
+        </div>
+      )}
       {workspaceSaveError && (
         <div className="flex flex-col gap-3 border-b border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800 sm:flex-row sm:items-center sm:justify-between" role="alert">
           <span>{workspaceSaveError}</span>
@@ -1990,31 +2399,74 @@ export default function App() {
         holidays={holidays}
         selectedLocality={selectedLocality}
         holidayEligibilityConfirmed={holidayEligibilityConfirmed}
+        settingsBalances={settingsBalances}
         dailyWage={dailyWage}
         dailyAllowance={dailyAllowance}
         overtimeMultiplier={overtimeMultiplier}
         earlyPunchWindowMinutes={earlyPunchWindowMinutes}
         lateGracePeriodMinutes={lateGracePeriodMinutes}
-        onLocalityChange={setSelectedLocality}
-        onHolidayEligibilityChange={setHolidayEligibilityConfirmed}
-        onDailyWageChange={setDailyWage}
-        onDailyAllowanceChange={setDailyAllowance}
-        onOvertimeMultiplierChange={setOvertimeMultiplier}
-        onEarlyPunchWindowChange={(value) => {
-          const minutes = Number(value);
-          setEarlyPunchWindowMinutes(Number.isFinite(minutes) ? Math.min(120, Math.max(0, minutes)) : 0);
-        }}
-        onLateGracePeriodChange={(value) => {
-          const minutes = Number(value);
-          setLateGracePeriodMinutes(Number.isFinite(minutes) ? Math.min(120, Math.max(0, minutes)) : 0);
-        }}
         nightDifferential={nightDifferential}
-        onNightDifferentialChange={updateNightDifferential}
-        onToggleHoliday={toggleHoliday}
-        onUpdateHolidayDate={updateHolidayDate}
-        onAddHoliday={addHoliday}
         onDeleteAccount={deleteAccount}
         accountDeletionLoading={accountDeletionLoading}
+        salaryVaultStatus={salaryVaultStatus}
+        salaryVaultError={salaryVaultError}
+        salaryVaultConflict={salaryVaultConflict}
+        salaryVaultSyncing={salaryVaultSyncing}
+        onUnlockSalaryVault={unlockOrCreateSalaryVault}
+        onLockSalaryVault={lockSalaryVault}
+        onRotateSalaryVault={rotateSalaryVaultPassphrase}
+        onReloadSalaryVault={reloadSalaryVault}
+        onSettingsValidationError={(message) => showToast(message, "warning")}
+        onSaveSettings={async (draft) => {
+          const financialSettingsChanged = draft.dailyWage !== dailyWage ||
+            draft.dailyAllowance !== dailyAllowance ||
+            draft.overtimeMultiplier !== overtimeMultiplier ||
+            draft.nightDifferential !== nightDifferential;
+          if (financialSettingsChanged && salaryVaultStatus !== "unlocked") {
+            addToast("Unlock or create the encrypted salary vault before changing salary settings.", "warning");
+            return false;
+          }
+          if (salaryVaultStatus === "unlocked") {
+            try {
+              await persistPrivateSalaryVault({
+                settings: {
+                  ...salaryVaultExtraSettings,
+                  dailyWage: draft.dailyWage,
+                  dailyAllowance: draft.dailyAllowance,
+                  overtimeMultiplier: draft.overtimeMultiplier,
+                  nightDifferential: draft.nightDifferential,
+                },
+                attendance: extractPrivateFinancialAttendance(attendance),
+              });
+            } catch (error) {
+              const conflict = error?.code === "40001";
+              const message = conflict
+                ? "Encrypted salary data changed on another device. Unlock the vault again before saving."
+                : "Salary settings could not be saved to the encrypted cloud vault. Your settings were not confirmed as saved.";
+              setSalaryVaultError(message);
+              addToast(message, "error");
+              return false;
+            }
+          }
+          setHolidays(draft.holidays);
+          setSelectedLocality(draft.selectedLocality);
+          setHolidayEligibilityConfirmed(draft.holidayEligibilityConfirmed);
+          setDailyWage(draft.dailyWage);
+          setDailyAllowance(draft.dailyAllowance);
+          setOvertimeMultiplier(draft.overtimeMultiplier);
+          setEarlyPunchWindowMinutes(draft.earlyPunchWindowMinutes);
+          setLateGracePeriodMinutes(draft.lateGracePeriodMinutes);
+          setNightDifferential(draft.nightDifferential);
+          setSettingsBalances(draft.settingsBalances);
+          setLeaveBalances({
+            VL: Number(draft.settingsBalances.VL) || 0,
+            SL: Number(draft.settingsBalances.SL) || 0,
+            EL: Number(draft.settingsBalances.EL) || 0,
+          });
+          setActiveModal(null);
+          showToast("Settings saved successfully.", "success");
+          return true;
+        }}
       />
       </>
       )}
