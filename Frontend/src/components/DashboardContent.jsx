@@ -35,6 +35,8 @@ export default function DashboardContent(props) {
     remaining,
     percentage,
     netPay,
+    grossPay,
+    payrollDeductions,
     totalHours,
     formatCurrency,
     expenseName,
@@ -86,6 +88,8 @@ export default function DashboardContent(props) {
             remaining={remaining}
             percentage={percentage}
             netPay={netPay}
+            grossPay={grossPay}
+            payrollDeductions={payrollDeductions}
             totalHours={totalHours}
             monthLabel={monthLabel}
             formatCurrency={formatCurrency}

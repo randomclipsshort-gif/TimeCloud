@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   clearLegacyPrivateFinancialData,
   extractLegacyPrivateFinancialData,
+  extractPrivateFinancialSettings,
   findPrivateFinancialConflicts,
   getLegacyPrivateFinancialData,
   hasLegacyPrivateFinancialData,
@@ -54,6 +55,39 @@ test("cloud workspace serialization excludes salary and earnings fields", () => 
     id: "morning",
     startTime: "06:00",
   }]);
+});
+
+test("payroll deduction settings stay private for encrypted vault sync", () => {
+  const payrollSettings = {
+    payrollDeductionMode: "manual",
+    manualSssPerPaycheck: "125.50",
+    manualPhilHealthPerPaycheck: "200",
+    manualPagIbigPerPaycheck: "100",
+  };
+  const privateData = extractLegacyPrivateFinancialData(payrollSettings);
+  const workspaceData = serializeWorkspaceForCloud(payrollSettings);
+
+  assert.deepEqual(privateData.settings, {
+    dailyWage: "",
+    dailyAllowance: "0",
+    overtimeMultiplier: "1.25",
+    nightDifferential: "10",
+    ...payrollSettings,
+  });
+  assert.deepEqual(workspaceData, {});
+});
+
+test("private settings provide defaults for older salary vaults", () => {
+  assert.deepEqual(extractPrivateFinancialSettings({}), {
+    dailyWage: "",
+    dailyAllowance: "0",
+    overtimeMultiplier: "1.25",
+    nightDifferential: "10",
+    payrollDeductionMode: "automatic",
+    manualSssPerPaycheck: "0",
+    manualPhilHealthPerPaycheck: "0",
+    manualPagIbigPerPaycheck: "0",
+  });
 });
 
 test("legacy salary fields are extracted locally before cleanup", () => {

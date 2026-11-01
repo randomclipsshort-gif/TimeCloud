@@ -10,6 +10,8 @@ export default function SettingsModal({
   dailyWage,
   dailyAllowance,
   overtimeMultiplier,
+  payrollSettings,
+  payrollDeductions,
   earlyPunchWindowMinutes,
   lateGracePeriodMinutes,
   nightDifferential,
@@ -62,6 +64,10 @@ export default function SettingsModal({
       dailyWage,
       dailyAllowance,
       overtimeMultiplier,
+      payrollDeductionMode: payrollSettings?.payrollDeductionMode ?? "automatic",
+      manualSssPerPaycheck: payrollSettings?.manualSssPerPaycheck ?? "0",
+      manualPhilHealthPerPaycheck: payrollSettings?.manualPhilHealthPerPaycheck ?? "0",
+      manualPagIbigPerPaycheck: payrollSettings?.manualPagIbigPerPaycheck ?? "0",
       earlyPunchWindowMinutes,
       lateGracePeriodMinutes,
       nightDifferential,
@@ -112,6 +118,14 @@ export default function SettingsModal({
           dailyAllowance: unlocked.settings.dailyAllowance,
           overtimeMultiplier: unlocked.settings.overtimeMultiplier,
           nightDifferential: unlocked.settings.nightDifferential,
+          payrollDeductionMode:
+            unlocked.settings.payrollDeductionMode ?? "automatic",
+          manualSssPerPaycheck:
+            unlocked.settings.manualSssPerPaycheck ?? "0",
+          manualPhilHealthPerPaycheck:
+            unlocked.settings.manualPhilHealthPerPaycheck ?? "0",
+          manualPagIbigPerPaycheck:
+            unlocked.settings.manualPagIbigPerPaycheck ?? "0",
         }));
       }
       setVaultPassphrase("");
@@ -128,6 +142,21 @@ export default function SettingsModal({
   };
 
   const handleSaveSettings = async () => {
+    const manualContributionKeys = [
+      "manualSssPerPaycheck",
+      "manualPhilHealthPerPaycheck",
+      "manualPagIbigPerPaycheck",
+    ];
+    if (
+      settingsDraft.payrollDeductionMode === "manual" &&
+      manualContributionKeys.some((key) => {
+        const amount = Number(settingsDraft[key]);
+        return !Number.isFinite(amount) || amount < 0;
+      })
+    ) {
+      onSettingsValidationError("Contribution amounts must be zero or greater.");
+      return;
+    }
     setSettingsSaving(true);
     try {
       await onSaveSettings(settingsDraft);
@@ -622,48 +651,99 @@ export default function SettingsModal({
               : "space-y-5 text-xs hidden"
           }
         >
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                SSS Contribution (₱)
-              </label>
-              <input
-                type="number"
-                id="settingSss"
-                placeholder="Not calculated"
-                disabled
-                className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-500 font-medium"
-              />
+          <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            {salaryVaultStatus !== "unlocked" && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-900">
+                {salaryVaultStatus === "unavailable"
+                  ? "Apply the Supabase salary-vault migration to enable private contribution settings."
+                  : "Unlock or create your encrypted salary vault in Earnings & Rates to edit and sync contribution settings."}
+              </p>
+            )}
+            <label className="block">
+              <span className="mb-1 block font-semibold text-slate-700">
+                Contribution calculation
+              </span>
+              <select
+                id="payrollDeductionMode"
+                value={settingsDraft.payrollDeductionMode}
+                onChange={(event) =>
+                  updateDraft("payrollDeductionMode", event.target.value)
+                }
+                disabled={salaryVaultStatus !== "unlocked"}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <option value="automatic">Automatic monthly estimates</option>
+                <option value="manual">Enter amounts per paycheck</option>
+              </select>
+            </label>
+            {settingsDraft.payrollDeductionMode === "manual" ? (
+              <>
+                <p className="text-[11px] text-slate-600">
+                  Enter your employee contribution on each paycheck. TimeCloud
+                  assumes two paychecks per month and deducts both from that
+                  month&apos;s earnings estimate.
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {[
+                    ["manualSssPerPaycheck", "SSS per paycheck"],
+                    ["manualPhilHealthPerPaycheck", "PhilHealth per paycheck"],
+                    ["manualPagIbigPerPaycheck", "Pag-IBIG per paycheck"],
+                  ].map(([key, label]) => (
+                    <label key={key} className="block">
+                      <span className="mb-1 block font-semibold text-slate-700">
+                        {label} (₱)
+                      </span>
+                      <input
+                        type="number"
+                        id={key}
+                        min="0"
+                        step="0.01"
+                        value={settingsDraft[key]}
+                        onChange={(event) => updateDraft(key, event.target.value)}
+                        disabled={salaryVaultStatus !== "unlocked"}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium text-slate-800 focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[
+                  ["SSS employee share", payrollDeductions.sss],
+                  ["PhilHealth employee share", payrollDeductions.philHealth],
+                  ["Pag-IBIG employee share", payrollDeductions.pagIbig],
+                ].map(([label, amount]) => (
+                  <div key={label}>
+                    <span className="mb-1 block font-semibold text-slate-700">
+                      Estimated {label} (₱/month)
+                    </span>
+                    <output className="block rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium text-slate-800">
+                      {Number(amount).toFixed(2)}
+                    </output>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-900">
+              <p className="font-semibold">
+                Planning estimates only; verify actual deductions with your
+                payroll or HR.
+              </p>
+              <p className="mt-1">
+                Automatic mode uses simplified assumptions: SSS employee share
+                at 5% of a ₱5,000–₱35,000 salary-credit step; PhilHealth at 2.5%
+                of a ₱10,000–₱100,000 base; Pag-IBIG at 1% up to ₱1,500 and 2%
+                above that, capped at ₱10,000. These built-in estimates may not
+                match current official tables or your payroll basis. Verify
+                actual deductions with payroll or HR. Employer shares and
+                income tax are not included.
+              </p>
             </div>
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                PhilHealth Contribution (₱)
-              </label>
-              <input
-                type="number"
-                id="settingPhilhealth"
-                placeholder="Not calculated"
-                disabled
-                className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-500 font-medium"
-              />
-            </div>
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Pag-IBIG Contribution (₱)
-              </label>
-              <input
-                type="number"
-                id="settingPagibig"
-                placeholder="Not calculated"
-                disabled
-                className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-500 font-medium"
-              />
-            </div>
+            <p className="text-[11px] font-semibold text-slate-700">
+              Estimated monthly deductions: ₱{payrollDeductions.total.toFixed(2)}
+            </p>
           </div>
-          <p className="text-[11px] text-slate-500">
-            Statutory deductions and withholding tax are not calculated or
-            applied to this personal earnings estimate.
-          </p>
           <div className="pt-4 border-t border-slate-100">
             <span className="font-bold text-slate-800 block mb-3">
               <i className="fa-solid fa-umbrella-beach text-teal-600 mr-1.5"></i>

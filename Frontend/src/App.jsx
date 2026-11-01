@@ -12,6 +12,7 @@ import { holidayCalendarByYear } from "./data/holidayCalendar.js";
 import { getHolidayClassification, getHolidayForDate } from "./utils/holidayUtils.js";
 import { calculateHolidayPay, getAttendanceHours } from "./utils/holidayPay.js";
 import { getAttendancePunchAvailability } from "./utils/attendancePunchRules.js";
+import { calculatePayrollDeductions } from "./utils/payrollDeductions.js";
 import { supabase, supabaseConfigured } from "./lib/supabase.js";
 import {
   clockInForShift,
@@ -732,13 +733,24 @@ export default function App() {
     }
     : null;
   const currentMonthPrefix = `${year}-${String(monthIndex + 1).padStart(2, "0")}-`;
-  const netPay = Object.entries(attendance)
+  const grossPay = Object.entries(attendance)
     .filter(([date]) => date.startsWith(currentMonthPrefix))
     .reduce((sum, [, record]) => {
       if (record.clockedIn) return sum;
       if (record.type === "Leave") return sum + getAmount(record.est);
       return hasValidAttendanceRecord(record) ? sum + getAmount(record.est) : sum;
     }, 0);
+  const payrollDeductions = calculatePayrollDeductions({
+    mode: salaryVaultExtraSettings.payrollDeductionMode,
+    monthlyGrossPay: grossPay,
+    manualPerPaycheck: {
+      sss: salaryVaultExtraSettings.manualSssPerPaycheck,
+      philHealth: salaryVaultExtraSettings.manualPhilHealthPerPaycheck,
+      pagIbig: salaryVaultExtraSettings.manualPagIbigPerPaycheck,
+    },
+    paychecksPerMonth: 2,
+  });
+  const netPay = Math.max(0, grossPay - payrollDeductions.total);
   const totalHours = Object.entries(attendance)
     .filter(([date]) => date.startsWith(currentMonthPrefix))
     .reduce((sum, [, record]) => sum + (
@@ -1235,9 +1247,9 @@ export default function App() {
       setNightDifferential(salaryVault
         ? localPrivateFinancialDefaults.nightDifferential
         : localPrivateData.settings.nightDifferential);
-      setSalaryVaultExtraSettings(salaryVault
-        ? {}
-        : extractPrivateFinancialSettings(localPrivateData.settings));
+      setSalaryVaultExtraSettings(extractPrivateFinancialSettings(
+        salaryVault ? {} : localPrivateData.settings,
+      ));
       setEarlyPunchWindowMinutes(workspace.earlyPunchWindowMinutes);
       setLateGracePeriodMinutes(workspace.lateGracePeriodMinutes);
       workspaceRevisionRef.current = revision;
@@ -2355,6 +2367,8 @@ export default function App() {
         record={selectedRecordWithNightDifferential}
         expenses={expenses}
         totalExpenses={totalExpenses}
+        grossPay={grossPay}
+        payrollDeductions={payrollDeductions}
         remaining={remaining}
         percentage={percentage}
         netPay={netPay}
@@ -2408,6 +2422,8 @@ export default function App() {
         dailyWage={dailyWage}
         dailyAllowance={dailyAllowance}
         overtimeMultiplier={overtimeMultiplier}
+        payrollSettings={salaryVaultExtraSettings}
+        payrollDeductions={payrollDeductions}
         earlyPunchWindowMinutes={earlyPunchWindowMinutes}
         lateGracePeriodMinutes={lateGracePeriodMinutes}
         nightDifferential={nightDifferential}
@@ -2426,7 +2442,11 @@ export default function App() {
           const financialSettingsChanged = draft.dailyWage !== dailyWage ||
             draft.dailyAllowance !== dailyAllowance ||
             draft.overtimeMultiplier !== overtimeMultiplier ||
-            draft.nightDifferential !== nightDifferential;
+            draft.nightDifferential !== nightDifferential ||
+            draft.payrollDeductionMode !== salaryVaultExtraSettings.payrollDeductionMode ||
+            draft.manualSssPerPaycheck !== salaryVaultExtraSettings.manualSssPerPaycheck ||
+            draft.manualPhilHealthPerPaycheck !== salaryVaultExtraSettings.manualPhilHealthPerPaycheck ||
+            draft.manualPagIbigPerPaycheck !== salaryVaultExtraSettings.manualPagIbigPerPaycheck;
           if (financialSettingsChanged && salaryVaultStatus !== "unlocked") {
             addToast("Unlock or create the encrypted salary vault before changing salary settings.", "warning");
             return false;
@@ -2440,6 +2460,10 @@ export default function App() {
                   dailyAllowance: draft.dailyAllowance,
                   overtimeMultiplier: draft.overtimeMultiplier,
                   nightDifferential: draft.nightDifferential,
+                  payrollDeductionMode: draft.payrollDeductionMode,
+                  manualSssPerPaycheck: draft.manualSssPerPaycheck,
+                  manualPhilHealthPerPaycheck: draft.manualPhilHealthPerPaycheck,
+                  manualPagIbigPerPaycheck: draft.manualPagIbigPerPaycheck,
                 },
                 attendance: extractPrivateFinancialAttendance(attendance),
               });
@@ -2462,6 +2486,13 @@ export default function App() {
           setEarlyPunchWindowMinutes(draft.earlyPunchWindowMinutes);
           setLateGracePeriodMinutes(draft.lateGracePeriodMinutes);
           setNightDifferential(draft.nightDifferential);
+          setSalaryVaultExtraSettings((current) => ({
+            ...current,
+            payrollDeductionMode: draft.payrollDeductionMode,
+            manualSssPerPaycheck: draft.manualSssPerPaycheck,
+            manualPhilHealthPerPaycheck: draft.manualPhilHealthPerPaycheck,
+            manualPagIbigPerPaycheck: draft.manualPagIbigPerPaycheck,
+          }));
           setSettingsBalances(draft.settingsBalances);
           setLeaveBalances({
             VL: Number(draft.settingsBalances.VL) || 0,

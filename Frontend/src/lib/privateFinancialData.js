@@ -3,6 +3,10 @@ const privateSettingsDefaults = {
   dailyAllowance: "0",
   overtimeMultiplier: "1.25",
   nightDifferential: "10",
+  payrollDeductionMode: "automatic",
+  manualSssPerPaycheck: "0",
+  manualPhilHealthPerPaycheck: "0",
+  manualPagIbigPerPaycheck: "0",
 };
 
 const privateSettingKeys = Object.keys(privateSettingsDefaults);
@@ -108,7 +112,10 @@ export function mergePrivateFinancialData(...sources) {
 }
 
 export function extractPrivateFinancialSettings(settings) {
-  return pickPrivateFinancialKeys(settings);
+  return {
+    ...privateSettingsDefaults,
+    ...pickPrivateFinancialKeys(settings),
+  };
 }
 
 export function findPrivateFinancialConflicts(localData, vaultData) {

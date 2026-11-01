@@ -5,6 +5,8 @@ export default function FinancialDashboard({
   remaining,
   percentage,
   netPay,
+  grossPay,
+  payrollDeductions,
   totalHours,
   monthLabel,
   formatCurrency,
@@ -40,10 +42,10 @@ export default function FinancialDashboard({
           </div>
           <div>
             <span className="text-xs text-slate-500 font-medium">
-              Recorded Earnings Estimate
+              Gross Earnings Estimate
             </span>
             <h4 className="text-sm font-bold text-slate-800 mt-0.5">
-              {formatCurrency(netPay)}
+              {formatCurrency(grossPay)}
             </h4>
             <span className="text-[10px] text-slate-400">
               {`${totalHours.toFixed(2)} Total Hours`}
@@ -56,13 +58,13 @@ export default function FinancialDashboard({
           </div>
           <div>
             <span className="text-xs text-slate-500 font-medium">
-              Payroll Deductions
+              Estimated Payroll Deductions
             </span>
             <h4 className="text-sm font-bold text-slate-800 mt-0.5">
-              Not configured
+              {formatCurrency(payrollDeductions.total)}
             </h4>
             <span className="text-[10px] text-rose-500 font-medium">
-              Not calculated
+              SSS · PhilHealth · Pag-IBIG
             </span>
           </div>
         </div>
@@ -72,7 +74,7 @@ export default function FinancialDashboard({
           </div>
           <div>
             <span className="text-xs text-slate-500 font-medium">
-              Recorded Earnings
+              Net Earnings Estimate
             </span>
             <h4 className="text-sm font-bold text-emerald-600 mt-0.5">
               {formatCurrency(netPay)}
@@ -100,7 +102,7 @@ export default function FinancialDashboard({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4">
             <span className="text-xs text-slate-500 font-medium block">
-              Recorded Earnings Estimate
+              Net Earnings Estimate
             </span>
             <span
               id="trackerNetPay"
