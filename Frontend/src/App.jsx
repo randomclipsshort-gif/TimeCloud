@@ -12,7 +12,12 @@ import { holidayCalendarByYear } from "./data/holidayCalendar.js";
 import { getHolidayClassification, getHolidayForDate } from "./utils/holidayUtils.js";
 import { calculateHolidayPay, getAttendanceHours } from "./utils/holidayPay.js";
 import { getAttendancePunchAvailability } from "./utils/attendancePunchRules.js";
-import { calculatePayrollDeductions } from "./utils/payrollDeductions.js";
+import {
+  calculateCutoffPayrollDeductions,
+  getPayrollDeductionSettingsDefaults,
+  payrollDeductionSettingKeys,
+  sumCutoffPayrollDeductions,
+} from "./utils/payrollDeductions.js";
 import {
   getNextPayrollPeriod,
   getPayrollPeriodForDate,
@@ -700,6 +705,37 @@ export default function App() {
     () => summarizePayrollPeriod(attendance, payrollPeriod, getPayrollRecordEarnings),
     [attendance, getPayrollRecordEarnings, payrollPeriod],
   );
+  const payrollDeductionSettings = useMemo(
+    () => getPayrollDeductionSettingsDefaults(salaryVaultExtraSettings),
+    [salaryVaultExtraSettings],
+  );
+  const payrollPeriodMonthGross = useMemo(() => {
+    const payrollMonth = payrollPeriod.endDate.slice(0, 7);
+    return [10, 25].reduce((sum, cutoffDay) => {
+      const period = getPayrollPeriodForMonth(payrollMonth, cutoffDay);
+      return sum + summarizePayrollPeriod(
+        attendance,
+        period,
+        getPayrollRecordEarnings,
+      ).recordedEarnings;
+    }, 0);
+  }, [attendance, getPayrollRecordEarnings, payrollPeriod]);
+  const cutoffPayrollDeductions = useMemo(
+    () => calculateCutoffPayrollDeductions({
+      period: payrollPeriod,
+      mode: payrollDeductionSettings.payrollDeductionMode,
+      monthlyGrossPay: payrollPeriodMonthGross,
+      manualPerPaycheck: {
+        sss: payrollDeductionSettings.manualSssPerPaycheck,
+        philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
+        pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
+      },
+      settings: payrollDeductionSettings,
+    }),
+    [payrollDeductionSettings, payrollPeriod, payrollPeriodMonthGross],
+  );
+  const payrollPeriodNetPay =
+    payrollPeriodSummary.recordedEarnings - cutoffPayrollDeductions.total;
   const selectedWorkedHours = hasValidAttendanceRecord(selectedAttendanceRecord)
     ? getAttendanceHours(selectedAttendanceRecord)
     : 0;
@@ -828,16 +864,20 @@ export default function App() {
       if (record.type === "Leave") return sum + getAmount(record.est);
       return hasValidAttendanceRecord(record) ? sum + getAmount(record.est) : sum;
     }, 0);
-  const payrollDeductions = calculatePayrollDeductions({
-    mode: salaryVaultExtraSettings.payrollDeductionMode,
-    monthlyGrossPay: grossPay,
-    manualPerPaycheck: {
-      sss: salaryVaultExtraSettings.manualSssPerPaycheck,
-      philHealth: salaryVaultExtraSettings.manualPhilHealthPerPaycheck,
-      pagIbig: salaryVaultExtraSettings.manualPagIbigPerPaycheck,
-    },
-    paychecksPerMonth: 2,
-  });
+  const calendarPayrollMonth = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+  const payrollDeductions = sumCutoffPayrollDeductions(
+    ...[10, 25].map((cutoffDay) => calculateCutoffPayrollDeductions({
+      period: getPayrollPeriodForMonth(calendarPayrollMonth, cutoffDay),
+      mode: payrollDeductionSettings.payrollDeductionMode,
+      monthlyGrossPay: grossPay,
+      manualPerPaycheck: {
+        sss: payrollDeductionSettings.manualSssPerPaycheck,
+        philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
+        pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
+      },
+      settings: payrollDeductionSettings,
+    })),
+  );
   const netPay = Math.max(0, grossPay - payrollDeductions.total);
   const totalHours = Object.entries(attendance)
     .filter(([date]) => date.startsWith(currentMonthPrefix))
@@ -2484,6 +2524,8 @@ export default function App() {
         totalHours={totalHours}
         payrollPeriod={payrollPeriod}
         payrollPeriodSummary={payrollPeriodSummary}
+        cutoffPayrollDeductions={cutoffPayrollDeductions}
+        payrollPeriodNetPay={payrollPeriodNetPay}
         payrollPeriodEarningsAvailable={isPayrollPeriodEarningsAvailable(salaryVaultStatus)}
         currentDate={manilaNow.date}
         salaryVaultStatus={salaryVaultStatus}
@@ -2530,6 +2572,8 @@ export default function App() {
         userName={user?.name}
         payrollPeriod={payrollPeriod}
         payrollPeriodSummary={payrollPeriodSummary}
+        cutoffPayrollDeductions={cutoffPayrollDeductions}
+        payrollPeriodNetPay={payrollPeriodNetPay}
         payrollPeriodEarningsAvailable={isPayrollPeriodEarningsAvailable(salaryVaultStatus)}
         dailyWage={dailyWage}
         formatCurrency={formatCurrency}
@@ -2561,14 +2605,14 @@ export default function App() {
         onReloadSalaryVault={reloadSalaryVault}
         onSettingsValidationError={(message) => showToast(message, "warning")}
         onSaveSettings={async (draft) => {
+          const currentPayrollSettings =
+            getPayrollDeductionSettingsDefaults(salaryVaultExtraSettings);
           const financialSettingsChanged = draft.dailyWage !== dailyWage ||
             draft.dailyAllowance !== dailyAllowance ||
             draft.overtimeMultiplier !== overtimeMultiplier ||
             draft.nightDifferential !== nightDifferential ||
-            draft.payrollDeductionMode !== salaryVaultExtraSettings.payrollDeductionMode ||
-            draft.manualSssPerPaycheck !== salaryVaultExtraSettings.manualSssPerPaycheck ||
-            draft.manualPhilHealthPerPaycheck !== salaryVaultExtraSettings.manualPhilHealthPerPaycheck ||
-            draft.manualPagIbigPerPaycheck !== salaryVaultExtraSettings.manualPagIbigPerPaycheck;
+            payrollDeductionSettingKeys.some((key) =>
+              draft[key] !== currentPayrollSettings[key]);
           if (financialSettingsChanged && salaryVaultStatus !== "unlocked") {
             addToast("Unlock or create the encrypted salary vault before changing salary settings.", "warning");
             return false;
@@ -2582,10 +2626,10 @@ export default function App() {
                   dailyAllowance: draft.dailyAllowance,
                   overtimeMultiplier: draft.overtimeMultiplier,
                   nightDifferential: draft.nightDifferential,
-                  payrollDeductionMode: draft.payrollDeductionMode,
-                  manualSssPerPaycheck: draft.manualSssPerPaycheck,
-                  manualPhilHealthPerPaycheck: draft.manualPhilHealthPerPaycheck,
-                  manualPagIbigPerPaycheck: draft.manualPagIbigPerPaycheck,
+                  ...Object.fromEntries(payrollDeductionSettingKeys.map((key) => [
+                    key,
+                    draft[key],
+                  ])),
                 },
                 attendance: extractPrivateFinancialAttendance(attendance),
               });
@@ -2610,10 +2654,10 @@ export default function App() {
           setNightDifferential(draft.nightDifferential);
           setSalaryVaultExtraSettings((current) => ({
             ...current,
-            payrollDeductionMode: draft.payrollDeductionMode,
-            manualSssPerPaycheck: draft.manualSssPerPaycheck,
-            manualPhilHealthPerPaycheck: draft.manualPhilHealthPerPaycheck,
-            manualPagIbigPerPaycheck: draft.manualPagIbigPerPaycheck,
+            ...Object.fromEntries(payrollDeductionSettingKeys.map((key) => [
+              key,
+              draft[key],
+            ])),
           }));
           setSettingsBalances(draft.settingsBalances);
           setLeaveBalances({

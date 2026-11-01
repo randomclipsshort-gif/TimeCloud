@@ -1,4 +1,9 @@
 import React, { useEffect, useState } from "react";
+import {
+  getPayrollDeductionSettingsDefaults,
+  payrollContributions,
+  payrollFrequencyLabels,
+} from "../../utils/payrollDeductions.js";
 
 export default function SettingsModal({
   open,
@@ -64,10 +69,7 @@ export default function SettingsModal({
       dailyWage,
       dailyAllowance,
       overtimeMultiplier,
-      payrollDeductionMode: payrollSettings?.payrollDeductionMode ?? "automatic",
-      manualSssPerPaycheck: payrollSettings?.manualSssPerPaycheck ?? "0",
-      manualPhilHealthPerPaycheck: payrollSettings?.manualPhilHealthPerPaycheck ?? "0",
-      manualPagIbigPerPaycheck: payrollSettings?.manualPagIbigPerPaycheck ?? "0",
+      ...getPayrollDeductionSettingsDefaults(payrollSettings),
       earlyPunchWindowMinutes,
       lateGracePeriodMinutes,
       nightDifferential,
@@ -118,14 +120,7 @@ export default function SettingsModal({
           dailyAllowance: unlocked.settings.dailyAllowance,
           overtimeMultiplier: unlocked.settings.overtimeMultiplier,
           nightDifferential: unlocked.settings.nightDifferential,
-          payrollDeductionMode:
-            unlocked.settings.payrollDeductionMode ?? "automatic",
-          manualSssPerPaycheck:
-            unlocked.settings.manualSssPerPaycheck ?? "0",
-          manualPhilHealthPerPaycheck:
-            unlocked.settings.manualPhilHealthPerPaycheck ?? "0",
-          manualPagIbigPerPaycheck:
-            unlocked.settings.manualPagIbigPerPaycheck ?? "0",
+          ...getPayrollDeductionSettingsDefaults(unlocked.settings),
         }));
       }
       setVaultPassphrase("");
@@ -142,19 +137,31 @@ export default function SettingsModal({
   };
 
   const handleSaveSettings = async () => {
-    const manualContributionKeys = [
-      "manualSssPerPaycheck",
-      "manualPhilHealthPerPaycheck",
-      "manualPagIbigPerPaycheck",
-    ];
-    if (
-      settingsDraft.payrollDeductionMode === "manual" &&
-      manualContributionKeys.some((key) => {
+    const invalidAmount = payrollContributions.some(({ id, manualAmountKey }) => {
+      const frequency = settingsDraft[`${id}Frequency`];
+      const amountKeys = [];
+      if (settingsDraft.payrollDeductionMode === "manual" && frequency !== "custom") {
+        amountKeys.push(manualAmountKey);
+      }
+      if (frequency === "custom") {
+        amountKeys.push(`${id}FirstCutoffAmount`, `${id}SecondCutoffAmount`);
+      }
+      return amountKeys.some((key) => {
         const amount = Number(settingsDraft[key]);
         return !Number.isFinite(amount) || amount < 0;
-      })
-    ) {
+      });
+    });
+    if (invalidAmount) {
       onSettingsValidationError("Contribution amounts must be zero or greater.");
+      return;
+    }
+    if (payrollContributions.some(({ id }) => {
+      const frequency = settingsDraft[`${id}Frequency`];
+      const monthlyCutoff = settingsDraft[`${id}MonthlyCutoff`];
+      return !Object.hasOwn(payrollFrequencyLabels, frequency) ||
+        (frequency === "monthly" && !["10", "25"].includes(String(monthlyCutoff)));
+    })) {
+      onSettingsValidationError("Choose a valid contribution frequency and monthly cutoff.");
       return;
     }
     setSettingsSaving(true);
@@ -661,7 +668,7 @@ export default function SettingsModal({
             )}
             <label className="block">
               <span className="mb-1 block font-semibold text-slate-700">
-                Contribution calculation
+                Contribution amount source
               </span>
               <select
                 id="payrollDeductionMode"
@@ -672,59 +679,127 @@ export default function SettingsModal({
                 disabled={salaryVaultStatus !== "unlocked"}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <option value="automatic">Automatic monthly estimates</option>
-                <option value="manual">Enter amounts per paycheck</option>
+                <option value="automatic">Automatic planning estimates</option>
+                <option value="manual">Enter configured amounts</option>
               </select>
             </label>
-            {settingsDraft.payrollDeductionMode === "manual" ? (
-              <>
-                <p className="text-[11px] text-slate-600">
-                  Enter your employee contribution on each paycheck. TimeCloud
-                  assumes two paychecks per month and deducts both from that
-                  month&apos;s earnings estimate.
-                </p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  {[
-                    ["manualSssPerPaycheck", "SSS per paycheck"],
-                    ["manualPhilHealthPerPaycheck", "PhilHealth per paycheck"],
-                    ["manualPagIbigPerPaycheck", "Pag-IBIG per paycheck"],
-                  ].map(([key, label]) => (
-                    <label key={key} className="block">
-                      <span className="mb-1 block font-semibold text-slate-700">
-                        {label} (₱)
-                      </span>
-                      <input
-                        type="number"
-                        id={key}
-                        min="0"
-                        step="0.01"
-                        value={settingsDraft[key]}
-                        onChange={(event) => updateDraft(key, event.target.value)}
-                        disabled={salaryVaultStatus !== "unlocked"}
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium text-slate-800 focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
-                      />
-                    </label>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {[
-                  ["SSS employee share", payrollDeductions.sss],
-                  ["PhilHealth employee share", payrollDeductions.philHealth],
-                  ["Pag-IBIG employee share", payrollDeductions.pagIbig],
-                ].map(([label, amount]) => (
-                  <div key={label}>
-                    <span className="mb-1 block font-semibold text-slate-700">
-                      Estimated {label} (₱/month)
-                    </span>
-                    <output className="block rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium text-slate-800">
-                      {Number(amount).toFixed(2)}
-                    </output>
+            <p className="text-[11px] text-slate-600">
+              Configure each employee contribution independently. Legacy manual
+              per-paycheck values remain set to Every cutoff; automatic estimates
+              default to splitting the monthly amount evenly. With automatic
+              estimates, Every cutoff applies the full estimated monthly amount
+              at both cutoffs; Monthly assigns it to one cutoff.
+            </p>
+            <div className="space-y-3">
+              {payrollContributions.map(({ id, label, manualAmountKey }) => {
+                const frequency = settingsDraft[`${id}Frequency`];
+                const isCustom = frequency === "custom";
+                const usesMonthlyAmount =
+                  frequency === "monthly" || frequency === "split_monthly";
+                const amountLabel = usesMonthlyAmount
+                  ? "Monthly amount"
+                  : "Amount each cutoff";
+                const monthlyAmount = payrollDeductions?.items?.find((item) => item.id === id)?.amount;
+                const automaticAmountLabel = frequency === "custom"
+                  ? "Configured total across cutoffs"
+                  : "Estimated total across cutoffs";
+                return (
+                  <div key={id} className="rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-1 block font-semibold text-slate-700">
+                          {label} employee contribution frequency
+                        </span>
+                        <select
+                          id={`${id}Frequency`}
+                          value={frequency}
+                          onChange={(event) =>
+                            updateDraft(`${id}Frequency`, event.target.value)
+                          }
+                          disabled={salaryVaultStatus !== "unlocked"}
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {Object.entries(payrollFrequencyLabels).map(([value, optionLabel]) => (
+                            <option key={value} value={value}>{optionLabel}</option>
+                          ))}
+                        </select>
+                      </label>
+                      {settingsDraft.payrollDeductionMode === "manual" && !isCustom ? (
+                        <label className="block">
+                          <span className="mb-1 block font-semibold text-slate-700">
+                            {label} {amountLabel} (₱)
+                          </span>
+                          <input
+                            type="number"
+                            id={manualAmountKey}
+                            min="0"
+                            step="0.01"
+                            value={settingsDraft[manualAmountKey]}
+                            onChange={(event) =>
+                              updateDraft(manualAmountKey, event.target.value)
+                            }
+                            disabled={salaryVaultStatus !== "unlocked"}
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium text-slate-800 focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          />
+                        </label>
+                      ) : settingsDraft.payrollDeductionMode === "automatic" ? (
+                        <div>
+                          <span className="mb-1 block font-semibold text-slate-700">
+                            {automaticAmountLabel}
+                          </span>
+                          <output className="block rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-800">
+                            {Number(monthlyAmount || 0).toFixed(2)}
+                          </output>
+                        </div>
+                      ) : null}
+                    </div>
+                    {frequency === "monthly" && (
+                      <label className="mt-3 block sm:max-w-xs">
+                        <span className="mb-1 block font-semibold text-slate-700">
+                          Apply monthly amount on cutoff
+                        </span>
+                        <select
+                          id={`${id}MonthlyCutoff`}
+                          value={settingsDraft[`${id}MonthlyCutoff`]}
+                          onChange={(event) =>
+                            updateDraft(`${id}MonthlyCutoff`, event.target.value)
+                          }
+                          disabled={salaryVaultStatus !== "unlocked"}
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <option value="10">10th cutoff</option>
+                          <option value="25">25th cutoff</option>
+                        </select>
+                      </label>
+                    )}
+                    {isCustom && (
+                      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {[
+                          [`${id}FirstCutoffAmount`, "First cutoff (10th)"],
+                          [`${id}SecondCutoffAmount`, "Second cutoff (25th)"],
+                        ].map(([key, cutoffLabel]) => (
+                          <label key={key} className="block">
+                            <span className="mb-1 block font-semibold text-slate-700">
+                              {label} · {cutoffLabel} (₱)
+                            </span>
+                            <input
+                              type="number"
+                              id={key}
+                              min="0"
+                              step="0.01"
+                              value={settingsDraft[key]}
+                              onChange={(event) => updateDraft(key, event.target.value)}
+                              disabled={salaryVaultStatus !== "unlocked"}
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium text-slate-800 focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-900">
               <p className="font-semibold">
                 Planning estimates only; verify actual deductions with your
@@ -736,13 +811,15 @@ export default function SettingsModal({
                 of a ₱10,000–₱100,000 base; Pag-IBIG at 1% up to ₱1,500 and 2%
                 above that, capped at ₱10,000. These built-in estimates may not
                 match current official tables or your payroll basis. Verify
-                actual deductions with payroll or HR. Employer shares and
-                income tax are not included.
+                actual deductions with payroll or HR. These estimates include
+                employee shares only; employer contributions and income tax are
+                not included or deducted from net pay.
               </p>
             </div>
-            <p className="text-[11px] font-semibold text-slate-700">
-              Estimated monthly deductions: ₱{payrollDeductions.total.toFixed(2)}
-            </p>
+            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700">
+              <span>Estimated total across both cutoffs</span>
+              <span>₱{payrollDeductions.total.toFixed(2)}</span>
+            </div>
           </div>
           <div className="pt-4 border-t border-slate-100">
             <span className="font-bold text-slate-800 block mb-3">

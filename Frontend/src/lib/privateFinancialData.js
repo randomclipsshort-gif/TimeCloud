@@ -25,6 +25,7 @@ function isObject(value) {
 function isPrivateFinancialKey(key) {
   return privateSettingKeys.includes(key) ||
     privateAttendanceKeys.includes(key) ||
+    /^(sss|philhealth|pagibig)(frequency|monthlycutoff|firstcutoffamount|secondcutoffamount)$/i.test(key) ||
     /(salary|wage|pay|earning|compensation|rate|bonus|commission|income|gross|deduction|tax|payroll|allowance|night.?differential|overtime.?multiplier|overtime.?amount|^(base|ot|penalty|est)$)/i.test(key);
 }
 

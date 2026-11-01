@@ -40,6 +40,8 @@ export default function DashboardContent(props) {
     totalHours,
     payrollPeriod,
     payrollPeriodSummary,
+    cutoffPayrollDeductions,
+    payrollPeriodNetPay,
     payrollPeriodEarningsAvailable,
     salaryVaultStatus,
     currentDate,
@@ -102,6 +104,8 @@ export default function DashboardContent(props) {
             monthLabel={monthLabel}
             payrollPeriod={payrollPeriod}
             payrollPeriodSummary={payrollPeriodSummary}
+            cutoffPayrollDeductions={cutoffPayrollDeductions}
+            payrollPeriodNetPay={payrollPeriodNetPay}
             payrollPeriodEarningsAvailable={payrollPeriodEarningsAvailable}
             salaryVaultStatus={salaryVaultStatus}
             currentDate={currentDate}

@@ -17,6 +17,8 @@ export default function FinancialDashboard({
   monthLabel,
   payrollPeriod,
   payrollPeriodSummary,
+  cutoffPayrollDeductions,
+  payrollPeriodNetPay,
   payrollPeriodEarningsAvailable,
   salaryVaultStatus,
   currentDate,
@@ -72,7 +74,7 @@ export default function FinancialDashboard({
           </div>
           <div>
             <span className="text-xs text-slate-500 font-medium">
-              Estimated Payroll Deductions
+              Estimated Monthly Deductions
             </span>
             <h4 className="text-sm font-bold text-slate-800 mt-0.5">
               {formatCurrency(payrollDeductions.total)}
@@ -192,13 +194,62 @@ export default function FinancialDashboard({
             </span>
           </div>
           <div className="rounded-xl border border-teal-100 bg-teal-50/60 p-4">
-            <span className="block text-xs font-medium text-teal-800">Recorded earnings estimate</span>
+            <span className="block text-xs font-medium text-teal-800">Gross earnings estimate</span>
             <span className="mt-1 block text-xl font-bold text-teal-800">
               {payrollPeriodEarningsAvailable
                 ? formatCurrency(payrollPeriodSummary.recordedEarnings)
                 : "Private"}
             </span>
           </div>
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-rose-100 bg-rose-50/50 p-4">
+            <span className="block text-xs font-medium text-rose-800">Total cutoff deductions</span>
+            <span className="mt-1 block text-xl font-bold text-rose-800">
+              {payrollPeriodEarningsAvailable
+                ? formatCurrency(cutoffPayrollDeductions.total)
+                : "Private"}
+            </span>
+          </div>
+          <div className="rounded-xl border border-amber-100 bg-amber-50/60 p-4">
+            <span className="block text-xs font-medium text-amber-800">Employee contributions</span>
+            <span className="mt-1 block text-xl font-bold text-amber-800">
+              {payrollPeriodEarningsAvailable
+                ? formatCurrency(cutoffPayrollDeductions.employeeContributionTotal)
+                : "Private"}
+            </span>
+          </div>
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
+            <span className="block text-xs font-medium text-emerald-800">Net pay after cutoff deductions</span>
+            <span className="mt-1 block text-xl font-bold text-emerald-800">
+              {payrollPeriodEarningsAvailable
+                ? formatCurrency(payrollPeriodNetPay)
+                : "Private"}
+            </span>
+          </div>
+        </div>
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-slate-700">
+            Cutoff deduction breakdown
+          </h3>
+          <div className="mt-3 divide-y divide-slate-100">
+            {cutoffPayrollDeductions.items.map((item) => (
+              <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-xs">
+                <span className="font-semibold text-slate-700">
+                  {item.label} employee contribution
+                </span>
+                <span className="text-slate-500">{item.frequencyLabel}</span>
+                <span className="font-bold text-slate-800">
+                  {payrollPeriodEarningsAvailable
+                    ? formatCurrency(item.amount)
+                    : "Private"}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+            Only configured employee-paid contributions reduce net pay. Employer contributions are not modeled or deducted.
+          </p>
         </div>
         {!payrollPeriodEarningsAvailable && (
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" role="status">
@@ -214,7 +265,7 @@ export default function FinancialDashboard({
           </p>
         )}
         <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
-          Overnight shifts are split at cutoff boundaries, with recorded earnings apportioned by minutes worked. Workdays follow the shift-start date. These are estimates, not a payslip or confirmed payday; monthly deductions remain in the estimate cards above.
+          Overnight shifts are split at cutoff boundaries, with recorded earnings apportioned by minutes worked. Workdays follow the shift-start date. These are estimates, not finalized payroll or a confirmed payday.
         </p>
       </section>
       <section className="bg-cardBg rounded-2xl border border-slate-200 p-6 shadow-sm">

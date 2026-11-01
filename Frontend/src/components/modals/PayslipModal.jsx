@@ -6,6 +6,8 @@ export default function PayslipModal({
   userName,
   payrollPeriod,
   payrollPeriodSummary,
+  cutoffPayrollDeductions,
+  payrollPeriodNetPay,
   payrollPeriodEarningsAvailable,
   dailyWage,
   formatCurrency,
@@ -13,6 +15,12 @@ export default function PayslipModal({
   const periodLabel = formatPayrollPeriod(payrollPeriod);
   const earningsLabel = payrollPeriodEarningsAvailable
     ? formatCurrency(payrollPeriodSummary.recordedEarnings)
+    : "Private — unlock salary vault";
+  const deductionsLabel = payrollPeriodEarningsAvailable
+    ? formatCurrency(cutoffPayrollDeductions.total)
+    : "Private — unlock salary vault";
+  const netPayLabel = payrollPeriodEarningsAvailable
+    ? formatCurrency(payrollPeriodNetPay)
     : "Private — unlock salary vault";
   const recordedHours = payrollPeriodSummary.regularHours +
     payrollPeriodSummary.overtimeHours;
@@ -95,7 +103,7 @@ export default function PayslipModal({
       <div className="bg-gradient-to-r from-teal-600 to-teal-700 text-white rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-md mb-6 gap-4">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider opacity-90 block">
-            Recorded Earnings Estimate
+            Gross Earnings Estimate
           </span>
           <span className="text-3xl font-black">
             {earningsLabel}
@@ -117,7 +125,7 @@ export default function PayslipModal({
             <h4 className="font-bold text-xs uppercase tracking-wider text-teal-800 flex items-center space-x-1.5">
               <i className="fa-solid fa-plus-circle text-teal-600"></i>
               <span>
-                Earnings Breakdown
+                Gross Earnings Breakdown
               </span>
             </h4>
             <span className="text-xs font-extrabold text-teal-700">
@@ -127,7 +135,7 @@ export default function PayslipModal({
           <div className="space-y-2.5 text-xs text-slate-600">
             <div className="flex justify-between">
               <span>
-                Recorded earnings and leave estimates for this cutoff
+                Recorded attendance and leave earnings
               </span>
               <span className="font-semibold text-slate-800">
                 {earningsLabel}
@@ -144,18 +152,35 @@ export default function PayslipModal({
               </span>
             </h4>
             <span className="text-xs font-extrabold text-rose-700">
-              Not allocated
+              {deductionsLabel}
             </span>
           </div>
           <div className="space-y-2.5 text-xs text-slate-600">
-            <div className="flex justify-between">
-              <span>
-                Monthly deductions are not allocated to this cutoff
-              </span>
+            {cutoffPayrollDeductions.items.map((item) => (
+              <div key={item.id} className="flex flex-wrap justify-between gap-2">
+                <span>{item.label} employee contribution · {item.frequencyLabel}</span>
+                <span className="font-semibold text-slate-800">
+                  {payrollPeriodEarningsAvailable
+                    ? formatCurrency(item.amount)
+                    : "Private"}
+                </span>
+              </div>
+            ))}
+            <div className="flex justify-between border-t border-slate-100 pt-2">
+              <span>Total employee contributions</span>
               <span className="font-semibold text-slate-800">
-                See monthly finance estimate
+                {payrollPeriodEarningsAvailable
+                  ? formatCurrency(cutoffPayrollDeductions.employeeContributionTotal)
+                  : "Private"}
               </span>
             </div>
+            <div className="flex justify-between font-bold text-slate-800">
+              <span>Net pay after deductions</span>
+              <span>{netPayLabel}</span>
+            </div>
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              Employer contributions are not modeled or deducted from employee net pay. No finalized payroll record is created.
+            </p>
           </div>
         </div>
       </div>

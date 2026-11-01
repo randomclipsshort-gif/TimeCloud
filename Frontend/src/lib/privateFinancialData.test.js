@@ -63,6 +63,14 @@ test("payroll deduction settings stay private for encrypted vault sync", () => {
     manualSssPerPaycheck: "125.50",
     manualPhilHealthPerPaycheck: "200",
     manualPagIbigPerPaycheck: "100",
+    sssFrequency: "split_monthly",
+    sssFirstCutoffAmount: "500",
+    sssSecondCutoffAmount: "500",
+    philHealthFrequency: "monthly",
+    philHealthMonthlyCutoff: "25",
+    pagIbigFrequency: "custom",
+    pagIbigFirstCutoffAmount: "50",
+    pagIbigSecondCutoffAmount: "75",
   };
   const privateData = extractLegacyPrivateFinancialData(payrollSettings);
   const workspaceData = serializeWorkspaceForCloud(payrollSettings);
