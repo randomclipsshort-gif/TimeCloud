@@ -546,11 +546,12 @@ export default function App() {
   const [activeModal, setActiveModal] = useState(null);
   const [activeSettingsTab, setActiveSettingsTab] = useState("earnings");
   const [page, setPage] = useState(0);
-  const [monthIndex, setMonthIndex] = useState(8);
-  const [year, setYear] = useState(2026);
+  const [initialCalendarDate] = useState(() => getManilaDateTime().date);
+  const [monthIndex, setMonthIndex] = useState(() => Number(initialCalendarDate.slice(5, 7)) - 1);
+  const [year, setYear] = useState(() => Number(initialCalendarDate.slice(0, 4)));
   const [selectedPayrollPeriodEndDate, setSelectedPayrollPeriodEndDate] = useState(null);
   const [monthCarouselMotion, setMonthCarouselMotion] = useState(null);
-  const [selectedDay, setSelectedDay] = useState(1);
+  const [selectedDay, setSelectedDay] = useState(() => Number(initialCalendarDate.slice(8, 10)));
   const [attendance, setAttendance] = useState({});
   const [activeTimeEntry, setActiveTimeEntry] = useState(null);
   const [holidays, setHolidays] = useState(() =>
@@ -1520,11 +1521,12 @@ export default function App() {
   };
 
   const resetCalendar = () => {
+    const today = getManilaDateTime().date;
     window.clearTimeout(monthCarouselTimer.current);
     setMonthCarouselMotion(null);
-    setMonthIndex(8);
-    setYear(2026);
-    setSelectedDay(1);
+    setMonthIndex(Number(today.slice(5, 7)) - 1);
+    setYear(Number(today.slice(0, 4)));
+    setSelectedDay(Number(today.slice(8, 10)));
     showToast("Calendar view reset", "info");
   };
 
@@ -2526,9 +2528,9 @@ export default function App() {
       <PayslipModal
         open={activeModal === "payslipModal"}
         userName={user?.name}
-        monthLabel={monthLabel}
-        estimatedEarnings={netPay}
-        totalHours={totalHours}
+        payrollPeriod={payrollPeriod}
+        payrollPeriodSummary={payrollPeriodSummary}
+        payrollPeriodEarningsAvailable={isPayrollPeriodEarningsAvailable(salaryVaultStatus)}
         dailyWage={dailyWage}
         formatCurrency={formatCurrency}
       />

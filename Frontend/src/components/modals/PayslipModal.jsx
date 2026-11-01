@@ -1,14 +1,22 @@
 import React from "react";
+import { formatPayrollPeriod } from "../../utils/payrollPeriods.js";
 
 export default function PayslipModal({
   open,
   userName,
-  monthLabel,
-  estimatedEarnings,
-  totalHours,
+  payrollPeriod,
+  payrollPeriodSummary,
+  payrollPeriodEarningsAvailable,
   dailyWage,
   formatCurrency,
 }) {
+  const periodLabel = formatPayrollPeriod(payrollPeriod);
+  const earningsLabel = payrollPeriodEarningsAvailable
+    ? formatCurrency(payrollPeriodSummary.recordedEarnings)
+    : "Private — unlock salary vault";
+  const recordedHours = payrollPeriodSummary.regularHours +
+    payrollPeriodSummary.overtimeHours;
+
   return (
   <div id="payslipModal" className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-hidden={!open} style={{ display: open ? "flex" : "none" }}>
     <div className="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-3xl p-8 shadow-2xl max-h-[92vh] overflow-y-auto">
@@ -22,9 +30,7 @@ export default function PayslipModal({
               Personal Earnings Summary — Estimate Only
             </span>
             <h3 className="font-extrabold text-xl text-textMain">
-              
-                {monthLabel}
-              
+              {periodLabel}
             </h3>
           </div>
         </div>
@@ -65,7 +71,7 @@ export default function PayslipModal({
               Pay Period:
             </span>
             <span className="font-semibold text-slate-800">
-              {monthLabel}
+              {periodLabel}
             </span>
           </div>
           <div className="flex justify-between">
@@ -73,7 +79,7 @@ export default function PayslipModal({
               Recorded Hours:
             </span>
             <span className="font-semibold text-teal-700">
-              {`${totalHours.toFixed(2)} hours`}
+              {`${recordedHours.toFixed(2)} hours`}
             </span>
           </div>
           <div className="flex justify-between">
@@ -92,10 +98,9 @@ export default function PayslipModal({
             Recorded Earnings Estimate
           </span>
           <span className="text-3xl font-black">
-            {formatCurrency(estimatedEarnings)}
-              
+            {earningsLabel}
             <span className="text-sm font-normal opacity-90">
-              PHP
+              {payrollPeriodEarningsAvailable ? " PHP" : ""}
             </span>
           </span>
         </div>
@@ -116,16 +121,16 @@ export default function PayslipModal({
               </span>
             </h4>
             <span className="text-xs font-extrabold text-teal-700">
-              {formatCurrency(estimatedEarnings)}
+              {earningsLabel}
             </span>
           </div>
           <div className="space-y-2.5 text-xs text-slate-600">
             <div className="flex justify-between">
               <span>
-                Recorded attendance and leave estimates
+                Recorded earnings and leave estimates for this cutoff
               </span>
               <span className="font-semibold text-slate-800">
-                {formatCurrency(estimatedEarnings)}
+                {earningsLabel}
               </span>
             </div>
           </div>
@@ -139,16 +144,16 @@ export default function PayslipModal({
               </span>
             </h4>
             <span className="text-xs font-extrabold text-rose-700">
-              Not configured
+              Not allocated
             </span>
           </div>
           <div className="space-y-2.5 text-xs text-slate-600">
             <div className="flex justify-between">
               <span>
-                Payroll deductions and contributions
+                Monthly deductions are not allocated to this cutoff
               </span>
               <span className="font-semibold text-slate-800">
-                Not included
+                See monthly finance estimate
               </span>
             </div>
           </div>
