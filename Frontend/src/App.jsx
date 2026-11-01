@@ -13,6 +13,16 @@ import { getHolidayClassification, getHolidayForDate } from "./utils/holidayUtil
 import { calculateHolidayPay, getAttendanceHours } from "./utils/holidayPay.js";
 import { getAttendancePunchAvailability } from "./utils/attendancePunchRules.js";
 import { calculatePayrollDeductions } from "./utils/payrollDeductions.js";
+import {
+  getNextPayrollPeriod,
+  getPayrollPeriodForDate,
+  getPayrollPeriodForEndDate,
+  getPayrollPeriodForMonth,
+  getPreviousPayrollPeriod,
+  isPayrollPeriodEarningsAvailable,
+  isValidPayrollPeriodEndDate,
+  summarizePayrollPeriod,
+} from "./utils/payrollPeriods.js";
 import { supabase, supabaseConfigured } from "./lib/supabase.js";
 import {
   clockInForShift,
@@ -538,6 +548,7 @@ export default function App() {
   const [page, setPage] = useState(0);
   const [monthIndex, setMonthIndex] = useState(8);
   const [year, setYear] = useState(2026);
+  const [selectedPayrollPeriodEndDate, setSelectedPayrollPeriodEndDate] = useState(null);
   const [monthCarouselMotion, setMonthCarouselMotion] = useState(null);
   const [selectedDay, setSelectedDay] = useState(1);
   const [attendance, setAttendance] = useState({});
@@ -588,6 +599,17 @@ export default function App() {
 
   const selectedDate = formatDate(year, monthIndex, selectedDay);
   const monthLabel = `${months[monthIndex]} ${year}`;
+  const currentPayrollPeriod = useMemo(
+    () => getPayrollPeriodForDate(manilaNow.date),
+    [manilaNow.date],
+  );
+  const payrollPeriod = useMemo(
+    () => getPayrollPeriodForEndDate(selectedPayrollPeriodEndDate) || currentPayrollPeriod,
+    [selectedPayrollPeriodEndDate, currentPayrollPeriod],
+  );
+  const isCurrentPayrollPeriod =
+    payrollPeriod.startDate === currentPayrollPeriod.startDate &&
+    payrollPeriod.endDate === currentPayrollPeriod.endDate;
   const holidaysByDate = useMemo(() => new Map(
     holidays
       .filter((holiday) =>
@@ -612,6 +634,71 @@ export default function App() {
     selectedHoliday,
   );
   const selectedAttendanceRecord = getRecord(attendance, monthIndex, selectedDay, year);
+  const getPayrollRecordEarnings = useCallback((record, date) => {
+    const holiday = getHolidayForDate(holidays, date, selectedLocality);
+    const hoursWorked = getAttendanceHours(record) || 0;
+    const hasAssignedShift = record.type === "Rest Day" ||
+      record.hasAssignedShift === true ||
+      Boolean(record.shiftStartTime && record.shiftEndTime);
+    const nightHours = getNightShiftMinutes(
+      record.workStartTime,
+      record.workEndTime,
+    ) / 60;
+    const applicableDailyWage = holiday ? Number(dailyWage) : getAmount(record.base);
+    const rate = Number(nightDifferential);
+    const nightDifferentialPay =
+      Number.isFinite(applicableDailyWage) &&
+      applicableDailyWage > 0 &&
+      Number.isFinite(rate) &&
+      rate > 0 &&
+      nightHours > 0
+        ? (applicableDailyWage / 8) * nightHours * (rate / 100)
+        : 0;
+    const allowanceAmount = Number(dailyAllowance);
+    const recordedOvertimeAmount = Number(record.overtimeAmount);
+    const overtimeAmount = Number.isFinite(recordedOvertimeAmount)
+      ? recordedOvertimeAmount
+      : 0;
+    const hasDailyAllowance = Number.isFinite(allowanceAmount) && allowanceAmount >= 0;
+
+    if (holiday) {
+      const holidayPay = calculateHolidayPay({
+        holiday: { ...holiday, classification: getHolidayClassification(holiday) },
+        dailyWage: Number(dailyWage),
+        hoursWorked,
+        hasSchedule: hasAssignedShift,
+        isRestDay: record.type === "Rest Day",
+        eligibilityKnown: holidayEligibilityConfirmed,
+        worked: hasValidAttendanceRecord(record) && !record.clockedIn,
+        unworked: record.holidayUnworked || record.type === "Absent",
+        overtimeMultiplier: Number(overtimeMultiplier),
+      });
+      return hasAssignedShift && holidayPay.amount != null && hasDailyAllowance
+        ? holidayPay.amount +
+          overtimeAmount +
+          nightDifferentialPay +
+          allowanceAmount
+        : null;
+    }
+
+    return hasAssignedShift &&
+      ["Regular", "Official Business"].includes(record.type) &&
+      hasDailyAllowance
+        ? getAmount(record.est) + allowanceAmount
+        : null;
+  }, [
+    dailyAllowance,
+    dailyWage,
+    holidayEligibilityConfirmed,
+    holidays,
+    nightDifferential,
+    overtimeMultiplier,
+    selectedLocality,
+  ]);
+  const payrollPeriodSummary = useMemo(
+    () => summarizePayrollPeriod(attendance, payrollPeriod, getPayrollRecordEarnings),
+    [attendance, getPayrollRecordEarnings, payrollPeriod],
+  );
   const selectedWorkedHours = hasValidAttendanceRecord(selectedAttendanceRecord)
     ? getAttendanceHours(selectedAttendanceRecord)
     : 0;
@@ -773,6 +860,7 @@ export default function App() {
     settingsBalances,
     earlyPunchWindowMinutes,
     lateGracePeriodMinutes,
+    selectedPayrollPeriodEndDate: payrollPeriod.endDate,
   }), [
     attendance,
     activeTimeEntry,
@@ -785,6 +873,7 @@ export default function App() {
     settingsBalances,
     earlyPunchWindowMinutes,
     lateGracePeriodMinutes,
+    payrollPeriod.endDate,
   ]);
 
   const addToast = useCallback((message, type = "success") => {
@@ -1149,6 +1238,7 @@ export default function App() {
       pendingExpenseClearRef.current = false;
       setAttendance({});
       setActiveTimeEntry(null);
+      setSelectedPayrollPeriodEndDate(null);
       setHolidays(holidayCalendarByYear[2026].map((holiday) => ({ ...holiday, enabled: true })));
       setSelectedLocality("");
       setHolidayEligibilityConfirmed(false);
@@ -1252,6 +1342,11 @@ export default function App() {
       ));
       setEarlyPunchWindowMinutes(workspace.earlyPunchWindowMinutes);
       setLateGracePeriodMinutes(workspace.lateGracePeriodMinutes);
+      setSelectedPayrollPeriodEndDate(
+        isValidPayrollPeriodEndDate(workspace.selectedPayrollPeriodEndDate)
+          ? workspace.selectedPayrollPeriodEndDate
+          : getPayrollPeriodForDate(getManilaDateTime().date).endDate,
+      );
       workspaceRevisionRef.current = revision;
       setWorkspaceLoadedForUser(user.id);
       workspaceLoadedRef.current = true;
@@ -2385,6 +2480,19 @@ export default function App() {
         percentage={percentage}
         netPay={netPay}
         totalHours={totalHours}
+        payrollPeriod={payrollPeriod}
+        payrollPeriodSummary={payrollPeriodSummary}
+        payrollPeriodEarningsAvailable={isPayrollPeriodEarningsAvailable(salaryVaultStatus)}
+        currentDate={manilaNow.date}
+        salaryVaultStatus={salaryVaultStatus}
+        isCurrentPayrollPeriod={isCurrentPayrollPeriod}
+        onPayrollPeriodChange={(nextPeriod) => {
+          if (nextPeriod) setSelectedPayrollPeriodEndDate(nextPeriod.endDate);
+        }}
+        onPayrollPeriodSelect={(monthValue, cutoffDay) => {
+          const nextPeriod = getPayrollPeriodForMonth(monthValue, cutoffDay);
+          if (nextPeriod) setSelectedPayrollPeriodEndDate(nextPeriod.endDate);
+        }}
         formatCurrency={formatCurrency}
         expenseName={expenseName}
         setExpenseName={setExpenseName}

@@ -17,6 +17,7 @@ export const emptyWorkspace = {
   settingsBalances: { VL: "0", SL: "0", EL: "0" },
   earlyPunchWindowMinutes: 15,
   lateGracePeriodMinutes: 15,
+  selectedPayrollPeriodEndDate: null,
 };
 
 function isObject(value) {

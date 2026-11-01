@@ -38,6 +38,14 @@ export default function DashboardContent(props) {
     grossPay,
     payrollDeductions,
     totalHours,
+    payrollPeriod,
+    payrollPeriodSummary,
+    payrollPeriodEarningsAvailable,
+    salaryVaultStatus,
+    currentDate,
+    isCurrentPayrollPeriod,
+    onPayrollPeriodChange,
+    onPayrollPeriodSelect,
     formatCurrency,
     expenseName,
     setExpenseName,
@@ -92,6 +100,14 @@ export default function DashboardContent(props) {
             payrollDeductions={payrollDeductions}
             totalHours={totalHours}
             monthLabel={monthLabel}
+            payrollPeriod={payrollPeriod}
+            payrollPeriodSummary={payrollPeriodSummary}
+            payrollPeriodEarningsAvailable={payrollPeriodEarningsAvailable}
+            salaryVaultStatus={salaryVaultStatus}
+            currentDate={currentDate}
+            isCurrentPayrollPeriod={isCurrentPayrollPeriod}
+            onPayrollPeriodChange={onPayrollPeriodChange}
+            onPayrollPeriodSelect={onPayrollPeriodSelect}
             formatCurrency={formatCurrency}
             expenseName={expenseName}
             setExpenseName={setExpenseName}
