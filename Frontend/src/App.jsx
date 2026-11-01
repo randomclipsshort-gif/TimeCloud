@@ -18,6 +18,7 @@ import {
   payrollDeductionSettingKeys,
   sumCutoffPayrollDeductions,
 } from "./utils/payrollDeductions.js";
+import { summarizePayrollEarningsBreakdown } from "./utils/payrollEarningsBreakdown.js";
 import {
   getNextPayrollPeriod,
   getPayrollPeriodForDate,
@@ -640,7 +641,25 @@ export default function App() {
     selectedHoliday,
   );
   const selectedAttendanceRecord = getRecord(attendance, monthIndex, selectedDay, year);
-  const getPayrollRecordEarnings = useCallback((record, date) => {
+  const getPayrollRecordBreakdown = useCallback((record, date) => {
+    const recordedOvertimeAmount = Number(record.overtimeAmount);
+    const overtimeAmount = Number.isFinite(recordedOvertimeAmount)
+      ? recordedOvertimeAmount
+      : 0;
+    const lateMinutes = Number(record.lateMinutes);
+    const undertimeMinutes = Number(record.undertimeMinutes);
+    const timingValues = {
+      lateMinutes: Number.isFinite(lateMinutes) ? lateMinutes : 0,
+      undertimeMinutes: Number.isFinite(undertimeMinutes) ? undertimeMinutes : 0,
+    };
+    if (record.type === "Leave") {
+      const leaveEarnings = getAmount(record.est);
+      return {
+        ...timingValues,
+        [record.leaveCode === "SL" ? "paidSickLeave" : "otherPaidLeave"]: leaveEarnings,
+      };
+    }
+
     const holiday = getHolidayForDate(holidays, date, selectedLocality);
     const hoursWorked = getAttendanceHours(record) || 0;
     const hasAssignedShift = record.type === "Rest Day" ||
@@ -661,10 +680,6 @@ export default function App() {
         ? (applicableDailyWage / 8) * nightHours * (rate / 100)
         : 0;
     const allowanceAmount = Number(dailyAllowance);
-    const recordedOvertimeAmount = Number(record.overtimeAmount);
-    const overtimeAmount = Number.isFinite(recordedOvertimeAmount)
-      ? recordedOvertimeAmount
-      : 0;
     const hasDailyAllowance = Number.isFinite(allowanceAmount) && allowanceAmount >= 0;
 
     if (holiday) {
@@ -680,14 +695,27 @@ export default function App() {
         overtimeMultiplier: Number(overtimeMultiplier),
       });
       if (!hasAssignedShift || holidayPay.amount == null || !hasDailyAllowance) return null;
+      const classification = getHolidayClassification(holiday);
+      const holidayRegularPay = Number.isFinite(holidayPay.regularPay)
+        ? holidayPay.regularPay
+        : Math.max(0, holidayPay.amount - (holidayPay.overtimePay || 0));
+      const holidayOvertimePay = (Number(holidayPay.overtimePay) || 0) + overtimeAmount;
+      const holidayEarningsKey = classification === "Regular Holiday"
+        ? "regularHoliday"
+        : classification === "Special Non-Working Day"
+          ? "specialHoliday"
+          : "basicPay";
       return {
-        total: holidayPay.amount + overtimeAmount + nightDifferentialPay + allowanceAmount,
-        breakdown: {
-          regular: holidayPay.regularPay || 0,
-          overtime: (holidayPay.overtimePay || 0) + overtimeAmount,
-          nightDifferential: nightDifferentialPay,
-          allowance: allowanceAmount,
-        },
+        ...timingValues,
+        [holidayEarningsKey]: holidayRegularPay,
+        allowance: allowanceAmount,
+        shiftDifferentials: nightDifferentialPay,
+        overtime: holidayOvertimePay,
+        overtimeMinutes: Math.max(
+          Number(record.overtimeMinutes) || 0,
+          (Number(holidayPay.overtimeHours) || 0) * 60,
+        ),
+        overtimeHours: Number(holidayPay.overtimeHours) || 0,
       };
     }
 
@@ -696,16 +724,14 @@ export default function App() {
       !["Regular", "Official Business"].includes(record.type) ||
       !hasDailyAllowance
     ) return null;
-    const recordedEarnings = getAmount(record.est);
-    const recordedOvertime = Math.min(overtimeAmount, recordedEarnings);
+
     return {
-      total: recordedEarnings + allowanceAmount,
-      breakdown: {
-        regular: recordedEarnings - recordedOvertime,
-        overtime: recordedOvertime,
-        nightDifferential: 0,
-        allowance: allowanceAmount,
-      },
+      ...timingValues,
+      basicPay: Math.max(0, getAmount(record.est) - overtimeAmount),
+      allowance: allowanceAmount,
+      shiftDifferentials: nightDifferentialPay,
+      overtime: overtimeAmount,
+      overtimeMinutes: Number(record.overtimeMinutes) || 0,
     };
   }, [
     dailyAllowance,
@@ -716,9 +742,29 @@ export default function App() {
     overtimeMultiplier,
     selectedLocality,
   ]);
+  const getPayrollRecordEarnings = useCallback((record, date) => {
+    const breakdown = getPayrollRecordBreakdown(record, date);
+    if (!breakdown) return null;
+    return [
+      "basicPay",
+      "allowance",
+      "shiftDifferentials",
+      "regularHoliday",
+      "specialHoliday",
+      "overtime",
+    ].reduce((total, key) => total + (Number(breakdown[key]) || 0), 0);
+  }, [getPayrollRecordBreakdown]);
   const payrollPeriodSummary = useMemo(
     () => summarizePayrollPeriod(attendance, payrollPeriod, getPayrollRecordEarnings),
     [attendance, getPayrollRecordEarnings, payrollPeriod],
+  );
+  const payrollEarningsBreakdown = useMemo(
+    () => summarizePayrollEarningsBreakdown(
+      attendance,
+      payrollPeriod,
+      getPayrollRecordBreakdown,
+    ),
+    [attendance, getPayrollRecordBreakdown, payrollPeriod],
   );
   const payrollDeductionSettings = useMemo(
     () => getPayrollDeductionSettingsDefaults(salaryVaultExtraSettings),
@@ -2587,9 +2633,11 @@ export default function App() {
         userName={user?.name}
         payrollPeriod={payrollPeriod}
         payrollPeriodSummary={payrollPeriodSummary}
+        payrollEarningsBreakdown={payrollEarningsBreakdown}
         cutoffPayrollDeductions={cutoffPayrollDeductions}
         payrollPeriodNetPay={payrollPeriodNetPay}
         payrollPeriodEarningsAvailable={isPayrollPeriodEarningsAvailable(salaryVaultStatus)}
+        dailyWage={dailyWage}
         formatCurrency={formatCurrency}
       />
       <SettingsModal

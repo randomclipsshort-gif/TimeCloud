@@ -1,283 +1,219 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Timekeep Cloud - Personal Hub</title>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Font Awesome -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
-  <!-- Google Fonts: Inter -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Inter', 'sans-serif'],
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Timekeep Cloud - Interactive Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+            },
+            colors: {
+              slateBg: "#F8FAFC",
+              cardBg: "#FFFFFF",
+              brandTeal: "#0D9488",
+              brandTealHover: "#0F766E",
+              textMain: "#1E293B",
+              textMuted: "#64748B",
+            },
           },
-          colors: {
-            cardBg: '#ffffff',
-            textMain: '#0f172a',
-            textMuted: '#64748b',
-          }
-        }
-      }
-    }
-  </script>
-</head>
-<body class="bg-slate-100 font-sans text-slate-800 antialiased min-h-screen flex flex-col">
-
-  <!-- Auth Modal / Overlay -->
-  <div id="authModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 border border-slate-100 transition-all duration-300">
-      
-      <!-- Auth Header -->
-      <div class="text-center mb-6">
-        <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-teal-50 text-teal-600 mb-3 shadow-inner">
-          <i class="fa-solid fa-clock text-2xl"></i>
-        </div>
-        <h2 id="authTitle" class="text-2xl font-bold text-slate-800">Welcome to TimeCloud</h2>
-        <p id="authSubtitle" class="text-xs text-slate-500 mt-1">Sign in to access your personal hub & timekeeping</p>
-      </div>
-
-      <!-- Auth Tabs -->
-      <div class="flex border-b border-slate-200 mb-6">
-        <button id="tabLogin" onclick="switchAuthTab('login')" class="flex-1 pb-3 text-sm font-semibold border-b-2 border-teal-600 text-teal-600 transition-all">Sign In</button>
-        <button id="tabRegister" onclick="switchAuthTab('register')" class="flex-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-all">Register</button>
-      </div>
-
-      <!-- Login Form -->
-      <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Email Address</label>
-          <div class="relative">
-            <i class="fa-solid fa-envelope absolute left-3 top-3 text-slate-400 text-xs"></i>
-            <input type="email" id="loginEmail" required placeholder="alex@mycloud.dev" class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none transition-all">
-          </div>
-        </div>
-        <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="block text-xs font-semibold text-slate-600">Password</label>
-            <a href="#" onclick="showToast('Password reset link sent to registered email.', 'info'); return false;" class="text-[11px] font-semibold text-teal-600 hover:text-teal-700">Forgot?</a>
-          </div>
-          <div class="relative">
-            <i class="fa-solid fa-lock absolute left-3 top-3 text-slate-400 text-xs"></i>
-            <input type="password" id="loginPassword" required placeholder="••••••••" class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none transition-all">
-          </div>
-        </div>
-        <div class="flex items-center justify-between pt-1">
-          <label class="flex items-center space-x-2 cursor-pointer">
-            <input type="checkbox" checked class="w-3.5 h-3.5 accent-teal-600 rounded cursor-pointer" />
-            <span class="text-xs text-slate-600 font-medium">Remember me</span>
-          </label>
-        </div>
-        <button type="submit" class="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg text-xs shadow-md shadow-teal-600/20 transition-all flex items-center justify-center space-x-2 mt-2">
-          <i class="fa-solid fa-right-to-bracket text-xs"></i>
-          <span>Access My Hub</span>
-        </button>
-      </form>
-
-      <!-- Personal Registration Form -->
-      <form id="registerForm" onsubmit="handleRegister(event)" class="space-y-4 hidden">
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Full Name</label>
-          <div class="relative">
-            <i class="fa-solid fa-user absolute left-3 top-3 text-slate-400 text-xs"></i>
-            <input type="text" id="regName" required placeholder="Alex Morgan" class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none transition-all">
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Email Address</label>
-          <div class="relative">
-            <i class="fa-solid fa-envelope absolute left-3 top-3 text-slate-400 text-xs"></i>
-            <input type="email" id="regEmail" required placeholder="alex@mycloud.dev" class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none transition-all">
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Daily Base Rate (PHP ₱)</label>
-          <div class="relative">
-            <i class="fa-solid fa-peso-sign absolute left-3 top-3 text-slate-400 text-xs"></i>
-            <input type="number" id="regWage" required min="1" step="0.01" placeholder="600.00" value="600.00" class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none transition-all">
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Password</label>
-          <div class="relative">
-            <i class="fa-solid fa-lock absolute left-3 top-3 text-slate-400 text-xs"></i>
-            <input type="password" id="regPassword" required placeholder="At least 6 characters" minlength="6" class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none transition-all">
-          </div>
-        </div>
-        <button type="submit" class="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg text-xs shadow-md shadow-teal-600/20 transition-all flex items-center justify-center space-x-2 mt-2">
-          <i class="fa-solid fa-user-plus text-xs"></i>
-          <span>Start Tracking</span>
-        </button>
-      </form>
-
-      <!-- Registration Form -->
-      <form id="registerForm" onsubmit="handleRegister(event)" class="space-y-4 hidden">
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Full Name</label>
-          <div class="relative">
-            <i class="fa-solid fa-user absolute left-3 top-3 text-slate-400 text-xs"></i>
-            <input type="text" id="regName" required placeholder="Alex Morgan" class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none transition-all">
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Email Address</label>
-          <div class="relative">
-            <i class="fa-solid fa-envelope absolute left-3 top-3 text-slate-400 text-xs"></i>
-            <input type="email" id="regEmail" required placeholder="alex@timecloud.dev" class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none transition-all">
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Department / Position</label>
-          <div class="relative">
-            <i class="fa-solid fa-briefcase absolute left-3 top-3 text-slate-400 text-xs"></i>
-            <input type="text" id="regDeptPos" required placeholder="Network Operations Center / NOC Engineer" class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none transition-all">
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Daily Base Wage (PHP)</label>
-          <div class="relative">
-            <i class="fa-solid fa-peso-sign absolute left-3 top-3 text-slate-400 text-xs"></i>
-            <input type="number" id="regWage" required min="1" step="0.01" placeholder="600.00" value="600.00" class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none transition-all">
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Create Password</label>
-          <div class="relative">
-            <i class="fa-solid fa-lock absolute left-3 top-3 text-slate-400 text-xs"></i>
-            <input type="password" id="regPassword" required placeholder="At least 6 characters" minlength="6" class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none transition-all">
-          </div>
-        </div>
-        <button type="submit" class="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg text-xs shadow-md shadow-teal-600/20 transition-all flex items-center justify-center space-x-2 mt-2">
-          <i class="fa-solid fa-user-plus text-xs"></i>
-          <span>Create Account & Start</span>
-        </button>
-      </form>
-
-    </div>
-  </div>
-
-  <!-- MAIN APP WRAPPER -->
-  <div id="mainApp" class="flex-1 flex flex-col">
-    <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
-      <div class="max-w-[1600px] mx-auto w-full px-4 sm:px-6 py-3 min-h-16 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 md:gap-4">
-        
+        },
+      };
+    </script>
+  </head>
+  <body
+    class="bg-slateBg text-textMain font-sans antialiased min-h-screen flex flex-col selection:bg-teal-500 selection:text-white overflow-x-hidden"
+  >
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-50">
+      <div
+        class="max-w-[1600px] mx-auto w-full sm:px-6 lg:px-6 py-3 md:py-0 min-h-16 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 md:gap-4"
+      >
         <div class="flex items-center space-x-3 shrink-0">
-          <div class="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-md">
+          <div
+            class="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-md"
+          >
             <i class="fa-solid fa-clock-rotate-left text-lg"></i>
           </div>
           <div>
-            <h1 class="font-bold text-base text-textMain leading-tight">Timekeep Cloud</h1>
-            <span class="text-[11px] font-medium text-textMuted">Personal Time &amp; Financial Tracker</span>
+            <h1 class="font-bold text-base text-textMain leading-tight">
+              Timekeep Cloud
+            </h1>
+            <span class="text-[11px] font-medium text-textMuted"
+              >Enterprise Time & Financial Hub</span
+            >
           </div>
         </div>
 
-        <div class="w-full md:w-auto flex flex-wrap items-center justify-between md:justify-end gap-2 md:gap-3">
-          <div id="liveClock" class="flex items-center space-x-2 bg-slate-100 border border-slate-200 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium text-slate-700 whitespace-nowrap">
+        <div
+          class="w-full md:w-auto flex flex-wrap items-center justify-between md:justify-end gap-2 md:gap-3"
+        >
+          <div
+            id="liveClock"
+            class="flex items-center space-x-2 bg-slate-100 border border-slate-200 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium text-slate-700 whitespace-nowrap"
+          >
             <i class="fa-regular fa-clock text-teal-600"></i>
-            <span id="clockText">06:55:25 AM <span class="hidden sm:inline text-xs text-textMuted font-normal">PST</span></span>
+            <span id="clockText"
+              >06:55:25 AM
+              <span class="hidden sm:inline text-xs text-textMuted font-normal"
+                >PST</span
+              ></span
+            >
           </div>
-
-          <button onclick="openModal('payslipModal')" aria-label="View Payslip" title="View Payslip" class="bg-teal-600 hover:bg-teal-700 text-white px-3 py-2 rounded-lg text-xs font-medium shadow-sm transition flex items-center space-x-2 cursor-pointer whitespace-nowrap">
+          <button
+            onclick="openModal('payslipModal')"
+            aria-label="View Payslip"
+            title="View Payslip"
+            class="bg-teal-600 hover:bg-teal-700 text-white px-2 sm:px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition flex items-center space-x-2 cursor-pointer whitespace-nowrap"
+          >
             <i class="fa-regular fa-file-lines"></i>
-            <span class="hidden sm:inline">View Payslip</span>
+            <span class="hidden sm:inline text-xs">View Payslip</span>
           </button>
-
-          <div class="flex items-center space-x-1 border-l border-slate-200 pl-2 sm:pl-3">
-            <div class="flex items-center space-x-2 px-2.5 py-1 bg-teal-50 border border-teal-100 rounded-lg mr-1">
-              <i class="fa-solid fa-circle-user text-teal-600 text-sm"></i>
-              <span id="headerUserName" class="text-xs font-semibold text-teal-900 truncate max-w-[100px] sm:max-w-[140px]">Alex Morgan</span>
-            </div>
-
-            <button onclick="showToast('Exporting attendance report...', 'info')" class="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer" title="Download Report">
+          <div
+            class="flex items-center space-x-1 border-l border-slate-200 pl-2 sm:pl-3"
+          >
+            <button
+              onclick="showToast('Exporting attendance report...', 'info')"
+              class="p-1.5 sm:p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+              title="Download Report"
+            >
               <i class="fa-solid fa-download"></i>
             </button>
-            <button onclick="openAuthModal()" class="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer" title="Switch User">
-              <i class="fa-solid fa-user-gear"></i>
+            <button
+              onclick="resetCalendar()"
+              class="p-1.5 sm:p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+              title="Reset View"
+            >
+              <i class="fa-solid fa-rotate-left"></i>
             </button>
-            <button onclick="openModal('settingsModal')" class="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer" title="Settings">
+            <button
+              onclick="openModal('settingsModal')"
+              class="p-1.5 sm:p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+              title="Settings"
+            >
               <i class="fa-solid fa-gear"></i>
             </button>
-            <button onclick="openAuthModal()" class="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer" title="Logout">
+            <button
+              onclick="showToast('Logged out successfully', 'warning')"
+              class="p-1.5 sm:p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+              title="Logout"
+            >
               <i class="fa-solid fa-right-from-bracket"></i>
             </button>
           </div>
         </div>
-
       </div>
     </header>
 
-    <main class="flex-1 max-w-[1600px] w-full mx-auto p-4 sm:p-6 flex flex-col gap-6">
-      
-      <!-- User Profile Bar -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-sm gap-4">
-        <div class="flex items-center space-x-3 sm:space-x-4">
-          <div id="userAvatar" class="w-12 h-12 rounded-full bg-teal-600 text-white font-bold flex items-center justify-center text-lg shadow-sm border-2 border-white ring-2 ring-teal-500/20">
-            AM
-          </div>
-          <div>
-            <h1 id="userName" class="text-base sm:text-lg font-bold text-slate-800 leading-snug">Alex Morgan</h1>
-            <p id="userDeptPos" class="text-xs font-medium text-teal-600">Personal Timekeeping & Financial Account</p>
-          </div>
-        </div>
-        <button onclick="openAuthModal()" class="self-start sm:self-auto flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-medium transition-all">
-          <i class="fa-solid fa-user-gear"></i>
-          <span>Switch Account</span>
-        </button>
-      </div>
-
+    <main class="flex-1 max-w-[1600px] w-full mx-auto p-6 flex flex-col gap-6">
       <!-- Modern Sliding Container -->
       <div class="relative overflow-hidden w-full">
-        <div id="sliderTrack" class="flex transition-transform duration-500 ease-in-out w-full">
-          
+        <div
+          id="sliderTrack"
+          class="flex transition-transform duration-500 ease-in-out w-full"
+        >
           <!-- Page 1: Time & Attendance Dashboard -->
           <div class="w-full shrink-0 grid grid-cols-1 lg:grid-cols-12 gap-6">
             <!-- Left Panel: Selected Employee & Attendance Breakdown -->
-            <section class="lg:col-span-4 bg-cardBg rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between">
+            <section
+              class="lg:col-span-4 bg-cardBg rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between"
+            >
               <div>
-                <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
+                <div
+                  class="flex items-center justify-between pb-4 border-b border-slate-100 mb-6"
+                >
                   <div>
-                    <span class="text-[11px] font-bold uppercase tracking-wider text-teal-700">Personal Attendance</span>
-                    <h2 class="text-lg font-bold text-textMain">Daily Breakdown</h2>
+                    <span
+                      class="text-[11px] font-bold uppercase tracking-wider text-teal-700"
+                      >Selected Employee</span
+                    >
+                    <h2 class="text-lg font-bold text-textMain">
+                      Attendance Breakdown
+                    </h2>
                   </div>
-                  <span id="selectedDateBadge" class="text-xs font-semibold bg-slate-100 border border-slate-200 text-slate-700 px-2.5 py-1 rounded-md">2026-09-01</span>
+                  <span
+                    id="selectedDateBadge"
+                    class="text-xs font-semibold bg-slate-100 border border-slate-200 text-slate-700 px-2.5 py-1 rounded-md"
+                    >2026-09-01</span
+                  >
                 </div>
 
                 <!-- Shift Status Box -->
-                <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-4 mb-6">
+                <div
+                  class="bg-slate-50 border border-slate-200/80 rounded-xl p-4 mb-6"
+                >
                   <div class="flex items-center justify-between mb-2">
-                    <span id="workdayTypeBadge" class="text-xs font-bold uppercase tracking-wider bg-slate-200/70 text-slate-700 px-2 py-0.5 rounded">Regular Workday</span>
-                    <span id="wageRateText" class="text-xs font-semibold text-teal-700">Wage Rate: 100% + OT</span>
+                    <span
+                      id="workdayTypeBadge"
+                      class="text-xs font-bold uppercase tracking-wider bg-slate-200/70 text-slate-700 px-2 py-0.5 rounded"
+                      >Regular Workday</span
+                    >
+                    <span
+                      id="wageRateText"
+                      class="text-xs font-semibold text-teal-700"
+                      >Wage Rate: 100% + OT</span
+                    >
                   </div>
-                  <div id="shiftTitle" class="text-base font-bold text-textMain">Standard Shift Day</div>
-                  <div id="shiftSubTitle" class="text-xs text-textMuted mt-0.5">100% + OT</div>
+                  <div
+                    id="shiftTitle"
+                    class="text-base font-bold text-textMain"
+                  >
+                    Standard Shift Day
+                  </div>
+                  <div id="shiftSubTitle" class="text-xs text-textMuted mt-0.5">
+                    100% + OT
+                  </div>
                 </div>
 
                 <!-- Earnings Calculator -->
-                <div class="bg-teal-50/50 border border-teal-100 rounded-xl p-4 mb-6">
-                  <div class="flex justify-between items-center mb-3 pb-3 border-b border-teal-100/60">
-                    <span class="text-xs font-semibold text-teal-900 uppercase tracking-wider">Estimated Daily Earnings</span>
-                    <span id="estEarnings" class="text-lg font-extrabold text-teal-700">₱787.50 PHP</span>
+                <div
+                  class="bg-teal-50/50 border border-teal-100 rounded-xl p-4 mb-6"
+                >
+                  <div
+                    class="flex justify-between items-center mb-3 pb-3 border-b border-teal-100/60"
+                  >
+                    <span
+                      class="text-xs font-semibold text-teal-900 uppercase tracking-wider"
+                      >Estimated Daily Earnings</span
+                    >
+                    <span
+                      id="estEarnings"
+                      class="text-lg font-extrabold text-teal-700"
+                      >P787.50 PHP</span
+                    >
                   </div>
                   <div class="space-y-2 text-xs">
                     <div class="flex justify-between text-slate-600">
                       <span>Base Daily Wage (8 hrs):</span>
-                      <span id="baseWage" class="font-medium text-slate-800">₱600.00 PHP</span>
+                      <span id="baseWage" class="font-medium text-slate-800"
+                        >P600.00 PHP</span
+                      >
                     </div>
                     <div class="flex justify-between text-slate-600">
                       <span>Holiday Premium / Overtime:</span>
-                      <span id="otPay" class="font-medium text-teal-700">₱187.50 PHP</span>
+                      <span id="otPay" class="font-medium text-teal-700"
+                        >P187.50 PHP</span
+                      >
                     </div>
                     <div class="flex justify-between text-slate-600">
                       <span>Late / Undertime Penalty:</span>
-                      <span id="penaltyPay" class="font-medium text-slate-800">₱0.00 PHP</span>
+                      <span id="penaltyPay" class="font-medium text-slate-800"
+                        >P0.00 PHP</span
+                      >
                     </div>
                   </div>
                 </div>
@@ -286,20 +222,34 @@
                 <div class="space-y-3 text-xs border-t border-slate-100 pt-5">
                   <div class="flex justify-between py-1">
                     <span class="text-textMuted">Assigned Shift:</span>
-                    <span id="assignedShiftTime" class="font-semibold text-textMain">6:00 AM - 2:00 PM</span>
+                    <span
+                      id="assignedShiftTime"
+                      class="font-semibold text-textMain"
+                      >6:00 AM - 2:00 PM</span
+                    >
                   </div>
                   <div class="flex justify-between py-1">
                     <span class="text-textMuted">First Time In:</span>
-                    <span id="firstTimeIn" class="font-semibold text-teal-700">06:00 AM</span>
+                    <span id="firstTimeIn" class="font-semibold text-teal-700"
+                      >06:00 AM</span
+                    >
                   </div>
                   <div class="flex justify-between py-1">
                     <span class="text-textMuted">Last Time Out:</span>
-                    <span id="lastTimeOut" class="font-semibold text-teal-700">02:00 PM</span>
+                    <span id="lastTimeOut" class="font-semibold text-teal-700"
+                      >02:00 PM</span
+                    >
                   </div>
                   <div class="flex items-center justify-between py-1">
                     <span class="text-textMuted">Status Badges:</span>
-                    <div id="statusBadgesContainer" class="flex space-x-1.5 flex-wrap gap-y-1">
-                      <span class="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded">Present</span>
+                    <div
+                      id="statusBadgesContainer"
+                      class="flex space-x-1.5 flex-wrap gap-y-1"
+                    >
+                      <span
+                        class="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded"
+                        >Present</span
+                      >
                     </div>
                   </div>
                 </div>
@@ -308,53 +258,96 @@
               <!-- Action Buttons -->
               <div class="space-y-3 pt-6 border-t border-slate-100 mt-6">
                 <div class="grid grid-cols-2 gap-2">
-                  <button onclick="openModal('timeInModal')" class="bg-teal-600 hover:bg-teal-700 text-white font-medium py-2.5 px-3 rounded-xl text-xs transition shadow-sm flex items-center justify-center space-x-1.5 cursor-pointer">
+                  <button
+                    onclick="openModal('timeInModal')"
+                    class="bg-teal-600 hover:bg-teal-700 text-white font-medium py-2.5 px-3 rounded-xl text-xs transition shadow-sm flex items-center justify-center space-x-1.5 cursor-pointer"
+                  >
                     <i class="fa-solid fa-right-to-bracket"></i>
-                    <span>Time In / Out</span>
+                    <span>Time In</span>
                   </button>
-                  <button onclick="openModal('manualEntryModal')" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium py-2.5 px-3 rounded-xl text-xs transition border border-slate-200 flex items-center justify-center space-x-1.5 cursor-pointer">
+                  <button
+                    onclick="openManualEntryModal()"
+                    class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium py-2.5 px-3 rounded-xl text-xs transition border border-slate-200 flex items-center justify-center space-x-1.5 cursor-pointer"
+                  >
                     <i class="fa-solid fa-pen-to-square"></i>
                     <span>Manual Entry</span>
                   </button>
                 </div>
                 <div class="grid grid-cols-2 gap-2">
-                  <button onclick="openModal('assignShiftModal')" class="bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium py-2 px-3 rounded-xl text-xs transition border border-slate-200 flex items-center justify-center space-x-1.5 cursor-pointer">
+                  <button
+                    onclick="openAssignShiftModal()"
+                    class="bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium py-2 px-3 rounded-xl text-xs transition border border-slate-200 flex items-center justify-center space-x-1.5 cursor-pointer"
+                  >
                     <i class="fa-regular fa-calendar-days text-teal-600"></i>
-                    <span>Set Shift</span>
+                    <span>Assign Shift</span>
                   </button>
-                  <button onclick="openModal('grantLeaveModal')" class="bg-amber-50 hover:bg-amber-100 text-amber-800 font-medium py-2 px-3 rounded-xl text-xs transition border border-amber-200/60 flex items-center justify-center space-x-1.5 cursor-pointer">
+                  <button
+                    onclick="openModal('grantLeaveModal')"
+                    class="bg-amber-50 hover:bg-amber-100 text-amber-800 font-medium py-2 px-3 rounded-xl text-xs transition border border-amber-200/60 flex items-center justify-center space-x-1.5 cursor-pointer"
+                  >
                     <i class="fa-solid fa-umbrella-beach text-amber-600"></i>
-                    <span>File Leave</span>
+                    <span>Grant Leave</span>
                   </button>
                 </div>
               </div>
             </section>
 
             <!-- Right Panel: Calendar Grid -->
-            <section class="lg:col-span-8 bg-cardBg rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col">
-              <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-6 border-b border-slate-100 gap-4">
+            <section
+              class="lg:col-span-8 bg-cardBg rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col"
+            >
+              <!-- Calendar Header / Controls -->
+              <div
+                class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-6 border-b border-slate-100 gap-4"
+              >
                 <div>
-                  <span class="text-[11px] font-bold uppercase tracking-wider text-teal-700">Monthly Log Calendar</span>
+                  <span
+                    class="text-[11px] font-bold uppercase tracking-wider text-teal-700"
+                    >Statutory Monthly Schedule</span
+                  >
                   <div class="flex items-center space-x-2 mt-0.5">
-                    <h2 id="calendarTitleMonth" class="text-lg font-bold text-textMain">September 2026</h2>
+                    <h2
+                      id="calendarTitleMonth"
+                      class="text-lg font-bold text-textMain"
+                    >
+                      September 2026
+                    </h2>
                   </div>
                 </div>
 
-                <div class="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end flex-wrap gap-2">
-                  <div class="flex items-center space-x-1 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700">
+                <div
+                  class="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end flex-wrap gap-2"
+                >
+                  <!-- Year Badge & Nav -->
+                  <div
+                    class="flex items-center space-x-1 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700"
+                  >
                     <i class="fa-regular fa-calendar text-teal-600"></i>
                     <span id="calendarTitleYear">2026</span>
                   </div>
 
-                  <div id="monthTabsContainer" class="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200 overflow-x-auto">
+                  <!-- Month Selector Tabs -->
+                  <div
+                    id="monthTabsContainer"
+                    class="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200 overflow-x-auto"
+                  >
                     <!-- Populated by JS -->
                   </div>
 
-                  <div class="flex items-center space-x-1 border-l border-slate-200 pl-2">
-                    <button onclick="changeMonth(-1)" class="w-7 h-7 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-200 transition cursor-pointer">
+                  <!-- Arrow Navigation -->
+                  <div
+                    class="flex items-center space-x-1 border-l border-slate-200 pl-2"
+                  >
+                    <button
+                      onclick="changeMonth(-1)"
+                      class="w-7 h-7 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-200 transition cursor-pointer"
+                    >
                       <i class="fa-solid fa-chevron-left text-xs"></i>
                     </button>
-                    <button onclick="changeMonth(1)" class="w-7 h-7 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-200 transition cursor-pointer">
+                    <button
+                      onclick="changeMonth(1)"
+                      class="w-7 h-7 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-200 transition cursor-pointer"
+                    >
                       <i class="fa-solid fa-chevron-right text-xs"></i>
                     </button>
                   </div>
@@ -362,7 +355,9 @@
               </div>
 
               <!-- Days of Week Header -->
-              <div class="grid grid-cols-7 text-center text-xs font-bold text-textMuted py-3 border-b border-slate-100">
+              <div
+                class="grid grid-cols-7 text-center text-xs font-bold text-textMuted py-3 border-b border-slate-100"
+              >
                 <div>SUN</div>
                 <div>MON</div>
                 <div>TUE</div>
@@ -373,7 +368,10 @@
               </div>
 
               <!-- Calendar Grid Container -->
-              <div id="calendarGrid" class="grid grid-cols-7 gap-2 mt-3 flex-1">
+              <div
+                id="calendarGrid"
+                class="grid grid-cols-7 gap-2.5 mt-3 flex-1"
+              >
                 <!-- Populated dynamically via JS -->
               </div>
             </section>
@@ -381,118 +379,248 @@
 
           <!-- Page 2: Quick Stats & Financial Management Hub -->
           <div class="w-full shrink-0 flex flex-col gap-6">
+            <!-- Quick Stats Row -->
             <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              <div class="bg-cardBg rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center space-x-4">
-                <div class="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-xl">
+              <div
+                class="bg-cardBg rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center space-x-4"
+              >
+                <div
+                  class="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-xl"
+                >
                   <i class="fa-solid fa-calendar-check"></i>
                 </div>
                 <div>
-                  <span class="text-xs text-slate-500 font-medium">Current Pay Period</span>
-                  <h4 class="text-[14px] font-bold text-slate-800 mt-0.5">Sep 01 - Sep 15</h4>
-                  <span class="text-[10px] text-teal-600 font-semibold bg-teal-50 px-1.5 py-0.5 rounded">Semi-Monthly</span>
+                  <span class="text-xs text-slate-500 font-medium"
+                    >Current Pay Period</span
+                  >
+                  <h4 class="text-[14px] font-bold text-slate-800 mt-0.5">
+                    Sep 01 - Sep 15
+                  </h4>
+                  <span
+                    class="text-[10px] text-teal-600 font-semibold bg-teal-50 px-1.5 py-0.5 rounded"
+                    >Semi-Monthly</span
+                  >
                 </div>
               </div>
 
-              <div class="bg-cardBg rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center space-x-4">
-                <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">
+              <div
+                class="bg-cardBg rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center space-x-4"
+              >
+                <div
+                  class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl"
+                >
                   <i class="fa-solid fa-money-bill-wave"></i>
                 </div>
                 <div>
-                  <span class="text-xs text-slate-500 font-medium">Gross Earnings</span>
-                  <h4 class="text-sm font-bold text-slate-800 mt-0.5">₱8,400.00</h4>
-                  <span class="text-[10px] text-slate-400">80.0 Total Hours</span>
+                  <span class="text-xs text-slate-500 font-medium"
+                    >Gross Earnings</span
+                  >
+                  <h4 class="text-sm font-bold text-slate-800 mt-0.5">
+                    ₱8,400.00
+                  </h4>
+                  <span class="text-[10px] text-slate-400"
+                    >80.0 Total Hours</span
+                  >
                 </div>
               </div>
 
-              <div class="bg-cardBg rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center space-x-4">
-                <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-xl">
+              <div
+                class="bg-cardBg rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center space-x-4"
+              >
+                <div
+                  class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-xl"
+                >
                   <i class="fa-solid fa-file-invoice-dollar"></i>
                 </div>
                 <div>
-                  <span class="text-xs text-slate-500 font-medium">Statutory Deductions</span>
-                  <h4 class="text-sm font-bold text-slate-800 mt-0.5">₱915.00</h4>
-                  <span class="text-[10px] text-rose-500 font-medium">Tax &amp; Contributions</span>
+                  <span class="text-xs text-slate-500 font-medium"
+                    >Statutory Deductions</span
+                  >
+                  <h4 class="text-sm font-bold text-slate-800 mt-0.5">
+                    ₱915.00
+                  </h4>
+                  <span class="text-[10px] text-rose-500 font-medium"
+                    >Tax &amp; Contributions</span
+                  >
                 </div>
               </div>
 
-              <div class="bg-cardBg rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center space-x-4">
-                <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
+              <div
+                class="bg-cardBg rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center space-x-4"
+              >
+                <div
+                  class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl"
+                >
                   <i class="fa-solid fa-wallet"></i>
                 </div>
                 <div>
-                  <span class="text-xs text-slate-500 font-medium">Net Take-Home Pay</span>
-                  <h4 class="text-sm font-bold text-emerald-600 mt-0.5">₱7,485.00</h4>
-                  <span class="text-[10px] text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded">Verified Payslip</span>
+                  <span class="text-xs text-slate-500 font-medium"
+                    >Net Take-Home Pay</span
+                  >
+                  <h4 class="text-sm font-bold text-emerald-600 mt-0.5">
+                    ₱7,485.00
+                  </h4>
+                  <span
+                    class="text-[10px] text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded"
+                    >Verified Payslip</span
+                  >
                 </div>
               </div>
             </div>
 
             <!-- Financial Management Hub Section -->
-            <section class="bg-cardBg rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 mb-6 gap-2">
+            <section
+              class="bg-cardBg rounded-2xl border border-slate-200 p-6 shadow-sm"
+            >
+              <div
+                class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 mb-6 gap-2"
+              >
                 <div>
-                  <span class="text-[11px] font-bold uppercase tracking-wider text-teal-700">Financial Management Hub</span>
-                  <h2 class="text-lg font-bold text-textMain">Take-Home Pay &amp; Expense Tracker</h2>
+                  <span
+                    class="text-[11px] font-bold uppercase tracking-wider text-teal-700"
+                    >Financial Management Hub</span
+                  >
+                  <h2 class="text-lg font-bold text-textMain">
+                    Take-Home Pay &amp; Expense Tracker
+                  </h2>
                 </div>
-                <span class="text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-100 px-3 py-1 rounded-lg">
-                  <i class="fa-solid fa-sync mr-1"></i> Synced to Net Pay: ₱7,485.00
+                <span
+                  class="text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-100 px-3 py-1 rounded-lg"
+                >
+                  <i class="fa-solid fa-sync mr-1"></i> Synced to Net Pay:
+                  ₱7,485.00
                 </span>
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-4">
-                  <span class="text-xs text-slate-500 font-medium block">Net Take-Home Pay Pool</span>
-                  <span id="trackerNetPay" class="text-2xl font-extrabold text-slate-800 mt-1 block">₱7,485.00</span>
+                <div
+                  class="bg-slate-50 border border-slate-200/80 rounded-xl p-4"
+                >
+                  <span class="text-xs text-slate-500 font-medium block"
+                    >Net Take-Home Pay Pool</span
+                  >
+                  <span
+                    id="trackerNetPay"
+                    class="text-2xl font-extrabold text-slate-800 mt-1 block"
+                    >₱7,485.00</span
+                  >
                 </div>
-                <div class="bg-rose-50/50 border border-rose-100 rounded-xl p-4">
-                  <span class="text-xs text-rose-700 font-medium block">Total Recorded Expenses</span>
-                  <span id="trackerTotalExpenses" class="text-2xl font-extrabold text-rose-600 mt-1 block">₱0.00</span>
+                <div
+                  class="bg-rose-50/50 border border-rose-100 rounded-xl p-4"
+                >
+                  <span class="text-xs text-rose-700 font-medium block"
+                    >Total Recorded Expenses</span
+                  >
+                  <span
+                    id="trackerTotalExpenses"
+                    class="text-2xl font-extrabold text-rose-600 mt-1 block"
+                    >₱0.00</span
+                  >
                 </div>
-                <div class="bg-teal-50/50 border border-teal-100 rounded-xl p-4">
-                  <span class="text-xs text-teal-800 font-medium block">Remaining Balance</span>
-                  <span id="trackerRemaining" class="text-2xl font-extrabold text-teal-700 mt-1 block">₱7,485.00</span>
+                <div
+                  class="bg-teal-50/50 border border-teal-100 rounded-xl p-4"
+                >
+                  <span class="text-xs text-teal-800 font-medium block"
+                    >Remaining Balance</span
+                  >
+                  <span
+                    id="trackerRemaining"
+                    class="text-2xl font-extrabold text-teal-700 mt-1 block"
+                    >₱7,485.00</span
+                  >
                 </div>
               </div>
 
-              <div class="mb-8 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <div class="flex justify-between text-xs font-semibold text-slate-600 mb-2">
-                  <span class="flex items-center space-x-1.5">
-                    <i class="fa-solid fa-chart-pie text-teal-600"></i>
-                    <span>Budget Utilization</span>
-                  </span>
-                  <span id="trackerPercentage" class="text-teal-700 font-bold">0.0% Spent</span>
+              <div
+                class="mb-8 bg-slate-50 p-4 rounded-xl border border-slate-200"
+              >
+                <div
+                  class="flex justify-between text-xs font-semibold text-slate-600 mb-2"
+                >
+                  <span class="flex items-center space-x-1.5"
+                    ><i class="fa-solid fa-chart-pie text-teal-600"></i
+                    ><span>Budget Utilization</span></span
+                  >
+                  <span id="trackerPercentage" class="text-teal-700 font-bold"
+                    >0.0% Spent</span
+                  >
                 </div>
-                <div class="w-full bg-slate-200 rounded-full h-3.5 overflow-hidden p-0.5 border border-slate-300">
-                  <div id="trackerProgressBar" class="bg-teal-600 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                <div
+                  class="w-full bg-slate-200 rounded-full h-3.5 overflow-hidden p-0.5 border border-slate-300"
+                >
+                  <div
+                    id="trackerProgressBar"
+                    class="bg-teal-600 h-full rounded-full transition-all duration-500"
+                    style="width: 0%"
+                  ></div>
                 </div>
               </div>
 
               <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div class="lg:col-span-5 bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
-                  <h3 class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center space-x-2">
-                    <i class="fa-solid fa-circle-plus text-teal-600 text-sm"></i>
+                <div
+                  class="lg:col-span-5 bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm"
+                >
+                  <h3
+                    class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center space-x-2"
+                  >
+                    <i
+                      class="fa-solid fa-circle-plus text-teal-600 text-sm"
+                    ></i>
                     <span>Add New Expense Entry</span>
                   </h3>
                   <div>
-                    <label class="block text-[11px] font-semibold text-slate-600 mb-1" for="expenseName">Expense Description</label>
-                    <input type="text" id="expenseName" placeholder="e.g., Weekly Groceries, Electricity" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 shadow-sm" />
+                    <label
+                      class="block text-[11px] font-semibold text-slate-600 mb-1"
+                      for="expenseName"
+                      >Expense Description</label
+                    >
+                    <input
+                      type="text"
+                      id="expenseName"
+                      placeholder="e.g., Weekly Groceries, Electricity"
+                      class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 shadow-sm"
+                    />
                   </div>
                   <div class="grid grid-cols-2 gap-3">
                     <div>
-                      <label class="block text-[11px] font-semibold text-slate-600 mb-1" for="expenseAmount">Amount (₱)</label>
-                      <input type="number" id="expenseAmount" placeholder="0.00" min="0.01" step="0.01" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 shadow-sm" />
+                      <label
+                        class="block text-[11px] font-semibold text-slate-600 mb-1"
+                        for="expenseAmount"
+                        >Amount (₱)</label
+                      >
+                      <input
+                        type="number"
+                        id="expenseAmount"
+                        placeholder="0.00"
+                        min="0.01"
+                        step="0.01"
+                        class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 shadow-sm"
+                      />
                     </div>
                     <div>
-                      <label class="block text-[11px] font-semibold text-slate-600 mb-1" for="expenseCategory">Category</label>
-                      <select id="expenseCategory" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 shadow-sm">
+                      <label
+                        class="block text-[11px] font-semibold text-slate-600 mb-1"
+                        for="expenseCategory"
+                        >Category</label
+                      >
+                      <select
+                        id="expenseCategory"
+                        class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 shadow-sm"
+                      >
                         <option value="Utilities">Utilities</option>
-                        <option value="Food &amp; Groceries">Food &amp; Groceries</option>
+                        <option value="Food &amp; Groceries">
+                          Food &amp; Groceries
+                        </option>
                         <option value="Transport">Transport</option>
                         <option value="Miscellaneous">Miscellaneous</option>
                       </select>
                     </div>
                   </div>
-                  <button type="button" onclick="addExpense()" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-2.5 rounded-lg text-xs transition shadow-sm cursor-pointer flex items-center justify-center space-x-2">
+                  <button
+                    type="button"
+                    onclick="addExpense()"
+                    class="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-2.5 rounded-lg text-xs transition shadow-sm cursor-pointer flex items-center justify-center space-x-2"
+                  >
                     <i class="fa-solid fa-plus"></i>
                     <span>Save Expense Record</span>
                   </button>
@@ -500,15 +628,25 @@
 
                 <div class="lg:col-span-7 flex flex-col">
                   <div class="flex items-center justify-between mb-2">
-                    <h3 class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center space-x-1.5">
+                    <h3
+                      class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center space-x-1.5"
+                    >
                       <i class="fa-solid fa-list text-teal-600"></i>
                       <span>Itemized Expense Ledger</span>
                     </h3>
-                    <span id="expenseCountBadge" class="text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full font-medium">0 items</span>
+                    <span
+                      id="expenseCountBadge"
+                      class="text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full font-medium"
+                      >0 items</span
+                    >
                   </div>
-                  <div class="overflow-y-auto max-h-[260px] border border-slate-200 rounded-xl bg-white shadow-sm">
+                  <div
+                    class="overflow-y-auto max-h-[260px] border border-slate-200 rounded-xl bg-white shadow-sm"
+                  >
                     <table class="w-full text-left text-xs">
-                      <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 sticky top-0 z-10">
+                      <thead
+                        class="bg-slate-50 border-b border-slate-200 text-slate-600 sticky top-0 z-10"
+                      >
                         <tr>
                           <th class="p-3 font-semibold">Description</th>
                           <th class="p-3 font-semibold">Category</th>
@@ -516,603 +654,2286 @@
                           <th class="p-3 font-semibold text-center">Action</th>
                         </tr>
                       </thead>
-                      <tbody id="expenseTableBody" class="divide-y divide-slate-100 text-slate-700">
-                        <!-- Populated by JS -->
-                      </tbody>
+                      <tbody
+                        id="expenseTableBody"
+                        class="divide-y divide-slate-100 text-slate-700"
+                      ></tbody>
                     </table>
                   </div>
                 </div>
               </div>
             </section>
           </div>
-
         </div>
       </div>
 
-      <!-- Navigation Indicators -->
+      <!-- Modern Interactive Sliding Navigation & Indicators -->
       <div class="flex items-center justify-center pb-2 pt-2">
-        <div class="bg-white border border-slate-200 p-1.5 rounded-2xl shadow-sm flex items-center space-x-3">
-          <button onclick="slidePage(0)" id="navDot0" class="flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-teal-600 text-white shadow-xs">
+        <div
+          class="bg-white border border-slate-200 p-1.5 rounded-2xl shadow-sm flex items-center space-x-3"
+        >
+          <button
+            onclick="slidePage(0)"
+            id="navDot0"
+            class="flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-teal-600 text-white shadow-xs"
+          >
             <i class="fa-solid fa-calendar-days"></i>
-            <span>Time &amp; Calendar Hub</span>
+            <span>Time & Calendar Hub</span>
           </button>
-          <button onclick="slidePage(1)" id="navDot1" class="flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100">
+          <button
+            onclick="slidePage(1)"
+            id="navDot1"
+            class="flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+          >
             <i class="fa-solid fa-wallet"></i>
-            <span>Quick Stats &amp; Finance Hub</span>
+            <span>Quick Stats & Finance Hub</span>
           </button>
         </div>
       </div>
-
     </main>
-  </div>
 
-  <!-- Modals -->
-  <!-- Time In / Out Modal -->
-  <div id="timeInModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-md p-6 shadow-2xl">
-      <div class="flex justify-between items-center pb-4 border-b border-slate-100 mb-4">
-        <h3 class="font-bold text-lg text-textMain flex items-center space-x-2">
-          <i class="fa-solid fa-right-to-bracket text-teal-600"></i>
-          <span>Log Time In / Out</span>
-        </h3>
-        <button onclick="closeModal('timeInModal')" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer">
-          <i class="fa-solid fa-xmark text-lg"></i>
-        </button>
+    <!-- Modals & Toasts -->
+    <div
+      id="timeInModal"
+      class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-md p-6 shadow-2xl"
+      >
+        <div
+          class="flex justify-between items-center pb-4 border-b border-slate-100 mb-4"
+        >
+          <h3
+            class="font-bold text-lg text-textMain flex items-center space-x-2"
+          >
+            <i class="fa-solid fa-right-to-bracket text-teal-600"></i>
+            <span>Log Time In / Out</span>
+          </h3>
+          <button
+            onclick="closeModal('timeInModal')"
+            class="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+          >
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+        <form onsubmit="handleTimeInSubmit(event)" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1"
+              >Date</label
+            >
+            <input
+              type="date"
+              id="timeInDate"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800"
+              required
+            />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1"
+                >Time In</label
+              >
+              <input
+                type="time"
+                id="timeInValue"
+                value="06:00"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1"
+                >Time Out</label
+              >
+              <input
+                type="time"
+                id="timeOutValue"
+                value="14:00"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800"
+                required
+              />
+            </div>
+          </div>
+          <div class="flex justify-end space-x-2 pt-2">
+            <button
+              type="button"
+              onclick="closeModal('timeInModal')"
+              class="px-4 py-2 rounded-xl text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="px-4 py-2 rounded-xl text-xs font-medium bg-teal-600 hover:bg-teal-700 text-white shadow-sm cursor-pointer"
+            >
+              Save Record
+            </button>
+          </div>
+        </form>
       </div>
-      <form onsubmit="handleTimeInSubmit(event)" class="space-y-4">
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Date</label>
-          <input type="date" id="timeInDate" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800" required />
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Time In</label>
-            <input type="time" id="timeInValue" value="06:00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800" required />
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Time Out</label>
-            <input type="time" id="timeOutValue" value="14:00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800" required />
-          </div>
-        </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="closeModal('timeInModal')" class="px-4 py-2 rounded-xl text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Cancel</button>
-          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-medium bg-teal-600 hover:bg-teal-700 text-white shadow-sm cursor-pointer">Save Record</button>
-        </div>
-      </form>
     </div>
-  </div>
 
-  <!-- Manual Entry Modal -->
-  <div id="manualEntryModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-md p-6 shadow-2xl">
-      <div class="flex justify-between items-center pb-4 border-b border-slate-100 mb-4">
-        <h3 class="font-bold text-lg text-textMain flex items-center space-x-2">
-          <i class="fa-solid fa-pen-to-square text-teal-600"></i>
-          <span>Direct Attendance Entry</span>
-        </h3>
-        <button onclick="closeModal('manualEntryModal')" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer">
-          <i class="fa-solid fa-xmark text-lg"></i>
-        </button>
+    <!-- Manual Entry Modal -->
+    <div
+      id="manualEntryModal"
+      class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-md p-6 shadow-2xl"
+      >
+        <div
+          class="flex justify-between items-center pb-4 border-b border-slate-100 mb-4"
+        >
+          <h3
+            class="font-bold text-lg text-textMain flex items-center space-x-2"
+          >
+            <i class="fa-solid fa-pen-to-square text-teal-600"></i>
+            <span>Direct Attendance Entry</span>
+          </h3>
+          <button
+            onclick="closeModal('manualEntryModal')"
+            class="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+          >
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+        <form
+          onsubmit="handleManualEntrySubmit(event)"
+          class="space-y-4 text-xs"
+        >
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1"
+              >Entry Type</label
+            >
+            <select
+              id="manualEntryType"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800"
+            >
+              <option value="Present">Present / Correction (Full Shift)</option>
+              <option value="Overtime">Overtime Claim (+2h OT)</option>
+              <option value="Absent on Holiday">
+                Absent During Holiday (Unexcused)
+              </option>
+              <option value="Official Business">
+                Official Business / Field Work
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1"
+              >Target Date</label
+            >
+            <input
+              type="date"
+              id="manualEntryDate"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800"
+              required
+            />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1"
+                >Time In</label
+              >
+              <input
+                type="time"
+                id="manualTimeIn"
+                value="06:00"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800"
+              />
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1"
+                >Time Out</label
+              >
+              <input
+                type="time"
+                id="manualTimeOut"
+                value="14:00"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800"
+              />
+            </div>
+          </div>
+          <div class="flex justify-end space-x-2 pt-2">
+            <button
+              type="button"
+              onclick="closeModal('manualEntryModal')"
+              class="px-4 py-2 rounded-xl text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="px-4 py-2 rounded-xl text-xs font-medium bg-teal-600 hover:bg-teal-700 text-white shadow-sm cursor-pointer"
+            >
+              Apply Directly
+            </button>
+          </div>
+        </form>
       </div>
-      <form onsubmit="handleManualEntrySubmit(event)" class="space-y-4 text-xs">
-        <div>
-          <label class="block font-semibold text-slate-700 mb-1">Entry Type</label>
-          <select id="manualEntryType" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800">
-            <option value="Present">Present / Correction (Full Shift)</option>
-            <option value="Overtime">Overtime Claim (+2h OT)</option>
-            <option value="Absent on Holiday">Absent During Holiday (Unexcused)</option>
-            <option value="Official Business">Official Business / Field Work</option>
-          </select>
-        </div>
-        <div>
-          <label class="block font-semibold text-slate-700 mb-1">Target Date</label>
-          <input type="date" id="manualEntryDate" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800" required />
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block font-semibold text-slate-700 mb-1">Time In</label>
-            <input type="time" id="manualTimeIn" value="06:00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800" />
-          </div>
-          <div>
-            <label class="block font-semibold text-slate-700 mb-1">Time Out</label>
-            <input type="time" id="manualTimeOut" value="14:00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800" />
-          </div>
-        </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="closeModal('manualEntryModal')" class="px-4 py-2 rounded-xl text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Cancel</button>
-          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-medium bg-teal-600 hover:bg-teal-700 text-white shadow-sm cursor-pointer">Apply Directly</button>
-        </div>
-      </form>
     </div>
-  </div>
 
-  <!-- Assign Shift Modal -->
-  <div id="assignShiftModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-lg p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
-      <div class="flex justify-between items-center pb-4 border-b border-slate-100 mb-4">
-        <h3 class="font-bold text-lg text-textMain flex items-center space-x-2">
-          <i class="fa-regular fa-calendar-days text-teal-600"></i>
-          <span>Assign or Create Shift Schedule</span>
-        </h3>
-        <button onclick="closeModal('assignShiftModal')" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer">
-          <i class="fa-solid fa-xmark text-lg"></i>
-        </button>
-      </div>
-
-      <form onsubmit="handleAssignShiftSubmit(event)" class="space-y-4 text-xs">
-        <div class="grid grid-cols-2 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
-          <div>
-            <label class="block font-semibold text-slate-700 mb-1">Start Date</label>
-            <input type="date" id="assignStartDate" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800" required />
-          </div>
-          <div>
-            <label class="block font-semibold text-slate-700 mb-1">End Date</label>
-            <input type="date" id="assignEndDate" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800" required />
-          </div>
+    <!-- Assign Shift / Create Custom Shift Modal -->
+    <div
+      id="assignShiftModal"
+      class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-lg p-6 shadow-2xl max-h-[92vh] overflow-y-auto"
+      >
+        <div
+          class="flex justify-between items-center pb-4 border-b border-slate-100 mb-4"
+        >
+          <h3
+            class="font-bold text-lg text-textMain flex items-center space-x-2"
+          >
+            <i class="fa-regular fa-calendar-days text-teal-600"></i>
+            <span>Assign or Create Shift Schedule</span>
+          </h3>
+          <button
+            onclick="closeModal('assignShiftModal')"
+            class="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+          >
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
         </div>
 
-        <div>
-          <label class="block font-semibold text-slate-700 mb-2">Select Shift Template</label>
-          <input type="hidden" id="selectedShiftTemplate" value="morning" />
-          <div id="shiftTemplatesContainer" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <button type="button" onclick="selectShiftTemplate('morning', this)" class="p-3 rounded-xl border-2 border-teal-600 bg-teal-50/50 text-left transition cursor-pointer">
-              <div class="flex items-center space-x-2 text-teal-700 font-bold mb-1">
-                <i class="fa-solid fa-sun"></i>
-                <span>Morning Shift</span>
+        <form
+          onsubmit="handleAssignShiftSubmit(event)"
+          class="space-y-4 text-xs"
+        >
+          <!-- Date Range Selector -->
+          <div
+            class="grid grid-cols-2 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3"
+          >
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1"
+                >Start Date</label
+              >
+              <input
+                type="date"
+                id="assignStartDate"
+                class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800"
+                required
+              />
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1"
+                >End Date</label
+              >
+              <input
+                type="date"
+                id="assignEndDate"
+                class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800"
+                required
+              />
+            </div>
+          </div>
+
+          <!-- Select Existing Shift via Cards -->
+          <div>
+            <label class="block font-semibold text-slate-700 mb-2"
+              >Select Shift Template</label
+            >
+            <input type="hidden" id="selectedShiftTemplate" value="morning" />
+            <div
+              id="shiftTemplatesContainer"
+              class="grid grid-cols-2 sm:grid-cols-3 gap-3"
+            ></div>
+          </div>
+
+          <div class="relative flex py-2 items-center">
+            <div class="flex-grow border-t border-slate-200"></div>
+            <span
+              class="flex-shrink mx-4 text-slate-400 font-bold uppercase tracking-wider text-[10px]"
+              >Or Create Custom Shift</span
+            >
+            <div class="flex-grow border-t border-slate-200"></div>
+          </div>
+
+          <!-- Custom Shift Creator Fields -->
+          <div
+            class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3"
+          >
+            <div class="font-bold text-slate-800 flex items-center space-x-1.5">
+              <i class="fa-solid fa-wand-magic-sparkles text-teal-600"></i>
+              <span>New Shift Builder</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block font-semibold text-slate-600 mb-1"
+                  >Shift Name</label
+                >
+                <input
+                  type="text"
+                  id="customShiftName"
+                  placeholder="e.g. NOC Night Watch"
+                  oninput="toggleSaveShiftButton()"
+                  class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-800"
+                />
               </div>
-              <div class="text-[11px] text-slate-600">06:00 AM - 02:00 PM</div>
-            </button>
-            <button type="button" onclick="selectShiftTemplate('night', this)" class="p-3 rounded-xl border border-slate-200 bg-white text-left hover:border-teal-400 transition cursor-pointer">
-              <div class="flex items-center space-x-2 text-indigo-600 font-bold mb-1">
-                <i class="fa-solid fa-moon"></i>
-                <span>Night Shift</span>
+              <div>
+                <label class="block font-semibold text-slate-600 mb-1"
+                  >Select Icon</label
+                >
+                <div class="grid grid-cols-6 gap-1.5">
+                  <button
+                    type="button"
+                    onclick="selectShiftIcon('fa-sun', this)"
+                    class="shift-icon-btn p-2 rounded-lg border border-slate-200 bg-white hover:bg-teal-50 hover:border-teal-400 text-slate-700 transition flex items-center justify-center cursor-pointer"
+                  >
+                    <i class="fa-solid fa-sun text-amber-500"></i>
+                  </button>
+                  <button
+                    type="button"
+                    onclick="selectShiftIcon('fa-moon', this)"
+                    class="shift-icon-btn p-2 rounded-lg border border-slate-200 bg-white hover:bg-teal-50 hover:border-teal-400 text-slate-700 transition flex items-center justify-center cursor-pointer active-icon"
+                  >
+                    <i class="fa-solid fa-moon text-indigo-600"></i>
+                  </button>
+                  <button
+                    type="button"
+                    onclick="selectShiftIcon('fa-solid fa-cloud-sun', this)"
+                    class="shift-icon-btn p-2 rounded-lg border border-slate-200 bg-white hover:bg-teal-50 hover:border-teal-400 text-slate-700 transition flex items-center justify-center cursor-pointer"
+                  >
+                    <i class="fa-solid fa-cloud-sun text-orange-500"></i>
+                  </button>
+                  <button
+                    type="button"
+                    onclick="selectShiftIcon('fa-shield-halved', this)"
+                    class="shift-icon-btn p-2 rounded-lg border border-slate-200 bg-white hover:bg-teal-50 hover:border-teal-400 text-slate-700 transition flex items-center justify-center cursor-pointer"
+                  >
+                    <i class="fa-solid fa-shield-halved text-rose-600"></i>
+                  </button>
+                  <button
+                    type="button"
+                    onclick="selectShiftIcon('fa-bolt', this)"
+                    class="shift-icon-btn p-2 rounded-lg border border-slate-200 bg-white hover:bg-teal-50 hover:border-teal-400 text-slate-700 transition flex items-center justify-center cursor-pointer"
+                  >
+                    <i class="fa-solid fa-bolt text-amber-500"></i>
+                  </button>
+                  <button
+                    type="button"
+                    onclick="selectShiftIcon('fa-clock', this)"
+                    class="shift-icon-btn p-2 rounded-lg border border-slate-200 bg-white hover:bg-teal-50 hover:border-teal-400 text-slate-700 transition flex items-center justify-center cursor-pointer"
+                  >
+                    <i class="fa-solid fa-clock text-slate-600"></i>
+                  </button>
+                </div>
+                <input type="hidden" id="selectedIconVal" value="fa-moon" />
               </div>
-              <div class="text-[11px] text-slate-600">10:00 PM - 06:00 AM</div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block font-semibold text-slate-600 mb-1"
+                  >Start Time</label
+                >
+                <input
+                  type="time"
+                  id="customShiftStart"
+                  value="22:00"
+                  class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-800"
+                />
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-600 mb-1"
+                  >End Time</label
+                >
+                <input
+                  type="time"
+                  id="customShiftEnd"
+                  value="06:00"
+                  class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-800"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="flex justify-end space-x-2 pt-3">
+            <button
+              type="button"
+              onclick="closeModal('assignShiftModal')"
+              class="px-4 py-2 rounded-xl text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              id="saveCustomShiftBtn"
+              onclick="handleSaveCustomShift(event)"
+              class="hidden bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-xl text-xs transition shadow-sm cursor-pointer items-center space-x-1"
+            >
+              <i class="fa-solid fa-check text-[10px]"></i>
+              <span>Save Shift</span>
+            </button>
+            <button
+              type="submit"
+              class="px-4 py-2 rounded-xl text-xs font-medium bg-teal-600 hover:bg-teal-700 text-white shadow-sm cursor-pointer"
+            >
+              Assign Shift
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Grant Leave Modal -->
+    <div
+      id="grantLeaveModal"
+      class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-md p-6 shadow-2xl"
+      >
+        <div
+          class="flex justify-between items-center pb-4 border-b border-slate-100 mb-4"
+        >
+          <h3
+            class="font-bold text-lg text-textMain flex items-center space-x-2"
+          >
+            <i class="fa-solid fa-umbrella-beach text-amber-600"></i>
+            <span>Grant / File Leave Request</span>
+          </h3>
+          <button
+            onclick="closeModal('grantLeaveModal')"
+            class="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+          >
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+        <form onsubmit="handleGrantLeaveSubmit(event)" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1"
+              >Leave Type</label
+            >
+            <select
+              id="grantLeaveTypeSelect"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800"
+            >
+              <option value="VL">
+                Vacation Leave (VL) - <span id="modalBalVL">15</span> days
+                available
+              </option>
+              <option value="SL">
+                Sick Leave (SL) - <span id="modalBalSL">12</span> days available
+              </option>
+              <option value="EL">
+                Emergency Leave (EL) - <span id="modalBalEL">5</span> days
+                available
+              </option>
+            </select>
+          </div>
+          <div class="flex justify-end space-x-2 pt-2">
+            <button
+              type="button"
+              onclick="closeModal('grantLeaveModal')"
+              class="px-4 py-2 rounded-xl text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="px-4 py-2 rounded-xl text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white shadow-sm cursor-pointer"
+            >
+              Submit
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- View Payslip Modal -->
+    <div
+      id="payslipModal"
+      class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-3xl p-8 shadow-2xl max-h-[92vh] overflow-y-auto"
+      >
+        <div
+          class="flex justify-between items-center pb-4 border-b border-slate-200 mb-6"
+        >
+          <div class="flex items-center space-x-3">
+            <div
+              class="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 font-bold text-lg"
+            >
+              <i class="fa-regular fa-file-lines"></i>
+            </div>
+            <div>
+              <span
+                class="text-[11px] font-bold uppercase tracking-wider text-teal-700"
+                >Official Statement of Earnings & Deductions</span
+              >
+              <h3 class="font-extrabold text-xl text-textMain">
+                September 2026 - Semi-Monthly Period 1
+              </h3>
+            </div>
+          </div>
+          <button
+            onclick="closeModal('payslipModal')"
+            class="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+          >
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <div
+          class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mb-6 text-xs"
+        >
+          <div class="space-y-1.5">
+            <div class="flex justify-between">
+              <span class="text-slate-500">Employee Name:</span>
+              <span class="font-bold text-slate-800">Alex Morgan</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Employee ID:</span>
+              <span class="font-semibold text-slate-800">TC-84920</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Department:</span>
+              <span class="font-semibold text-slate-800"
+                >Network Operations (NOC)</span
+              >
+            </div>
+          </div>
+          <div class="space-y-1.5 sm:border-l sm:border-slate-200 sm:pl-4">
+            <div class="flex justify-between">
+              <span class="text-slate-500">Pay Period:</span>
+              <span class="font-semibold text-slate-800"
+                >Sep 01, 2026 - Sep 15, 2026</span
+              >
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Payout Date:</span>
+              <span class="font-semibold text-teal-700"
+                >September 18, 2026</span
+              >
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Tax Status:</span>
+              <span class="font-semibold text-slate-800">Single (S)</span>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="bg-gradient-to-r from-teal-600 to-teal-700 text-white rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-md mb-6 gap-4"
+        >
+          <div>
+            <span
+              class="text-xs font-semibold uppercase tracking-wider opacity-90 block"
+              >Net Take-Home Pay</span
+            >
+            <span class="text-3xl font-black"
+              >₱7,485.00
+              <span class="text-sm font-normal opacity-90">PHP</span></span
+            >
+          </div>
+          <button
+            onclick="
+              showToast('Payslip PDF downloaded successfully', 'success')
+            "
+            class="bg-white text-teal-700 hover:bg-slate-100 px-4 py-2.5 rounded-xl text-xs font-bold shadow transition flex items-center space-x-2 cursor-pointer"
+          >
+            <i class="fa-solid fa-download"></i>
+            <span>Download PDF Copy</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div
+            class="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs"
+          >
+            <div
+              class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3"
+            >
+              <h4
+                class="font-bold text-xs uppercase tracking-wider text-teal-800 flex items-center space-x-1.5"
+              >
+                <i class="fa-solid fa-plus-circle text-teal-600"></i>
+                <span>Earnings Breakdown</span>
+              </h4>
+              <span class="text-xs font-extrabold text-teal-700"
+                >₱8,400.00</span
+              >
+            </div>
+            <div class="space-y-2.5 text-xs text-slate-600">
+              <div class="flex justify-between">
+                <span>Basic Pay (10 days @ ₱600)</span>
+                <span class="font-semibold text-slate-800">₱6,000.00</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Overtime Pay (2.5 hrs OT)</span>
+                <span class="font-semibold text-slate-800">₱234.38</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Paid Sick Leave (1 day)</span>
+                <span class="font-semibold text-slate-800">₱600.00</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Shift Differentials / Allowance</span>
+                <span class="font-semibold text-slate-800">₱1,565.62</span>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs"
+          >
+            <div
+              class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3"
+            >
+              <h4
+                class="font-bold text-xs uppercase tracking-wider text-rose-800 flex items-center space-x-1.5"
+              >
+                <i class="fa-solid fa-minus-circle text-rose-600"></i>
+                <span>Deductions & Contributions</span>
+              </h4>
+              <span class="text-xs font-extrabold text-rose-700">₱915.00</span>
+            </div>
+            <div class="space-y-2.5 text-xs text-slate-600">
+              <div class="flex justify-between">
+                <span>SSS Contribution (Employee)</span>
+                <span class="font-semibold text-slate-800">₱450.00</span>
+              </div>
+              <div class="flex justify-between">
+                <span>PhilHealth Contribution</span>
+                <span class="font-semibold text-slate-800">₱225.00</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Pag-IBIG Fund Contribution</span>
+                <span class="font-semibold text-slate-800">₱100.00</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Withholding Tax (BIR)</span>
+                <span class="font-semibold text-slate-800">₱140.00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="flex items-center justify-between pt-4 border-t border-slate-200 text-xs text-slate-500"
+        >
+          <span>Generated securely by Timekeep Cloud Engine</span>
+          <button
+            onclick="closeModal('payslipModal')"
+            class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-xl transition cursor-pointer"
+          >
+            Close Window
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div
+      id="settingsModal"
+      class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-3xl p-8 shadow-2xl max-h-[92vh] overflow-y-auto"
+      >
+        <!-- Modal Header -->
+        <div
+          class="flex justify-between items-center pb-4 border-b border-slate-200 mb-6"
+        >
+          <div class="flex items-center space-x-3">
+            <div
+              class="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 font-bold text-lg"
+            >
+              <i class="fa-solid fa-gear"></i>
+            </div>
+            <div>
+              <span
+                class="text-[11px] font-bold uppercase tracking-wider text-teal-700"
+                >System Configuration</span
+              >
+              <h3 class="font-extrabold text-xl text-textMain">
+                Payroll & Benefit Settings
+              </h3>
+            </div>
+          </div>
+          <button
+            onclick="closeModal('settingsModal')"
+            class="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+          >
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <!-- Settings Tabs Header -->
+        <div
+          class="flex space-x-2 border-b border-slate-200 pb-3 mb-6 overflow-x-auto text-xs font-semibold"
+        >
+          <button
+            onclick="switchSettingsTab('earnings')"
+            id="tabBtnEarnings"
+            class="px-4 py-2 rounded-xl bg-teal-600 text-white transition cursor-pointer shadow-xs"
+          >
+            Earnings & Rates
+          </button>
+          <button
+            onclick="switchSettingsTab('deductions')"
+            id="tabBtnDeductions"
+            class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer"
+          >
+            Deductions & Leave Balances
+          </button>
+          <button
+            onclick="switchSettingsTab('general')"
+            id="tabBtnGeneral"
+            class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer"
+          >
+            General Preferences
+          </button>
+        </div>
+
+        <!-- Tab 1: Earnings & Rates -->
+        <div id="settingsTabEarnings" class="space-y-5 text-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1"
+                >Daily Base Wage (PHP)</label
+              >
+              <input
+                type="number"
+                id="settingBaseWage"
+                value="600.00"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+              />
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1"
+                >Company Allowance (Daily) (₱)</label
+              >
+              <input
+                type="number"
+                id="settingDailyAllowance"
+                value="50.00"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1"
+                >Night Differential (%)</label
+              >
+              <input
+                type="number"
+                id="settingNightDiff"
+                value="10"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+              />
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1"
+                >Overtime Multiplier</label
+              >
+              <input
+                type="number"
+                step="0.05"
+                id="settingOtMultiplier"
+                value="1.25"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+              />
+            </div>
+          </div>
+
+          <div class="space-y-3 pt-2 border-t border-slate-100">
+            <span class="font-bold text-slate-800 block"
+              >Holiday Computation Toggles</span
+            >
+
+            <div
+              class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between"
+            >
+              <div>
+                <span class="font-bold text-slate-800 block"
+                  >Regular Holiday Rate</span
+                >
+                <span class="text-slate-500 text-[11px]"
+                  >Apply 200% multiplier on regular holiday work</span
+                >
+              </div>
+              <input
+                type="checkbox"
+                id="settingRegularHolidayToggle"
+                class="w-4 h-4 accent-teal-600 rounded cursor-pointer"
+              />
+            </div>
+
+            <div
+              class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between"
+            >
+              <div>
+                <span class="font-bold text-slate-800 block"
+                  >Special Holiday Rate</span
+                >
+                <span class="text-slate-500 text-[11px]"
+                  >Apply 130% multiplier on special non-working holiday
+                  work</span
+                >
+              </div>
+              <input
+                type="checkbox"
+                id="settingSpecialHolidayToggle"
+                class="w-4 h-4 accent-teal-600 rounded cursor-pointer"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Deductions & Leave Balances -->
+        <div id="settingsTabDeductions" class="space-y-5 text-xs hidden">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1"
+                >SSS Contribution (₱)</label
+              >
+              <input
+                type="number"
+                id="settingSss"
+                value="450.00"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+              />
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1"
+                >PhilHealth Contribution (₱)</label
+              >
+              <input
+                type="number"
+                id="settingPhilhealth"
+                value="225.00"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+              />
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1"
+                >Pag-IBIG Contribution (₱)</label
+              >
+              <input
+                type="number"
+                id="settingPagibig"
+                value="100.00"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+              />
+            </div>
+          </div>
+
+          <div class="pt-4 border-t border-slate-100">
+            <span class="font-bold text-slate-800 block mb-3"
+              ><i class="fa-solid fa-umbrella-beach text-teal-600 mr-1.5"></i>
+              Annual Leave Allotment (Credits)</span
+            >
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block font-semibold text-slate-700 mb-1"
+                  >Vacation Leave (VL)</label
+                >
+                <input
+                  type="number"
+                  id="settingLeaveVL"
+                  value="15"
+                  min="0"
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+                />
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-700 mb-1"
+                  >Sick Leave (SL)</label
+                >
+                <input
+                  type="number"
+                  id="settingLeaveSL"
+                  value="12"
+                  min="0"
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+                />
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-700 mb-1"
+                  >Emergency Leave (EL)</label
+                >
+                <input
+                  type="number"
+                  id="settingLeaveEL"
+                  value="5"
+                  min="0"
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="p-4 bg-teal-50/50 border border-teal-100 rounded-2xl">
+            <span class="font-bold text-teal-900 block mb-1"
+              >Leave Allocation & Deduction Note</span
+            >
+            <span class="text-teal-700 text-[11px]"
+              >Configuring leave credits here dynamically updates available
+              balances when filing leave requests across the system.</span
+            >
+          </div>
+        </div>
+
+        <!-- Tab 3: General Preferences -->
+        <div id="settingsTabGeneral" class="space-y-5 text-xs hidden">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1"
+                >Company / Organization Name</label
+              >
+              <input
+                type="text"
+                value="Network Operations Center (NOC)"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium"
+              />
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1"
+                >Primary Timezone</label
+              >
+              <select
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium"
+              >
+                <option>Philippine Standard Time (PST - UTC+8)</option>
+              </select>
+            </div>
+          </div>
+          <div
+            class="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between"
+          >
+            <div>
+              <span class="font-bold text-slate-800 block"
+                >Auto-Lock Inactive Sessions</span
+              >
+              <span class="text-slate-500 text-[11px]"
+                >Automatically lock dashboard after 15 minutes of
+                inactivity</span
+              >
+            </div>
+            <input
+              type="checkbox"
+              checked
+              class="w-4 h-4 accent-teal-600 rounded cursor-pointer"
+            />
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div
+          class="flex items-center justify-between pt-6 border-t border-slate-200 mt-6 text-xs"
+        >
+          <span class="text-slate-500"
+            >Settings save to local dashboard state instantly</span
+          >
+          <div class="space-x-2">
+            <button
+              onclick="closeModal('settingsModal')"
+              class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-xl transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              onclick="saveSettings()"
+              class="bg-teal-600 hover:bg-teal-700 text-white font-medium px-5 py-2 rounded-xl shadow transition cursor-pointer"
+            >
+              Save Configurations
             </button>
           </div>
         </div>
-
-        <div class="flex justify-end space-x-2 pt-3">
-          <button type="button" onclick="closeModal('assignShiftModal')" class="px-4 py-2 rounded-xl text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Cancel</button>
-          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-medium bg-teal-600 hover:bg-teal-700 text-white shadow-sm cursor-pointer">Assign Shift</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- File Leave Modal -->
-  <div id="grantLeaveModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-md p-6 shadow-2xl">
-      <div class="flex justify-between items-center pb-4 border-b border-slate-100 mb-4">
-        <h3 class="font-bold text-lg text-textMain flex items-center space-x-2">
-          <i class="fa-solid fa-umbrella-beach text-amber-600"></i>
-          <span>File Leave Request</span>
-        </h3>
-        <button onclick="closeModal('grantLeaveModal')" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer">
-          <i class="fa-solid fa-xmark text-lg"></i>
-        </button>
-      </div>
-      <form onsubmit="handleGrantLeaveSubmit(event)" class="space-y-4">
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Leave Type</label>
-          <select id="grantLeaveTypeSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800">
-            <option value="VL">Vacation Leave (VL) - 15 days available</option>
-            <option value="SL">Sick Leave (SL) - 12 days available</option>
-            <option value="EL">Emergency Leave (EL) - 5 days available</option>
-          </select>
-        </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="closeModal('grantLeaveModal')" class="px-4 py-2 rounded-xl text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Cancel</button>
-          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white shadow-sm cursor-pointer">Submit</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Payslip Modal -->
-  <div id="payslipModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-3xl p-6 sm:p-8 shadow-2xl max-h-[92vh] overflow-y-auto">
-      <div class="flex justify-between items-center pb-4 border-b border-slate-200 mb-6">
-        <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 font-bold text-lg">
-            <i class="fa-regular fa-file-lines"></i>
-          </div>
-          <div>
-            <span class="text-[11px] font-bold uppercase tracking-wider text-teal-700">Official Personal Statement of Earnings</span>
-            <h3 class="font-extrabold text-xl text-textMain">September 2026 - Semi-Monthly Period 1</h3>
-          </div>
-        </div>
-        <button onclick="closeModal('payslipModal')" class="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer">
-          <i class="fa-solid fa-xmark text-lg"></i>
-        </button>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mb-6 text-xs">
-        <div class="space-y-1.5">
-          <div class="flex justify-between">
-            <span class="text-slate-500">Name:</span>
-            <span id="payslipUserName" class="font-bold text-slate-800">Alex Morgan</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-slate-500">Account ID:</span>
-            <span class="font-semibold text-slate-800">TC-84920</span>
-          </div>
-        </div>
-        <div class="space-y-1.5 sm:border-l sm:border-slate-200 sm:pl-4">
-          <div class="flex justify-between">
-            <span class="text-slate-500">Pay Period:</span>
-            <span class="font-semibold text-slate-800">Sep 01, 2026 - Sep 15, 2026</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-slate-500">Payout Date:</span>
-            <span class="font-semibold text-teal-700">September 18, 2026</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-gradient-to-r from-teal-600 to-teal-700 text-white rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-md mb-6 gap-4">
-        <div>
-          <span class="text-xs font-semibold uppercase tracking-wider opacity-90 block">Net Take-Home Pay</span>
-          <span class="text-3xl font-black">₱7,485.00 <span class="text-sm font-normal opacity-90">PHP</span></span>
-        </div>
-        <button onclick="showToast('Payslip PDF downloaded successfully', 'success')" class="bg-white text-teal-700 hover:bg-slate-100 px-4 py-2.5 rounded-xl text-xs font-bold shadow transition flex items-center space-x-2 cursor-pointer">
-          <i class="fa-solid fa-download"></i>
-          <span>Download PDF Copy</span>
-        </button>
-      </div>
-
-      <div class="flex items-center justify-between pt-4 border-t border-slate-200 text-xs text-slate-500">
-        <span>Generated securely by Timekeep Cloud Engine</span>
-        <button onclick="closeModal('payslipModal')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-xl transition cursor-pointer">Close Window</button>
       </div>
     </div>
-  </div>
 
-  <!-- Settings Modal -->
-  <div id="settingsModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-3xl p-6 sm:p-8 shadow-2xl max-h-[92vh] overflow-y-auto">
-      <div class="flex justify-between items-center pb-4 border-b border-slate-200 mb-6">
-        <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 font-bold text-lg">
-            <i class="fa-solid fa-gear"></i>
-          </div>
-          <div>
-            <span class="text-[11px] font-bold uppercase tracking-wider text-teal-700">Personal Configuration</span>
-            <h3 class="font-extrabold text-xl text-textMain">Salary &amp; Benefit Settings</h3>
-          </div>
-        </div>
-        <button onclick="closeModal('settingsModal')" class="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer">
-          <i class="fa-solid fa-xmark text-lg"></i>
-        </button>
-      </div>
+    <!-- Toast Container -->
+    <div
+      id="toastContainer"
+      class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none"
+    ></div>
 
-      <div class="space-y-4 text-xs">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block font-semibold text-slate-700 mb-1">Daily Base Wage (PHP)</label>
-            <input type="number" id="settingBaseWage" value="600.00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none" />
-          </div>
-          <div>
-            <label class="block font-semibold text-slate-700 mb-1">Daily Allowance (₱)</label>
-            <input type="number" id="settingDailyAllowance" value="50.00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none" />
-          </div>
-        </div>
-      </div>
+    <script>
+      const monthsData = [
+        { name: "Jun", fullName: "June", days: 30, startDay: 1 },
+        { name: "Jul", fullName: "July", days: 31, startDay: 3 },
+        { name: "Aug", fullName: "August", days: 31, startDay: 6 },
+        { name: "Sep", fullName: "September", days: 30, startDay: 2 },
+        { name: "Oct", fullName: "October", days: 31, startDay: 4 },
+        { name: "Nov", fullName: "November", days: 30, startDay: 0 },
+        { name: "Dec", fullName: "December", days: 31, startDay: 2 },
+      ];
 
-      <div class="flex items-center justify-end space-x-2 pt-6 border-t border-slate-200 mt-6 text-xs">
-        <button onclick="closeModal('settingsModal')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-xl transition cursor-pointer">Cancel</button>
-        <button onclick="showToast('Settings saved successfully!', 'success'); closeModal('settingsModal');" class="bg-teal-600 hover:bg-teal-700 text-white font-medium px-5 py-2 rounded-xl shadow transition cursor-pointer">Save Configurations</button>
-      </div>
-    </div>
-  </div>
+      let currentMonthIndex = 3; // September
+      let currentYear = 2026;
+      let selectedDay = 1;
 
-  <!-- Toast Container -->
-  <div id="toastContainer" class="fixed bottom-5 right-5 z-[120] space-y-2 pointer-events-none"></div>
+      // Global Leave Balances State
+      let leaveBalances = {
+        VL: 15,
+        SL: 12,
+        EL: 5,
+      };
 
-  <script>
-    // --- User State & Auth Handlers ---
-    let currentUser = {
-      name: "Alex Morgan",
-      email: "alex@mycloud.dev",
-      deptPos: "Personal Timekeeping & Financial Account",
-      baseWage: 600.00
-    };
+      const expenseNetTakeHomePay = 7485;
+      let expensesList = [
+        {
+          id: 101,
+          name: "Fiber Internet Subscription",
+          category: "Utilities",
+          amount: 1500,
+        },
+        {
+          id: 102,
+          name: "Weekly Supermarket Groceries",
+          category: "Food & Groceries",
+          amount: 1300,
+        },
+      ];
 
-    let expenses = [];
-    let currentMonth = 8; // September (0-indexed: 8)
-    let currentYear = 2026;
+      function slidePage(pageIndex) {
+        const track = document.getElementById("sliderTrack");
+        track.style.transform = `translateX(-${pageIndex * 100}%)`;
 
-    function getInitials(name) {
-      if (!name) return "U";
-      const parts = name.trim().split(' ');
-      if (parts.length >= 2) {
-        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-      }
-      return parts[0].substring(0, 2).toUpperCase();
-    }
+        const btn0 = document.getElementById("navDot0");
+        const btn1 = document.getElementById("navDot1");
 
-    function updateProfileUI() {
-      const nameElems = ['userName', 'headerUserName', 'payslipUserName'];
-      nameElems.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.innerText = currentUser.name;
-      });
-      const deptEl = document.getElementById('userDeptPos');
-      if (deptEl) deptEl.innerText = currentUser.deptPos;
-      const avatarEl = document.getElementById('userAvatar');
-      if (avatarEl) avatarEl.innerText = getInitials(currentUser.name);
-    }
-
-    function switchAuthTab(tab) {
-      const loginForm = document.getElementById('loginForm');
-      const registerForm = document.getElementById('registerForm');
-      const tabLogin = document.getElementById('tabLogin');
-      const tabRegister = document.getElementById('tabRegister');
-      const authTitle = document.getElementById('authTitle');
-      const authSubtitle = document.getElementById('authSubtitle');
-
-      if (tab === 'login') {
-        loginForm.classList.remove('hidden');
-        registerForm.classList.add('hidden');
-        tabLogin.className = "flex-1 pb-3 text-sm font-semibold border-b-2 border-teal-600 text-teal-600 transition-all";
-        tabRegister.className = "flex-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-all";
-        authTitle.innerText = "Welcome back";
-        authSubtitle.innerText = "Sign in to access your personal hub & timekeeping";
-      } else {
-        loginForm.classList.add('hidden');
-        registerForm.classList.remove('hidden');
-        tabRegister.className = "flex-1 pb-3 text-sm font-semibold border-b-2 border-teal-600 text-teal-600 transition-all";
-        tabLogin.className = "flex-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-all";
-        authTitle.innerText = "Create Account";
-        authSubtitle.innerText = "Join TimeCloud to manage shifts, salary & logs";
-      }
-    }
-
-    function openAuthModal() {
-      document.getElementById('authModal').classList.remove('hidden');
-    }
-
-    function closeAuthModal() {
-      document.getElementById('authModal').classList.add('hidden');
-    }
-
-    function handleLogin(e) {
-      e.preventDefault();
-      const email = document.getElementById('loginEmail').value;
-      if (email) {
-        const namePart = email.split('@')[0].replace(/[._]/g, ' ');
-        currentUser.name = namePart.charAt(0).toUpperCase() + namePart.slice(1);
-        currentUser.email = email;
-      }
-      updateProfileUI();
-      closeAuthModal();
-      showToast("Signed in successfully!", "success");
-    }
-
-    function handleRegister(e) {
-      e.preventDefault();
-      const name = document.getElementById('regName').value;
-      const email = document.getElementById('regEmail').value;
-      const wage = parseFloat(document.getElementById('regWage').value) || 600;
-
-      if (name && email) {
-        currentUser.name = name;
-        currentUser.email = email;
-        currentUser.baseWage = wage;
-        currentUser.deptPos = "Personal Timekeeping & Financial Account";
-        
-        // Update dashboard wage displays
-        const baseWageEl = document.getElementById('baseWage');
-        if (baseWageEl) baseWageEl.innerText = `₱${wage.toFixed(2)} PHP`;
-      }
-      updateProfileUI();
-      closeAuthModal();
-      showToast("Personal account created successfully!", "success");
-    }
-
-    function openModal(id) {
-      const el = document.getElementById(id);
-      if (el) el.classList.remove('hidden');
-    }
-
-    function closeModal(id) {
-      const el = document.getElementById(id);
-      if (el) el.classList.add('hidden');
-    }
-
-    function slidePage(index) {
-      const track = document.getElementById('sliderTrack');
-      const dot0 = document.getElementById('navDot0');
-      const dot1 = document.getElementById('navDot1');
-
-      if (index === 0) {
-        track.style.transform = 'translateX(0%)';
-        dot0.className = "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-teal-600 text-white shadow-xs";
-        dot1.className = "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100";
-      } else {
-        track.style.transform = 'translateX(-100%)';
-        dot1.className = "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-teal-600 text-white shadow-xs";
-        dot0.className = "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100";
-      }
-    }
-
-    function showToast(message, type = 'info') {
-      const container = document.getElementById('toastContainer');
-      if (!container) return;
-      const toast = document.createElement('div');
-      toast.className = `p-3 rounded-xl shadow-lg text-xs font-semibold text-white transition-all duration-300 transform translate-y-0 ${
-        type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-rose-600' : 'bg-teal-600'
-      }`;
-      toast.innerText = message;
-      container.appendChild(toast);
-      setTimeout(() => {
-        toast.classList.add("opacity-0", "translate-y-2");
-        setTimeout(() => toast.remove(), 300);
-      }, 3000);
-    }
-
-    function selectShiftTemplate(type, btn) {
-      document.getElementById('selectedShiftTemplate').value = type;
-      showToast(`Selected template: ${type}`, "info");
-    }
-
-    function renderCalendar() {
-      const grid = document.getElementById('calendarGrid');
-      if (!grid) return;
-      grid.innerHTML = '';
-
-      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-      document.getElementById('calendarTitleMonth').innerText = monthNames[currentMonth] + " " + currentYear;
-
-      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-      const firstDay = new Date(currentYear, currentMonth, 1).getDay();
-
-      for (let i = 0; i < firstDay; i++) {
-        const emptyCell = document.createElement('div');
-        emptyCell.className = "p-2 min-h-[64px] bg-slate-50/50 rounded-xl border border-transparent";
-        grid.appendChild(emptyCell);
+        if (pageIndex === 0) {
+          btn0.className =
+            "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-teal-600 text-white shadow-xs";
+          btn1.className =
+            "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100";
+        } else {
+          btn1.className =
+            "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-teal-600 text-white shadow-xs";
+          btn0.className =
+            "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100";
+        }
       }
 
-      for (let day = 1; day <= daysInMonth; day++) {
-        const cell = document.createElement('div');
-        const isSelected = day === 1;
-        cell.className = `p-2 min-h-[64px] rounded-xl border transition flex flex-col justify-between cursor-pointer ${
-          isSelected ? 'bg-teal-50 border-teal-500 shadow-xs ring-1 ring-teal-500' : 'bg-white border-slate-200 hover:border-teal-300'
-        }`;
-        cell.onclick = () => {
-          document.getElementById('selectedDateBadge').innerText = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          showToast(`Selected ${monthNames[currentMonth]} ${day}`, 'info');
-        };
-
-        cell.innerHTML = `
-          <div class="flex justify-between items-center">
-            <span class="text-xs font-bold ${isSelected ? 'text-teal-800' : 'text-slate-700'}">${day}</span>
-            ${day <= 10 ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>' : ''}
-          </div>
-          <div class="text-[10px] ${isSelected ? 'text-teal-700 font-semibold' : 'text-slate-400'} mt-1">
-            ${day <= 10 ? '06:00-14:00' : 'Off'}
-          </div>
-        `;
-        grid.appendChild(cell);
-      }
-    }
-
-    function changeMonth(delta) {
-      currentMonth += delta;
-      if (currentMonth < 0) {
-        currentMonth = 11;
-        currentYear--;
-      } else if (currentMonth > 11) {
-        currentMonth = 0;
-        currentYear++;
-      }
-      document.getElementById('calendarTitleYear').innerText = currentYear;
-      renderCalendar();
-    }
-
-    function addExpense() {
-      const name = document.getElementById('expenseName').value;
-      const amount = parseFloat(document.getElementById('expenseAmount').value);
-      const category = document.getElementById('expenseCategory').value;
-
-      if (!name || isNaN(amount) || amount <= 0) {
-        showToast("Please enter a valid description and amount", "error");
-        return;
+      function formatExpenseCurrency(amount) {
+        return `₱${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       }
 
-      expenses.push({ id: Date.now(), name, amount, category });
-      document.getElementById('expenseName').value = '';
-      document.getElementById('expenseAmount').value = '';
-      renderExpenseTracker();
-      showToast("Expense added!", "success");
-    }
+      function renderExpenseTracker() {
+        const tbody = document.getElementById("expenseTableBody");
+        tbody.innerHTML = "";
+        const totalExpenses = expensesList.reduce(
+          (total, item) => total + item.amount,
+          0,
+        );
 
-    function deleteExpense(id) {
-      expenses = expenses.filter(item => item.id !== id);
-      renderExpenseTracker();
-      showToast("Expense removed", "info");
-    }
+        if (expensesList.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="4" class="p-6 text-center text-slate-400 italic">No expenses recorded for this pay period yet.</td></tr>';
+        } else {
+          expensesList.forEach((item) => {
+            let badgeClass = "bg-slate-100 text-slate-700";
+            if (item.category === "Utilities")
+              badgeClass = "bg-indigo-50 text-indigo-700";
+            else if (item.category === "Food & Groceries")
+              badgeClass = "bg-emerald-50 text-emerald-700";
+            else if (item.category === "Transport")
+              badgeClass = "bg-amber-50 text-amber-700";
+            else if (item.category === "Miscellaneous")
+              badgeClass = "bg-purple-50 text-purple-700";
 
-    function renderExpenseTracker() {
-      const tbody = document.getElementById('expenseTableBody');
-      const badge = document.getElementById('expenseCountBadge');
-      if (!tbody) return;
+            const row = document.createElement("tr");
+            row.className = "hover:bg-slate-50 transition";
+            row.innerHTML = `
+              <td class="p-3 font-medium text-slate-800">${escapeExpenseHtml(item.name)}</td>
+              <td class="p-3"><span class="text-[10px] font-semibold px-2 py-0.5 rounded-md ${badgeClass}">${escapeExpenseHtml(item.category)}</span></td>
+              <td class="p-3 font-semibold text-right text-rose-600">${formatExpenseCurrency(item.amount)}</td>
+              <td class="p-3 text-center">
+                <button type="button" onclick="deleteExpense(${item.id})" class="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer" title="Delete Entry" aria-label="Delete ${escapeExpenseHtml(item.name)}">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </td>`;
+            tbody.appendChild(row);
+          });
+        }
 
-      tbody.innerHTML = '';
-      let total = 0;
+        const remaining = expenseNetTakeHomePay - totalExpenses;
+        const percentage = Math.min(
+          Math.max((totalExpenses / expenseNetTakeHomePay) * 100, 0),
+          100,
+        );
+        document.getElementById("expenseCountBadge").textContent =
+          `${expensesList.length} item${expensesList.length === 1 ? "" : "s"}`;
+        document.getElementById("trackerNetPay").textContent =
+          formatExpenseCurrency(expenseNetTakeHomePay);
+        document.getElementById("trackerTotalExpenses").textContent =
+          formatExpenseCurrency(totalExpenses);
 
-      expenses.forEach(item => {
-        total += item.amount;
-        const row = document.createElement('tr');
-        row.className = "hover:bg-slate-50 transition";
-        row.innerHTML = `
-          <td class="p-3 font-medium text-slate-800">${item.name}</td>
-          <td class="p-3"><span class="px-2 py-0.5 text-[10px] bg-slate-100 text-slate-600 rounded-md font-semibold">${item.category}</span></td>
-          <td class="p-3 text-right font-bold text-rose-600">₱${item.amount.toFixed(2)}</td>
-          <td class="p-3 text-center">
-            <button onclick="deleteExpense(${item.id})" class="text-slate-400 hover:text-rose-600 p-1 transition cursor-pointer">
-              <i class="fa-solid fa-trash-can"></i>
-            </button>
-          </td>
-        `;
-        tbody.appendChild(row);
-      });
+        const remainingEl = document.getElementById("trackerRemaining");
+        remainingEl.textContent = formatExpenseCurrency(remaining);
+        remainingEl.className = `text-2xl font-extrabold ${remaining < 0 ? "text-rose-600" : "text-teal-700"} mt-1 block`;
 
-      if (expenses.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400 italic">No expenses recorded yet</td></tr>`;
+        document.getElementById("trackerPercentage").textContent =
+          `${percentage.toFixed(1)}% Spent`;
+        const progressBar = document.getElementById("trackerProgressBar");
+        progressBar.style.width = `${percentage}%`;
+        progressBar.className = `h-full rounded-full transition-all duration-500 ${percentage > 85 ? "bg-rose-500" : percentage > 60 ? "bg-amber-500" : "bg-teal-600"}`;
       }
 
-      if (badge) badge.innerText = `${expenses.length} item${expenses.length !== 1 ? 's' : ''}`;
+      function addExpense() {
+        const nameInput = document.getElementById("expenseName");
+        const amountInput = document.getElementById("expenseAmount");
+        const name = nameInput.value.trim();
+        const amount = Number(amountInput.value);
 
-      const netPay = 7485.00;
-      const remaining = netPay - total;
-      const percentage = Math.min((total / netPay) * 100, 100).toFixed(1);
+        if (!name) {
+          showToast("Please provide a valid expense description.", "warning");
+          nameInput.focus();
+          return;
+        }
+        if (!Number.isFinite(amount) || amount <= 0) {
+          showToast(
+            "Please enter a valid expense amount greater than 0.",
+            "warning",
+          );
+          amountInput.focus();
+          return;
+        }
 
-      document.getElementById('trackerTotalExpenses').innerText = `₱${total.toFixed(2)}`;
-      document.getElementById('trackerRemaining').innerText = `₱${remaining.toFixed(2)}`;
-      document.getElementById('trackerPercentage').innerText = `${percentage}% Spent`;
-      document.getElementById('trackerProgressBar').style.width = `${percentage}%`;
-    }
+        expensesList.unshift({
+          id: Date.now(),
+          name,
+          category: document.getElementById("expenseCategory").value,
+          amount,
+        });
+        nameInput.value = "";
+        amountInput.value = "";
+        renderExpenseTracker();
+        showToast("Expense record added successfully.", "success");
+      }
 
-    function handleTimeInSubmit(e) {
-      e.preventDefault();
-      closeModal('timeInModal');
-      showToast("Time record logged successfully!", "success");
-    }
+      function deleteExpense(id) {
+        expensesList = expensesList.filter((item) => item.id !== id);
+        renderExpenseTracker();
+        showToast("Expense item removed.", "info");
+      }
 
-    function handleManualEntrySubmit(e) {
-      e.preventDefault();
-      closeModal('manualEntryModal');
-      showToast("Manual attendance applied!", "success");
-    }
+      function escapeExpenseHtml(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
 
-    function handleAssignShiftSubmit(e) {
-      e.preventDefault();
-      closeModal('assignShiftModal');
-      showToast("Shift schedule assigned!", "success");
-    }
+      // Comprehensive Scenario Mapping across months ("monthIndex-dayNum")
+      const dailyAttendanceRecords = {
+        // --- JUNE 2026 SCENARIOS (Index 0) ---
+        "0-1": {
+          type: "Regular",
+          shift: "Standard Shift Day",
+          wageRate: "100%",
+          base: "P600.00",
+          ot: "P0.00",
+          penalty: "P0.00",
+          est: "P600.00 PHP",
+          assigned: "6:00 AM - 2:00 PM",
+          in: "6:00 AM",
+          out: "2:00 PM",
+          dots: [{ title: "Present", color: "bg-emerald-500" }],
+          badges: [
+            { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+          ],
+        },
+        "0-5": {
+          type: "Leave",
+          shift: "Vacation Leave (VL)",
+          wageRate: "100% (Paid)",
+          base: "P600.00",
+          ot: "P0.00",
+          penalty: "P0.00",
+          est: "P600.00 PHP",
+          assigned: "Approved Leave",
+          in: "—",
+          out: "—",
+          dots: [],
+          badges: [
+            { text: "Vacation Leave", color: "bg-amber-100 text-amber-800" },
+          ],
+        },
+        "0-12": {
+          type: "Regular Holiday",
+          shift: "Independence Day (Worked)",
+          holidayName: "Independence Day",
+          holidayDutyLabel: "Regular Holiday Duty",
+          wageRate: "200%",
+          base: "P600.00",
+          ot: "P600.00 (200% Prem)",
+          penalty: "P0.00",
+          est: "P1,200.00 PHP",
+          assigned: "8:00 AM - 5:00 PM",
+          in: "8:00 AM",
+          out: "5:00 PM",
+          dots: [{ title: "Present", color: "bg-emerald-500" }],
+          badges: [
+            { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+            { text: "Independence Day", color: "bg-rose-100 text-rose-800" },
+          ],
+        },
 
-    function handleGrantLeaveSubmit(e) {
-      e.preventDefault();
-      closeModal('grantLeaveModal');
-      showToast("Leave request submitted!", "success");
-    }
+        // --- JULY 2026 SCENARIOS (Index 1) ---
+        "1-6": {
+          type: "Regular",
+          shift: "Standard Shift with Tardiness",
+          wageRate: "100%",
+          base: "P600.00",
+          ot: "P0.00",
+          penalty: "-P45.00 (22m Late)",
+          est: "P555.00 PHP",
+          assigned: "6:00 AM - 2:00 PM",
+          in: "6:22 AM",
+          out: "2:00 PM",
+          dots: [
+            { title: "Present", color: "bg-emerald-500" },
+            { title: "22m Tardiness", color: "bg-amber-500" },
+          ],
+          badges: [
+            { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+            { text: "22m Late", color: "bg-amber-100 text-amber-800" },
+          ],
+        },
+        "1-15": {
+          type: "Absent",
+          shift: "Unexcused Absence",
+          wageRate: "0%",
+          base: "P0.00",
+          ot: "P0.00",
+          penalty: "-P600.00 (Absent)",
+          est: "P0.00 PHP",
+          assigned: "6:00 AM - 2:00 PM",
+          in: "—",
+          out: "—",
+          dots: [],
+          badges: [{ text: "Absent", color: "bg-red-100 text-red-800" }],
+        },
 
-    // Initialize on page load
-    window.onload = function () {
-      updateProfileUI();
-      renderCalendar();
-      renderExpenseTracker();
-      
-      // Live clock updater
+        // --- AUGUST 2026 SCENARIOS (Index 2) ---
+        "2-21": {
+          type: "Special Holiday",
+          shift: "Ninoy Aquino Day (Worked)",
+          holidayName: "Ninoy Aquino Day",
+          holidayDutyLabel: "Holiday Duty",
+          wageRate: "130%",
+          base: "P600.00",
+          ot: "P180.00 (130% Prem)",
+          penalty: "P0.00",
+          est: "P780.00 PHP",
+          assigned: "8:00 AM - 5:00 PM",
+          in: "8:00 AM",
+          out: "5:00 PM",
+          dots: [{ title: "Present", color: "bg-emerald-500" }],
+          badges: [
+            { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+            { text: "Special Holiday", color: "bg-indigo-100 text-indigo-800" },
+          ],
+        },
+        "2-31": {
+          type: "Regular Holiday",
+          shift: "National Heroes' Day (Worked)",
+          holidayName: "National Heroes' Day",
+          holidayDutyLabel: "Regular Holiday Duty",
+          wageRate: "200%",
+          base: "P600.00",
+          ot: "P600.00 (200% Prem)",
+          penalty: "P0.00",
+          est: "P1,200.00 PHP",
+          assigned: "8:00 AM - 5:00 PM",
+          in: "8:00 AM",
+          out: "5:00 PM",
+          dots: [{ title: "Present", color: "bg-emerald-500" }],
+          badges: [
+            { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+            { text: "Regular Holiday", color: "bg-rose-100 text-rose-800" },
+          ],
+        },
+
+        // --- SEPTEMBER 2026 SCENARIOS (Index 3) ---
+        "3-1": {
+          type: "Regular",
+          shift: "Standard Shift Day",
+          wageRate: "100% + OT",
+          base: "P600.00",
+          ot: "P234.38 (2.5 hrs)",
+          penalty: "P0.00",
+          est: "P834.38 PHP",
+          assigned: "6:00 AM - 2:00 PM",
+          in: "6:00 AM",
+          out: "4:30 PM",
+          dots: [
+            { title: "Present", color: "bg-emerald-500" },
+            { title: "+2.5h OT", color: "bg-purple-500" },
+          ],
+          badges: [
+            { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+            { text: "+2.5h OT", color: "bg-purple-100 text-purple-800" },
+          ],
+        },
+        "3-2": {
+          type: "Regular",
+          shift: "Standard Shift Day with Tardiness",
+          wageRate: "100%",
+          base: "P600.00",
+          ot: "P0.00",
+          penalty: "-P37.50 (18m Late)",
+          est: "P562.50 PHP",
+          assigned: "6:00 AM - 2:00 PM",
+          in: "6:18 AM",
+          out: "2:00 PM",
+          dots: [
+            { title: "Present", color: "bg-emerald-500" },
+            { title: "18m UT (Undertime/Late)", color: "bg-amber-500" },
+          ],
+          badges: [
+            { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+            { text: "18m UT", color: "bg-amber-100 text-amber-800" },
+          ],
+        },
+        "3-3": {
+          type: "Rest Day",
+          shift: "Rest Day",
+          wageRate: "0%",
+          base: "P0.00",
+          ot: "P0.00",
+          penalty: "P0.00",
+          est: "P0.00 PHP",
+          assigned: "Rest Day",
+          in: "—",
+          out: "—",
+          dots: [{ title: "Rest Day", color: "bg-slate-400" }],
+          badges: [{ text: "Rest Day", color: "bg-slate-100 text-slate-700" }],
+        },
+        "3-4": {
+          type: "Rest Day",
+          shift: "Rest Day",
+          wageRate: "0%",
+          base: "P0.00",
+          ot: "P0.00",
+          penalty: "P0.00",
+          est: "P0.00 PHP",
+          assigned: "Rest Day",
+          in: "—",
+          out: "—",
+          dots: [{ title: "Rest Day", color: "bg-slate-400" }],
+          badges: [{ text: "Rest Day", color: "bg-slate-100 text-slate-700" }],
+        },
+        "3-5": {
+          type: "Regular",
+          shift: "Standard Shift Day",
+          wageRate: "100%",
+          base: "P600.00",
+          ot: "P0.00",
+          penalty: "P0.00",
+          est: "P600.00 PHP",
+          assigned: "6:00 AM - 2:00 PM",
+          in: "6:00 AM",
+          out: "2:00 PM",
+          dots: [{ title: "Present", color: "bg-emerald-500" }],
+          badges: [
+            { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+          ],
+        },
+        "3-6": {
+          type: "Unworked Holiday",
+          shift: "Standard Shift Day",
+          holidayName: "National Heroes' Day",
+          holidayDutyLabel: "Regular Holiday (Unworked)",
+          wageRate: "100% (Holiday Pay)",
+          base: "P600.00",
+          ot: "P0.00",
+          penalty: "P0.00",
+          est: "P600.00 PHP",
+          assigned: "6:00 AM - 2:00 PM",
+          in: "—",
+          out: "—",
+          dots: [{ title: "Holiday", color: "bg-rose-400" }],
+          badges: [{ text: "Holiday Pay", color: "bg-rose-100 text-rose-800" }],
+        },
+        "3-7": {
+          type: "Absent",
+          shift: "Unexcused Absence",
+          wageRate: "0%",
+          base: "P0.00",
+          ot: "P0.00",
+          penalty: "-P600.00 (Absent)",
+          est: "P0.00 PHP",
+          assigned: "6:00 AM - 2:00 PM",
+          in: "—",
+          out: "—",
+          dots: [],
+          badges: [{ text: "Absent", color: "bg-red-100 text-red-800" }],
+        },
+        "3-8": {
+          type: "Leave",
+          shift: "Sick Leave (SL)",
+          wageRate: "100% (Paid)",
+          base: "P600.00",
+          ot: "P0.00",
+          penalty: "P0.00",
+          est: "P600.00 PHP",
+          assigned: "Approved Leave",
+          in: "—",
+          out: "—",
+          dots: [],
+          badges: [{ text: "Sick Leave", color: "bg-sky-100 text-sky-800" }],
+        },
+
+        // --- OCTOBER 2026 SCENARIOS (Index 4) ---
+        "4-12": {
+          type: "Custom Shift",
+          shift: "NOC Night Watch",
+          customIcon: "fa-moon",
+          customIconColor: "text-indigo-600",
+          wageRate: "110% (Night Diff)",
+          base: "P600.00",
+          ot: "P60.00 (10% ND)",
+          penalty: "P0.00",
+          est: "P660.00 PHP",
+          assigned: "10:00 PM - 6:00 AM",
+          in: "10:00 PM",
+          out: "6:00 AM",
+          dots: [{ title: "Night Shift", color: "bg-indigo-500" }],
+          badges: [
+            { text: "Night Watch", color: "bg-indigo-100 text-indigo-800" },
+            { text: "10% ND", color: "bg-teal-100 text-teal-800" },
+          ],
+        },
+
+        // --- NOVEMBER 2026 SCENARIOS (Index 5) ---
+        "5-1": {
+          type: "Special Holiday",
+          shift: "All Saints' Day (Non-Working)",
+          holidayName: "All Saints' Day",
+          holidayDutyLabel: "Holiday Duty",
+          wageRate: "130%",
+          base: "P600.00",
+          ot: "P180.00 (130% Prem)",
+          penalty: "P0.00",
+          est: "P780.00 PHP",
+          assigned: "8:00 AM - 5:00 PM",
+          in: "8:00 AM",
+          out: "5:00 PM",
+          dots: [{ title: "Present", color: "bg-emerald-500" }],
+          badges: [
+            { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+            { text: "All Saints' Day", color: "bg-indigo-100 text-indigo-800" },
+          ],
+        },
+        "5-2": {
+          type: "Special Holiday",
+          shift: "All Souls' Day (Non-Working)",
+          holidayName: "All Souls' Day",
+          holidayDutyLabel: "Holiday Duty",
+          wageRate: "130%",
+          base: "P600.00",
+          ot: "P180.00 (130% Prem)",
+          penalty: "P0.00",
+          est: "P780.00 PHP",
+          assigned: "8:00 AM - 5:00 PM",
+          in: "8:00 AM",
+          out: "5:00 PM",
+          dots: [{ title: "Present", color: "bg-emerald-500" }],
+          badges: [
+            { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+            { text: "All Souls' Day", color: "bg-indigo-100 text-indigo-800" },
+          ],
+        },
+        "5-30": {
+          type: "Regular Holiday",
+          shift: "Bonifacio Day",
+          holidayName: "Bonifacio Day",
+          holidayDutyLabel: "Regular Holiday Duty",
+          wageRate: "200%",
+          base: "P600.00",
+          ot: "P600.00 (200% Prem)",
+          penalty: "P0.00",
+          est: "P1,200.00 PHP",
+          assigned: "8:00 AM - 5:00 PM",
+          in: "8:00 AM",
+          out: "5:00 PM",
+          dots: [{ title: "Present", color: "bg-emerald-500" }],
+          badges: [
+            { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+            { text: "Bonifacio Day", color: "bg-rose-100 text-rose-800" },
+          ],
+        },
+
+        // --- DECEMBER 2026 SCENARIOS (Index 6) ---
+        "6-25": {
+          type: "Regular Holiday",
+          shift: "Christmas Day",
+          holidayName: "Christmas Day",
+          holidayDutyLabel: "Holiday Duty",
+          wageRate: "200%",
+          base: "P600.00",
+          ot: "P600.00 (200% Prem)",
+          penalty: "P0.00",
+          est: "P1,200.00 PHP",
+          assigned: "8:00 AM - 5:00 PM",
+          in: "8:00 AM",
+          out: "5:00 PM",
+          dots: [{ title: "Present", color: "bg-emerald-500" }],
+          badges: [
+            { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+            { text: "Christmas Day", color: "bg-rose-100 text-rose-800" },
+          ],
+        },
+        "6-30": {
+          type: "Regular Holiday",
+          shift: "Rizal Day",
+          holidayName: "Rizal Day",
+          holidayDutyLabel: "Holiday Duty",
+          wageRate: "200%",
+          base: "P600.00",
+          ot: "P600.00 (200% Prem)",
+          penalty: "P0.00",
+          est: "P1,200.00 PHP",
+          assigned: "8:00 AM - 5:00 PM",
+          in: "8:00 AM",
+          out: "5:00 PM",
+          dots: [{ title: "Present", color: "bg-emerald-500" }],
+          badges: [
+            { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+            { text: "Rizal Day", color: "bg-rose-100 text-rose-800" },
+          ],
+        },
+      };
+
+      const shiftTemplates = [
+        {
+          id: "morning",
+          name: "Standard Shift",
+          label: "Morning",
+          range: "06:00 - 14:00",
+          assigned: "6:00 AM - 2:00 PM",
+          icon: "fa-sun",
+          iconColor: "text-amber-500",
+        },
+        {
+          id: "evening",
+          name: "Evening Shift",
+          label: "Evening",
+          range: "14:00 - 22:00",
+          assigned: "2:00 PM - 10:00 PM",
+          icon: "fa-cloud-sun",
+          iconColor: "text-orange-500",
+        },
+        {
+          id: "night",
+          name: "Night Shift",
+          label: "Night",
+          range: "22:00 - 06:00",
+          assigned: "10:00 PM - 6:00 AM",
+          icon: "fa-moon",
+          iconColor: "text-indigo-600",
+        },
+        {
+          id: "rest-day",
+          name: "Rest Day",
+          label: "Rest Day",
+          range: "No working hours",
+          assigned: "Rest Day",
+          icon: "fa-calendar-xmark",
+          iconColor: "text-slate-600",
+          protected: true,
+        },
+      ];
+
+      let nextCustomShiftId = 1;
+
+      function formatTimeTo12Hour(timeStr) {
+        if (!timeStr) return "";
+        const parts = timeStr.split(":");
+        let hours = parseInt(parts[0], 10);
+        const minutes = parts[1] || "00";
+        const ampm = hours >= 12 ? "PM" : "AM";
+        hours = hours % 12 || 12;
+        return `${String(hours).padStart(2, "0")}:${minutes} ${ampm}`;
+      }
+
       setInterval(() => {
         const now = new Date();
-        const clockEl = document.getElementById('clockText');
-        if (clockEl) {
-          clockEl.innerHTML = `${now.toLocaleTimeString('en-US')} <span class="hidden sm:inline text-xs text-textMuted font-normal">PST</span>`;
-        }
+        let hours = now.getHours();
+        const minutes = String(now.getMinutes()).padStart(2, "0");
+        const seconds = String(now.getSeconds()).padStart(2, "0");
+        const ampm = hours >= 12 ? "PM" : "AM";
+        hours = hours % 12 || 12;
+        document.getElementById("clockText").innerHTML =
+          `${String(hours).padStart(2, "0")}:${minutes}:${seconds} ${ampm} <span class="text-xs text-textMuted font-normal">PST</span>`;
       }, 1000);
-    };
-  </script>
-</body>
+
+      function renderMonthTabs() {
+        const container = document.getElementById("monthTabsContainer");
+        container.innerHTML = "";
+        monthsData.forEach((m, idx) => {
+          const btn = document.createElement("button");
+          btn.className = `px-3 py-1 text-xs font-medium rounded-lg transition cursor-pointer ${idx === currentMonthIndex ? "bg-teal-600 text-white font-bold shadow-sm" : "text-slate-600 hover:text-slate-900"}`;
+          btn.innerText = m.name;
+          btn.onclick = () => selectMonth(idx);
+          container.appendChild(btn);
+        });
+      }
+
+      function selectMonth(index) {
+        currentMonthIndex = index;
+        selectedDay = 1;
+        renderMonthTabs();
+        renderCalendar();
+        updateBreakdownPanel();
+      }
+
+      function changeMonth(direction) {
+        currentMonthIndex += direction;
+        if (currentMonthIndex > 11) {
+          currentMonthIndex = 0;
+          currentYear++;
+        } else if (currentMonthIndex < 0) {
+          currentMonthIndex = 11;
+          currentYear--;
+        }
+        selectedDay = 1;
+        document.getElementById("calendarTitleYear").innerText = currentYear;
+        renderMonthTabs();
+        renderCalendar();
+        updateBreakdownPanel();
+      }
+
+      function renderCalendar() {
+        const monthObj = monthsData[currentMonthIndex];
+        document.getElementById("calendarTitleMonth").innerText =
+          `${monthObj.fullName} ${currentYear}`;
+        const grid = document.getElementById("calendarGrid");
+        grid.innerHTML = "";
+
+        const totalDays = monthObj.days;
+        const startDayOffset = monthObj.startDay;
+
+        for (let i = startDayOffset - 1; i >= 0; i--) {
+          const dayDiv = document.createElement("div");
+          dayDiv.className =
+            "bg-slate-50/50 border border-slate-100 rounded-xl p-0 min-h-[90px] opacity-40";
+          dayDiv.innerHTML = `<div class="p-2.5 h-full flex flex-col"><span class="text-xs font-semibold text-slate-400">${31 - i}</span></div>`;
+          grid.appendChild(dayDiv);
+        }
+
+        for (let d = 1; d <= totalDays; d++) {
+          const isSelected = d === selectedDay;
+          const lookupKey = `${currentMonthIndex}-${d}`;
+          const record = dailyAttendanceRecords[lookupKey] || {
+            type: "Regular",
+            shift: "Standard Shift Day",
+            dots: [{ title: "Present", color: "bg-emerald-500" }],
+            badges: [
+              { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+            ],
+            assigned: "6:00 AM - 2:00 PM",
+          };
+
+          let cardStyling =
+            "bg-slate-50/80 border border-slate-200/70 hover:bg-white hover:border-teal-300";
+          if (isSelected) {
+            cardStyling =
+              "bg-teal-50/60 border-2 border-teal-600 shadow-sm ring-2 ring-teal-500/25";
+          } else if (record.type === "Rest Day") {
+            cardStyling =
+              "bg-slate-100/60 border border-slate-200/70 hover:bg-slate-100";
+          } else if (
+            record.type === "Regular Holiday" ||
+            record.type === "Unworked Holiday"
+          ) {
+            cardStyling =
+              "bg-white border border-rose-200 border-l-4 border-l-rose-500 hover:border-rose-300 shadow-xs";
+          } else if (record.type === "Special Holiday") {
+            cardStyling =
+              "bg-white border border-indigo-200 border-l-4 border-l-indigo-500 hover:border-indigo-300 shadow-xs";
+          }
+
+          const dayDiv = document.createElement("div");
+          dayDiv.className = `rounded-xl min-h-[90px] flex flex-col transition cursor-pointer relative box-border ${cardStyling}`;
+
+          let dotsHtml = "";
+          if (record.dots) {
+            dotsHtml =
+              `<div class="flex items-center space-x-1">` +
+              record.dots
+                .map(
+                  (dot) =>
+                    `<span class="w-2.5 h-2.5 rounded-full ${dot.color} cursor-pointer inline-block" title="${dot.title}"></span>`,
+                )
+                .join("") +
+              `</div>`;
+          }
+
+          let centerLeftContent = "";
+          if (record.type === "Absent") {
+            centerLeftContent = `<span class="px-2 py-0.5 text-[10px] font-bold bg-red-100 text-red-800 rounded inline-block w-fit">Absent</span>`;
+          } else if (record.type === "Leave") {
+            centerLeftContent = `<span class="px-2 py-0.5 text-[10px] font-bold bg-sky-100 text-sky-800 rounded inline-block w-fit truncate max-w-full">${record.shift}</span>`;
+          } else if (record.type === "Rest Day") {
+            centerLeftContent = `<span class="px-2 py-0.5 text-[10px] font-bold bg-slate-200 text-slate-700 rounded inline-block w-fit">Rest Day</span>`;
+          } else if (record.type === "Unworked Holiday") {
+            centerLeftContent = `
+                        <div class="flex flex-col">
+                            <span class="text-[10px] text-rose-400 font-bold leading-tight">${record.holidayName}</span>
+                            <span class="text-[9px] font-semibold text-slate-400 mt-0.5">Unworked Holiday</span>
+                        </div>
+                    `;
+          } else if (record.holidayName) {
+            let holidayTextColor =
+              record.type === "Regular Holiday"
+                ? "text-rose-700 font-bold"
+                : "text-indigo-700 font-bold";
+            centerLeftContent = `
+                        <div class="flex flex-col">
+                            <span class="text-[10px] ${holidayTextColor} leading-tight">${record.holidayName}</span>
+                            <span class="text-[9px] font-semibold text-slate-500 mt-0.5">${record.holidayDutyLabel || "Holiday Duty"}</span>
+                        </div>
+                    `;
+          } else if (record.customIcon) {
+            centerLeftContent = `<div class="flex items-center space-x-1.5"><i class="fa-solid ${record.customIcon} ${record.customIconColor || "text-teal-600"} text-xs"></i><span class="text-[10px] font-bold text-slate-700 truncate">${record.shift}</span></div>`;
+          }
+
+          dayDiv.innerHTML = `
+                    <div class="p-2.5 flex flex-col justify-between h-full w-full">
+                        <div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs font-bold ${isSelected ? "text-teal-900" : "text-slate-700"}">${d}</span>
+                                <div class="flex items-center space-x-1">
+                                    ${dotsHtml}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="my-auto py-1 flex flex-col justify-center">
+                            ${centerLeftContent}
+                        </div>
+                        <span class="text-[10px] text-slate-500 font-medium">${record.assigned}</span>
+                    </div>
+                `;
+
+          dayDiv.onclick = () => selectDay(d);
+          grid.appendChild(dayDiv);
+        }
+      }
+
+      function selectDay(dayNum) {
+        selectedDay = dayNum;
+        renderCalendar();
+        updateBreakdownPanel();
+      }
+
+      function updateBreakdownPanel() {
+        const lookupKey = `${currentMonthIndex}-${selectedDay}`;
+        const formattedDate = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
+        document.getElementById("selectedDateBadge").innerText = formattedDate;
+        document.getElementById("timeInDate").value = formattedDate;
+
+        const record = dailyAttendanceRecords[lookupKey] || {
+          type: "Regular",
+          shift: "Standard Shift Day",
+          wageRate: "100%",
+          base: "P600.00",
+          ot: "P0.00",
+          penalty: "P0.00",
+          est: "P600.00 PHP",
+          assigned: "6:00 AM - 2:00 PM",
+          in: "6:00 AM",
+          out: "2:00 PM",
+          badges: [
+            { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+          ],
+        };
+
+        document.getElementById("workdayTypeBadge").innerText = record.type;
+        document.getElementById("wageRateText").innerText =
+          `Wage Rate: ${record.wageRate}`;
+        document.getElementById("shiftTitle").innerText = record.shift;
+        document.getElementById("shiftSubTitle").innerText = record.wageRate;
+        document.getElementById("estEarnings").innerText = record.est;
+        document.getElementById("baseWage").innerText = record.base;
+        document.getElementById("otPay").innerText = record.ot;
+        document.getElementById("penaltyPay").innerText = record.penalty;
+        document.getElementById("assignedShiftTime").innerText =
+          record.assigned;
+        document.getElementById("firstTimeIn").innerText = record.in;
+        document.getElementById("lastTimeOut").innerText = record.out;
+
+        const badgeContainer = document.getElementById("statusBadgesContainer");
+        badgeContainer.innerHTML = record.badges
+          .map(
+            (b) =>
+              `<span class="px-2 py-0.5 text-[10px] font-bold ${b.color} rounded">${b.text}</span>`,
+          )
+          .join("");
+      }
+
+      function openManualEntryModal() {
+        const formattedDate = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
+        document.getElementById("manualEntryDate").value = formattedDate;
+        openModal("manualEntryModal");
+      }
+
+      function openAssignShiftModal() {
+        const formattedDate = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
+        document.getElementById("assignStartDate").value = formattedDate;
+        document.getElementById("assignEndDate").value = formattedDate;
+        document.getElementById("customShiftName").value = "";
+        toggleSaveShiftButton();
+        renderShiftTemplates();
+        openModal("assignShiftModal");
+      }
+
+      function renderShiftTemplates() {
+        const container = document.getElementById("shiftTemplatesContainer");
+        const selectedId = document.getElementById(
+          "selectedShiftTemplate",
+        ).value;
+        container.innerHTML = "";
+
+        shiftTemplates.forEach((template) => {
+          const card = document.createElement("div");
+          card.className = `shift-card relative cursor-pointer border-2 rounded-2xl p-3.5 flex flex-col items-center text-center transition ${
+            template.id === selectedId
+              ? "border-indigo-600 bg-indigo-50/30 shadow-xs"
+              : "border-slate-200 bg-white hover:border-slate-300"
+          }`;
+          card.setAttribute("role", "button");
+          card.setAttribute("tabindex", "0");
+          card.setAttribute("aria-pressed", String(template.id === selectedId));
+
+          const iconWrap = document.createElement("div");
+          iconWrap.className =
+            "w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center mb-2";
+          const icon = document.createElement("i");
+          icon.className = `fa-solid ${template.icon} text-sm ${template.iconColor || "text-teal-600"}`;
+          iconWrap.appendChild(icon);
+
+          const title = document.createElement("span");
+          title.className = "font-bold text-slate-800 text-xs";
+          title.textContent = template.label;
+
+          const range = document.createElement("span");
+          range.className = "text-[10px] text-slate-500 mt-0.5";
+          range.textContent = template.range;
+
+          card.append(iconWrap, title, range);
+          card.addEventListener("click", () => selectShiftCard(template.id));
+          card.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              selectShiftCard(template.id);
+            }
+          });
+
+          if (!template.protected) {
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className =
+              "absolute top-1 right-1 w-6 h-6 rounded-full text-slate-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer";
+            deleteButton.title = `Delete ${template.label} template`;
+            deleteButton.setAttribute(
+              "aria-label",
+              `Delete ${template.label} template`,
+            );
+            deleteButton.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            deleteButton.addEventListener("click", (event) => {
+              event.stopPropagation();
+              deleteShiftTemplate(template.id);
+            });
+            card.appendChild(deleteButton);
+          }
+
+          container.appendChild(card);
+        });
+      }
+
+      function selectShiftCard(templateId) {
+        if (!shiftTemplates.some((template) => template.id === templateId)) {
+          return;
+        }
+        document.getElementById("selectedShiftTemplate").value = templateId;
+        document.getElementById("customShiftName").value = "";
+        toggleSaveShiftButton();
+        renderShiftTemplates();
+      }
+
+      function deleteShiftTemplate(templateId) {
+        const template = shiftTemplates.find((item) => item.id === templateId);
+        if (!template || template.protected) {
+          return;
+        }
+
+        shiftTemplates.splice(shiftTemplates.indexOf(template), 1);
+        if (
+          document.getElementById("selectedShiftTemplate").value === templateId
+        ) {
+          document.getElementById("selectedShiftTemplate").value = "rest-day";
+        }
+        renderShiftTemplates();
+        showToast(`"${template.label}" template deleted.`, "info");
+      }
+
+      function selectShiftIcon(iconClass, btnElement) {
+        document
+          .querySelectorAll(".shift-icon-btn")
+          .forEach((b) =>
+            b.classList.remove(
+              "border-teal-500",
+              "bg-teal-50",
+              "ring-2",
+              "ring-teal-500/30",
+            ),
+          );
+        btnElement.classList.add(
+          "border-teal-500",
+          "bg-teal-50",
+          "ring-2",
+          "ring-teal-500/30",
+        );
+        document.getElementById("selectedIconVal").value = iconClass
+          .replace(/\bfa-solid\b/g, "")
+          .trim();
+      }
+
+      function toggleSaveShiftButton() {
+        const nameVal = document.getElementById("customShiftName").value.trim();
+        const saveBtn = document.getElementById("saveCustomShiftBtn");
+        if (nameVal.length > 0) {
+          saveBtn.classList.remove("hidden");
+        } else {
+          saveBtn.classList.add("hidden");
+        }
+      }
+
+      function handleSaveCustomShift(e) {
+        e.preventDefault();
+        const customName = document
+          .getElementById("customShiftName")
+          .value.trim();
+        if (!customName) return;
+
+        const startT = document.getElementById("customShiftStart").value;
+        const endT = document.getElementById("customShiftEnd").value;
+        const selectedIcon = document.getElementById("selectedIconVal").value;
+
+        let iconColor = "text-teal-600";
+        if (selectedIcon.includes("sun") && !selectedIcon.includes("cloud"))
+          iconColor = "text-amber-500";
+        else if (selectedIcon.includes("moon")) iconColor = "text-indigo-600";
+        else if (selectedIcon.includes("cloud-sun"))
+          iconColor = "text-orange-500";
+        else if (selectedIcon.includes("shield")) iconColor = "text-rose-600";
+        else if (selectedIcon.includes("bolt")) iconColor = "text-amber-500";
+        else if (selectedIcon.includes("clock")) iconColor = "text-slate-600";
+
+        const newTemplate = {
+          id: `custom-${nextCustomShiftId++}`,
+          name: customName,
+          label: customName,
+          range: `${startT} - ${endT}`,
+          assigned: `${formatTimeTo12Hour(startT)} - ${formatTimeTo12Hour(endT)}`,
+          icon: selectedIcon,
+          iconColor: iconColor,
+        };
+
+        shiftTemplates.push(newTemplate);
+        document.getElementById("customShiftName").value = "";
+        document.getElementById("selectedShiftTemplate").value = newTemplate.id;
+        toggleSaveShiftButton();
+
+        renderShiftTemplates();
+        showToast(
+          `Custom shift "${newTemplate.name}" saved to options.`,
+          "success",
+        );
+      }
+
+      function switchSettingsTab(tabName) {
+        const tabs = ["earnings", "deductions", "general"];
+        tabs.forEach((t) => {
+          document
+            .getElementById(
+              `settingsTab${t.charAt(0).toUpperCase() + t.slice(1)}`,
+            )
+            .classList.add("hidden");
+          document.getElementById(
+            `tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`,
+          ).className =
+            "px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer";
+        });
+        document
+          .getElementById(
+            `settingsTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`,
+          )
+          .classList.remove("hidden");
+        document.getElementById(
+          `tabBtn${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`,
+        ).className =
+          "px-4 py-2 rounded-xl bg-teal-600 text-white transition cursor-pointer shadow-xs";
+      }
+
+      function saveSettings() {
+        leaveBalances.VL =
+          parseInt(document.getElementById("settingLeaveVL").value, 10) || 0;
+        leaveBalances.SL =
+          parseInt(document.getElementById("settingLeaveSL").value, 10) || 0;
+        leaveBalances.EL =
+          parseInt(document.getElementById("settingLeaveEL").value, 10) || 0;
+
+        // Update modal dynamic labels
+        document.getElementById("modalBalVL").innerText = leaveBalances.VL;
+        document.getElementById("modalBalSL").innerText = leaveBalances.SL;
+        document.getElementById("modalBalEL").innerText = leaveBalances.EL;
+
+        closeModal("settingsModal");
+        showToast("Leave credit balances and configurations saved!", "success");
+      }
+
+      function openModal(modalId) {
+        document.getElementById(modalId).classList.remove("hidden");
+      }
+      function closeModal(modalId) {
+        document.getElementById(modalId).classList.add("hidden");
+      }
+      function resetCalendar() {
+        currentMonthIndex = 3;
+        currentYear = 2026;
+        selectedDay = 1;
+        renderMonthTabs();
+        renderCalendar();
+        updateBreakdownPanel();
+        showToast("Calendar view reset", "info");
+      }
+
+      function handleTimeInSubmit(e) {
+        e.preventDefault();
+        closeModal("timeInModal");
+        showToast("Time record saved successfully!", "success");
+      }
+
+      function handleManualEntrySubmit(e) {
+        e.preventDefault();
+        const entryType = document.getElementById("manualEntryType").value;
+        const targetDateStr = document.getElementById("manualEntryDate").value;
+        const inTime = formatTimeTo12Hour(
+          document.getElementById("manualTimeIn").value,
+        );
+        const outTime = formatTimeTo12Hour(
+          document.getElementById("manualTimeOut").value,
+        );
+
+        const dateParts = targetDateStr.split("-");
+        const targetDayNum = parseInt(dateParts[2], 10);
+        const targetMonthNum = parseInt(dateParts[1], 10) - 1;
+
+        const lookupKey = `${targetMonthNum}-${targetDayNum}`;
+
+        let badgeList = [
+          { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+        ];
+        let dotList = [{ title: "Present", color: "bg-emerald-500" }];
+        let shiftName = "Manual Entry Adjustment";
+        let estVal = "P600.00 PHP";
+        let otVal = "P0.00";
+        let baseVal = "P600.00";
+        let inStr = inTime;
+        let outStr = outTime;
+
+        if (entryType === "Overtime") {
+          badgeList.push({
+            text: "+2h OT",
+            color: "bg-purple-100 text-purple-800",
+          });
+          dotList.push({ title: "+2h OT", color: "bg-purple-500" });
+          shiftName = "Overtime Claim";
+          estVal = "P750.00 PHP";
+          otVal = "P150.00 (2h OT)";
+        } else if (entryType === "Absent on Holiday") {
+          badgeList = [
+            { text: "Absent", color: "bg-red-100 text-red-800" },
+            { text: "Holiday Absence", color: "bg-rose-100 text-rose-800" },
+          ];
+          dotList = [];
+          shiftName = "Absent During Holiday";
+          estVal = "P0.00 PHP";
+          baseVal = "P0.00";
+          otVal = "P0.00";
+          inStr = "—";
+          outStr = "—";
+        } else if (entryType === "Official Business") {
+          badgeList = [
+            { text: "Official Business", color: "bg-teal-100 text-teal-800" },
+          ];
+          shiftName = "Official Business / Field Work";
+        }
+
+        dailyAttendanceRecords[lookupKey] = {
+          type: entryType === "Absent on Holiday" ? "Absent" : "Regular",
+          shift: shiftName,
+          wageRate: entryType === "Absent on Holiday" ? "0%" : "100%",
+          base: baseVal,
+          ot: otVal,
+          penalty:
+            entryType === "Absent on Holiday"
+              ? "-P600.00 (Holiday Absence)"
+              : "P0.00",
+          est: estVal,
+          assigned: `${inStr} - ${outStr}`,
+          in: inStr,
+          out: outStr,
+          dots: dotList,
+          badges: badgeList,
+        };
+
+        if (targetMonthNum === currentMonthIndex) {
+          selectedDay = targetDayNum;
+        }
+
+        closeModal("manualEntryModal");
+        renderCalendar();
+        updateBreakdownPanel();
+        showToast("Manual entry applied successfully!", "success");
+      }
+
+      function handleAssignShiftSubmit(e) {
+        e.preventDefault();
+
+        let selectedTemplate = shiftTemplates.find(
+          (template) =>
+            template.id ===
+            document.getElementById("selectedShiftTemplate").value,
+        );
+
+        if (!selectedTemplate) {
+          selectedTemplate = shiftTemplates.find(
+            (template) => template.id === "rest-day",
+          );
+        }
+
+        const startDateStr = document.getElementById("assignStartDate").value;
+        const endDateStr = document.getElementById("assignEndDate").value;
+
+        if (!startDateStr || !endDateStr) {
+          showToast("Please select both start and end dates.", "warning");
+          return;
+        }
+
+        let currDate = new Date(startDateStr);
+        const lastDate = new Date(endDateStr);
+
+        if (currDate > lastDate) {
+          showToast("Start date cannot be after end date.", "warning");
+          return;
+        }
+
+        let assignedCount = 0;
+
+        while (currDate <= lastDate) {
+          const mIdx = currDate.getMonth();
+          const dNum = currDate.getDate();
+          const lookupKey = `${mIdx}-${dNum}`;
+
+          if (selectedTemplate.id === "rest-day") {
+            dailyAttendanceRecords[lookupKey] = {
+              type: "Rest Day",
+              shift: "Rest Day",
+              wageRate: "0%",
+              base: "P0.00",
+              ot: "P0.00",
+              penalty: "P0.00",
+              est: "P0.00 PHP",
+              assigned: "Rest Day",
+              in: "—",
+              out: "—",
+              dots: [],
+              badges: [
+                { text: "Rest Day", color: "bg-slate-200 text-slate-700" },
+              ],
+            };
+          } else {
+            dailyAttendanceRecords[lookupKey] = {
+              type: "Regular",
+              shift: selectedTemplate.name,
+              wageRate: "100%",
+              base: "P600.00",
+              ot: "P0.00",
+              penalty: "P0.00",
+              est: "P600.00 PHP",
+              assigned: selectedTemplate.assigned,
+              in: "—",
+              out: "—",
+              customIcon: selectedTemplate.icon,
+              customIconColor: selectedTemplate.iconColor || "text-teal-600",
+              dots: [],
+              badges: [
+                {
+                  text: selectedTemplate.name,
+                  color: "bg-teal-100 text-teal-800",
+                },
+              ],
+            };
+          }
+
+          assignedCount++;
+          currDate.setDate(currDate.getDate() + 1);
+        }
+
+        closeModal("assignShiftModal");
+        renderCalendar();
+        updateBreakdownPanel();
+        showToast(
+          `Shift "${selectedTemplate.name}" assigned to ${assignedCount} day(s).`,
+          "success",
+        );
+      }
+
+      function handleGrantLeaveSubmit(e) {
+        e.preventDefault();
+        const leaveType = document.getElementById("grantLeaveTypeSelect").value;
+        if (leaveBalances[leaveType] > 0) {
+          leaveBalances[leaveType]--;
+          document.getElementById("modalBalVL").innerText = leaveBalances.VL;
+          document.getElementById("modalBalSL").innerText = leaveBalances.SL;
+          document.getElementById("modalBalEL").innerText = leaveBalances.EL;
+        }
+        closeModal("grantLeaveModal");
+        showToast(
+          `Leave request filed successfully (${leaveType}). Remaining credits updated.`,
+          "success",
+        );
+      }
+
+      function showToast(message, type = "success") {
+        const container = document.getElementById("toastContainer");
+        const toast = document.createElement("div");
+        let bg =
+          type === "info"
+            ? "bg-teal-700 text-white"
+            : type === "warning"
+              ? "bg-amber-600 text-white"
+              : "bg-emerald-600 text-white";
+        toast.className = `pointer-events-auto flex items-center space-x-2 px-4 py-3 rounded-xl shadow-xl text-xs font-semibold ${bg}`;
+        toast.innerHTML = `<span>${message}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 3500);
+      }
+
+      window.onload = function () {
+        renderShiftTemplates();
+        renderMonthTabs();
+        renderCalendar();
+        updateBreakdownPanel();
+        renderExpenseTracker();
+      };
+    </script>
+  </body>
 </html>

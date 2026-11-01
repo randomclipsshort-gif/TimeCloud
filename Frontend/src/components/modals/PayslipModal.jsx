@@ -1,193 +1,223 @@
 import React from "react";
 import { formatPayrollPeriod } from "../../utils/payrollPeriods.js";
 
-const earningLines = [
-  ["regular", "Regular / holiday earnings"],
-  ["overtime", "Overtime earnings"],
-  ["nightDifferential", "Night differential"],
-  ["allowance", "Allowances"],
-  ["leave", "Paid leave"],
-  ["other", "Other recorded earnings"],
-];
-
 export default function PayslipModal({
   open,
   userName,
   payrollPeriod,
   payrollPeriodSummary,
+  payrollEarningsBreakdown,
   cutoffPayrollDeductions,
   payrollPeriodNetPay,
   payrollPeriodEarningsAvailable,
+  dailyWage,
   formatCurrency,
 }) {
-  const earnings = payrollPeriodSummary.earningsBreakdown;
   const periodLabel = formatPayrollPeriod(payrollPeriod);
+  const earningsLabel = payrollPeriodEarningsAvailable
+    ? formatCurrency(payrollPeriodSummary.recordedEarnings)
+    : "Private — unlock salary vault";
+  const deductionsLabel = payrollPeriodEarningsAvailable
+    ? formatCurrency(cutoffPayrollDeductions.total)
+    : "Private — unlock salary vault";
+  const netPayLabel = payrollPeriodEarningsAvailable
+    ? formatCurrency(payrollPeriodNetPay)
+    : "Private — unlock salary vault";
   const recordedHours = payrollPeriodSummary.regularHours +
     payrollPeriodSummary.overtimeHours;
-  const formatPrivateAmount = (amount) => payrollPeriodEarningsAvailable
-    ? formatCurrency(amount)
-    : "Private — unlock salary vault";
-  const visibleEarningLines = earningLines.filter(([key]) => earnings[key] !== 0);
+  const formatUnits = (units) => Number.isInteger(units)
+    ? String(units)
+    : units.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  const formatEarningsItemLabel = (item) => {
+    if (item.id === "lateUndertime") {
+      return `Late/UT · Late ${formatUnits(item.lateMinutes)} min · UT ${formatUnits(item.undertimeMinutes)} min`;
+    }
+    if (item.id === "overtime") {
+      return `${item.label} (${formatUnits(item.units)} hrs OT)`;
+    }
+    if (item.units > 0) {
+      return `${item.label} (${formatUnits(item.units)} ${item.units === 1 ? "day" : "days"} @ ${formatCurrency(item.rate)})`;
+    }
+    return item.label;
+  };
 
   return (
-    <div
-      id="payslipModal"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="payslip-title"
-      aria-hidden={!open}
-      style={{ display: open ? "flex" : "none" }}
-    >
-      <article className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-8">
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-5">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-teal-700">
-              Timekeep Cloud · Earnings statement
-            </p>
-            <h2 id="payslip-title" className="mt-1 text-2xl font-bold text-slate-900">
-              Payslip estimate
-            </h2>
-            <p className="mt-1 text-sm text-slate-600">{periodLabel}</p>
-          </div>
-          <div className="payslip-no-print flex shrink-0 gap-2">
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
-            >
-              <i className="fa-solid fa-print mr-2" aria-hidden="true"></i>
-              Print
-            </button>
-            <button
-              type="button"
-              aria-label="Close payslip"
-              data-action="closeModal(&#x27;payslipModal&#x27;)"
-              className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
-            >
-              Close
-            </button>
-          </div>
-        </header>
-
-        <section className="grid grid-cols-2 gap-4 border-b border-slate-200 py-5 text-sm sm:grid-cols-3">
-          <div>
-            <p className="text-xs text-slate-500">Employee</p>
-            <p className="mt-1 font-semibold text-slate-900">{userName || "Employee"}</p>
+  <div id="payslipModal" className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-hidden={!open} style={{ display: open ? "flex" : "none" }}>
+    <div className="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-3xl p-8 shadow-2xl max-h-[92vh] overflow-y-auto">
+      <div className="flex justify-between items-center pb-4 border-b border-slate-200 mb-6">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 font-bold text-lg">
+            <i className="fa-regular fa-file-lines"></i>
           </div>
           <div>
-            <p className="text-xs text-slate-500">Recorded workdays</p>
-            <p className="mt-1 font-semibold text-slate-900">
-              {payrollPeriodSummary.eligibleWorkdays}
+            <span className="text-[11px] font-bold uppercase tracking-wider text-teal-700">
+              Personal Earnings Summary — Estimate Only
+            </span>
+            <h3 className="font-extrabold text-xl text-textMain">
+              {periodLabel}
+            </h3>
+          </div>
+        </div>
+        <button type="button" aria-label="Close modal" data-action="closeModal(&#x27;payslipModal&#x27;)" className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer">
+          <i className="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mb-6 text-xs">
+        <div className="space-y-1.5">
+          <div className="flex justify-between">
+            <span className="text-slate-500">
+              Employee Name:
+            </span>
+            <span className="font-bold text-slate-800">
+              {userName}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">
+              Account:
+            </span>
+            <span className="font-semibold text-slate-800">
+              Personal workspace
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">
+              Configured Daily Wage:
+            </span>
+            <span className="font-semibold text-slate-800">
+              {Number(dailyWage) > 0 ? formatCurrency(Number(dailyWage)) : "Not set"}
+            </span>
+          </div>
+        </div>
+        <div className="space-y-1.5 sm:border-l sm:border-slate-200 sm:pl-4">
+          <div className="flex justify-between">
+            <span className="text-slate-500">
+              Pay Period:
+            </span>
+            <span className="font-semibold text-slate-800">
+              {periodLabel}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">
+              Recorded Hours:
+            </span>
+            <span className="font-semibold text-teal-700">
+              {`${recordedHours.toFixed(2)} hours`}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">
+              Payroll Status:
+            </span>
+            <span className="font-semibold text-slate-800">
+              Estimate only
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="bg-gradient-to-r from-teal-600 to-teal-700 text-white rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-md mb-6 gap-4">
+        <div>
+          <span className="text-xs font-semibold uppercase tracking-wider opacity-90 block">
+            Gross Earnings Estimate
+          </span>
+          <span className="text-3xl font-black">
+            {earningsLabel}
+            <span className="text-sm font-normal opacity-90">
+              {payrollPeriodEarningsAvailable ? " PHP" : ""}
+            </span>
+          </span>
+        </div>
+        <button type="button" onClick={() => window.print()} className="bg-white text-teal-700 hover:bg-slate-100 px-4 py-2.5 rounded-xl text-xs font-bold shadow transition flex items-center space-x-2 cursor-pointer">
+          <i className="fa-solid fa-print"></i>
+          <span>
+            Print Summary
+          </span>
+        </button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+            <h4 className="font-bold text-xs uppercase tracking-wider text-teal-800 flex items-center space-x-1.5">
+              <i className="fa-solid fa-plus-circle text-teal-600"></i>
+              <span>
+                Gross Earnings Breakdown
+              </span>
+            </h4>
+            <span className="text-xs font-extrabold text-teal-700">
+              {earningsLabel}
+            </span>
+          </div>
+          <div className="space-y-2.5 text-xs text-slate-600">
+            {payrollEarningsBreakdown.items.map((item) => (
+              <div key={item.id} className="flex flex-wrap justify-between gap-2">
+                <span>
+                  {formatEarningsItemLabel(item)}
+                  {item.id === "lateUndertime" && (
+                    <span className="ml-1 text-slate-400">(no deduction configured)</span>
+                  )}
+                </span>
+                <span className="font-semibold text-slate-800">
+                  {item.informational
+                    ? "Not deducted"
+                    : payrollPeriodEarningsAvailable
+                      ? formatCurrency(item.total)
+                      : "Private"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+            <h4 className="font-bold text-xs uppercase tracking-wider text-rose-800 flex items-center space-x-1.5">
+              <i className="fa-solid fa-minus-circle text-rose-600"></i>
+              <span>
+                Deductions &amp; Contributions
+              </span>
+            </h4>
+            <span className="text-xs font-extrabold text-rose-700">
+              {deductionsLabel}
+            </span>
+          </div>
+          <div className="space-y-2.5 text-xs text-slate-600">
+            {cutoffPayrollDeductions.items.map((item) => (
+              <div key={item.id} className="flex flex-wrap justify-between gap-2">
+                <span>{item.label} employee contribution</span>
+                <span className="font-semibold text-slate-800">
+                  {payrollPeriodEarningsAvailable
+                    ? formatCurrency(item.amount)
+                    : "Private"}
+                </span>
+              </div>
+            ))}
+            <div className="flex justify-between border-t border-slate-100 pt-2">
+              <span>Total employee contributions</span>
+              <span className="font-semibold text-slate-800">
+                {payrollPeriodEarningsAvailable
+                  ? formatCurrency(cutoffPayrollDeductions.employeeContributionTotal)
+                  : "Private"}
+              </span>
+            </div>
+            <div className="flex justify-between font-bold text-slate-800">
+              <span>Net pay after deductions</span>
+              <span>{netPayLabel}</span>
+            </div>
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              Employer contributions are not modeled or deducted from employee net pay. No finalized payroll record is created.
             </p>
           </div>
-          <div>
-            <p className="text-xs text-slate-500">Recorded hours</p>
-            <p className="mt-1 font-semibold text-slate-900">
-              {recordedHours.toFixed(2)}
-              <span className="ml-1 font-normal text-slate-500">hrs</span>
-            </p>
-          </div>
-        </section>
-
-        <section className="pt-5" aria-labelledby="payslip-earnings-heading">
-          <h3 id="payslip-earnings-heading" className="text-sm font-bold uppercase tracking-wide text-slate-800">
-            Earnings
-          </h3>
-          <table className="mt-3 w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-                <th scope="col" className="py-2 font-medium">Description</th>
-                <th scope="col" className="py-2 text-right font-medium">Amount</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {visibleEarningLines.length > 0 ? visibleEarningLines.map(([key, label]) => (
-                <tr key={key}>
-                  <td className="py-2.5 text-slate-700">{label}</td>
-                  <td className="py-2.5 text-right font-medium tabular-nums text-slate-900">
-                    {formatPrivateAmount(earnings[key])}
-                  </td>
-                </tr>
-              )) : (
-                <tr>
-                  <td colSpan="2" className="py-3 text-slate-500">No earnings recorded for this period.</td>
-                </tr>
-              )}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-slate-200">
-                <th scope="row" className="py-3 text-left font-semibold text-slate-800">
-                  Gross earnings
-                </th>
-                <td className="py-3 text-right font-semibold tabular-nums text-slate-900">
-                  {formatPrivateAmount(payrollPeriodSummary.recordedEarnings)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </section>
-
-        <section className="mt-5 border-t border-slate-200 pt-5" aria-labelledby="payslip-deductions-heading">
-          <h3 id="payslip-deductions-heading" className="text-sm font-bold uppercase tracking-wide text-slate-800">
-            Employee deductions &amp; contributions
-          </h3>
-          <table className="mt-3 w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-                <th scope="col" className="py-2 font-medium">Description</th>
-                <th scope="col" className="py-2 font-medium">Schedule</th>
-                <th scope="col" className="py-2 text-right font-medium">Amount</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {cutoffPayrollDeductions.items.map((item) => (
-                <tr key={item.id}>
-                  <td className="py-2.5 text-slate-700">{item.label} · employee share</td>
-                  <td className="py-2.5 text-xs text-slate-500">{item.frequencyLabel}</td>
-                  <td className="py-2.5 text-right font-medium tabular-nums text-slate-900">
-                    {formatPrivateAmount(item.amount)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-slate-200">
-                <th scope="row" colSpan="2" className="py-3 text-left font-semibold text-slate-800">
-                  Total deductions
-                </th>
-                <td className="py-3 text-right font-semibold tabular-nums text-slate-900">
-                  {formatPrivateAmount(cutoffPayrollDeductions.total)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </section>
-
-        <section className="mt-4 flex items-center justify-between gap-4 rounded-xl bg-slate-900 px-4 py-4 text-white">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-300">
-              Estimated net pay
-            </p>
-            <p className="mt-1 text-xs text-slate-300">Gross earnings less employee deductions</p>
-          </div>
-          <p className="text-xl font-bold tabular-nums">
-            {formatPrivateAmount(payrollPeriodNetPay)}
-          </p>
-        </section>
-
-        <footer className="mt-5 border-t border-slate-200 pt-4 text-xs leading-relaxed text-slate-500">
-          <p>
-            Estimate only—not a finalized payroll record. Employer contributions are not included or deducted from employee net pay.
-          </p>
-          {payrollPeriodSummary.incompleteClockOuts > 0 && (
-            <p className="mt-1">
-              {payrollPeriodSummary.incompleteClockOuts} incomplete clock-out
-              {payrollPeriodSummary.incompleteClockOuts === 1 ? "" : "s"} excluded from this statement.
-            </p>
-          )}
-        </footer>
-      </article>
+        </div>
+      </div>
+      <div className="flex items-center justify-between pt-4 border-t border-slate-200 text-xs text-slate-500">
+        <span>
+          Estimates are not finalized payroll or guaranteed legal entitlements.
+        </span>
+        <button data-action="closeModal(&#x27;payslipModal&#x27;)" className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-xl transition cursor-pointer">
+          Close Window
+        </button>
+      </div>
     </div>
+  </div>
   );
 }

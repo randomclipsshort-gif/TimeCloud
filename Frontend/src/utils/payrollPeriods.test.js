@@ -117,14 +117,6 @@ test("summarizes inclusive days and clips an overnight shift across cutoffs", ()
       overtimeHours: 0,
       recordedEarnings: 800,
       incompleteClockOuts: 0,
-      earningsBreakdown: {
-        regular: 0,
-        overtime: 0,
-        nightDifferential: 0,
-        allowance: 0,
-        leave: 0,
-        other: 800,
-      },
     },
   );
   assert.deepEqual(
@@ -135,14 +127,6 @@ test("summarizes inclusive days and clips an overnight shift across cutoffs", ()
       overtimeHours: 0,
       recordedEarnings: 1000,
       incompleteClockOuts: 0,
-      earningsBreakdown: {
-        regular: 0,
-        overtime: 0,
-        nightDifferential: 0,
-        allowance: 0,
-        leave: 0,
-        other: 1000,
-      },
     },
   );
   assert.deepEqual(
@@ -153,46 +137,6 @@ test("summarizes inclusive days and clips an overnight shift across cutoffs", ()
       overtimeHours: 1,
       recordedEarnings: 200,
       incompleteClockOuts: 1,
-      earningsBreakdown: {
-        regular: 0,
-        overtime: 0,
-        nightDifferential: 0,
-        allowance: 0,
-        leave: 0,
-        other: 200,
-      },
     },
   );
-});
-
-test("apportions categorized earnings across the cutoff boundary", () => {
-  const summary = summarizePayrollPeriod(
-    {
-      "2026-10-25": {
-        type: "Regular",
-        workStartTime: "10:00 PM",
-        workEndTime: "2:00 AM",
-        overtimeMinutes: 60,
-      },
-    },
-    getPayrollPeriodForDate("2026-10-25"),
-    () => ({
-      total: 400,
-      breakdown: {
-        regular: 200,
-        overtime: 100,
-        nightDifferential: 50,
-        allowance: 50,
-      },
-    }),
-  );
-  assert.equal(summary.recordedEarnings, 200);
-  assert.deepEqual(summary.earningsBreakdown, {
-    regular: 100,
-    overtime: 50,
-    nightDifferential: 25,
-    allowance: 25,
-    leave: 0,
-    other: 0,
-  });
 });
