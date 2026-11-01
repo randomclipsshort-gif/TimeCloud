@@ -41,3 +41,43 @@ body {
     transition: none;
   }
 }
+
+@page {
+  size: A4;
+  margin: 16mm;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  #payslipModal,
+  #payslipModal * {
+    visibility: visible !important;
+  }
+
+  #payslipModal {
+    position: absolute !important;
+    inset: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background: white !important;
+    backdrop-filter: none !important;
+  }
+
+  #payslipModal > article {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .payslip-no-print {
+    display: none !important;
+  }
+}

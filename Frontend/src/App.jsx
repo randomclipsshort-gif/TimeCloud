@@ -679,19 +679,34 @@ export default function App() {
         unworked: record.holidayUnworked || record.type === "Absent",
         overtimeMultiplier: Number(overtimeMultiplier),
       });
-      return hasAssignedShift && holidayPay.amount != null && hasDailyAllowance
-        ? holidayPay.amount +
-          overtimeAmount +
-          nightDifferentialPay +
-          allowanceAmount
-        : null;
+      if (!hasAssignedShift || holidayPay.amount == null || !hasDailyAllowance) return null;
+      return {
+        total: holidayPay.amount + overtimeAmount + nightDifferentialPay + allowanceAmount,
+        breakdown: {
+          regular: holidayPay.regularPay || 0,
+          overtime: (holidayPay.overtimePay || 0) + overtimeAmount,
+          nightDifferential: nightDifferentialPay,
+          allowance: allowanceAmount,
+        },
+      };
     }
 
-    return hasAssignedShift &&
-      ["Regular", "Official Business"].includes(record.type) &&
-      hasDailyAllowance
-        ? getAmount(record.est) + allowanceAmount
-        : null;
+    if (
+      !hasAssignedShift ||
+      !["Regular", "Official Business"].includes(record.type) ||
+      !hasDailyAllowance
+    ) return null;
+    const recordedEarnings = getAmount(record.est);
+    const recordedOvertime = Math.min(overtimeAmount, recordedEarnings);
+    return {
+      total: recordedEarnings + allowanceAmount,
+      breakdown: {
+        regular: recordedEarnings - recordedOvertime,
+        overtime: recordedOvertime,
+        nightDifferential: 0,
+        allowance: allowanceAmount,
+      },
+    };
   }, [
     dailyAllowance,
     dailyWage,
@@ -2575,7 +2590,6 @@ export default function App() {
         cutoffPayrollDeductions={cutoffPayrollDeductions}
         payrollPeriodNetPay={payrollPeriodNetPay}
         payrollPeriodEarningsAvailable={isPayrollPeriodEarningsAvailable(salaryVaultStatus)}
-        dailyWage={dailyWage}
         formatCurrency={formatCurrency}
       />
       <SettingsModal

@@ -138,6 +138,14 @@ export function summarizePayrollPeriod(
   period,
   getEarningsForRecord = (record) => getAmount(record.est),
 ) {
+  const emptyEarningsBreakdown = {
+    regular: 0,
+    overtime: 0,
+    nightDifferential: 0,
+    allowance: 0,
+    leave: 0,
+    other: 0,
+  };
   const parsedStart = period && parseDateKey(period.startDate);
   const parsedEnd = period && parseDateKey(period.endDate);
   if (!parsedStart || !parsedEnd || parsedStart.ordinal > parsedEnd.ordinal) {
@@ -147,6 +155,7 @@ export function summarizePayrollPeriod(
       overtimeHours: 0,
       recordedEarnings: 0,
       incompleteClockOuts: 0,
+      earningsBreakdown: emptyEarningsBreakdown,
     };
   }
 
@@ -157,6 +166,7 @@ export function summarizePayrollPeriod(
   let overtimeMinutes = 0;
   let recordedEarnings = 0;
   let incompleteClockOuts = 0;
+  const earningsBreakdown = { ...emptyEarningsBreakdown };
 
   for (const [dateKey, record] of Object.entries(attendance || {})) {
     const parsedDate = parseDateKey(dateKey);
@@ -171,7 +181,11 @@ export function summarizePayrollPeriod(
     }
 
     if (record.type === "Leave") {
-      if (dateIsInPeriod) recordedEarnings += getAmount(record.est);
+      if (dateIsInPeriod) {
+        const leaveAmount = getAmount(record.est);
+        recordedEarnings += leaveAmount;
+        earningsBreakdown.leave += leaveAmount;
+      }
       continue;
     }
     if (["Absent", "Rest Day", "Unassigned"].includes(record.type)) continue;
@@ -202,15 +216,30 @@ export function summarizePayrollPeriod(
     overtimeMinutes += overtimeOverlap;
 
     if (dateIsInPeriod) eligibleWorkdays += 1;
-    recordedEarnings += getAmount(getEarningsForRecord(record, dateKey)) *
-      (overlapMinutes / workedMinutes);
+    const earnings = getEarningsForRecord(record, dateKey);
+    const earningsTotal = earnings && typeof earnings === "object"
+      ? getAmount(earnings.total)
+      : getAmount(earnings);
+    const allocation = overlapMinutes / workedMinutes;
+    recordedEarnings += earningsTotal * allocation;
+    if (earnings && typeof earnings === "object" && earnings.breakdown) {
+      for (const key of Object.keys(emptyEarningsBreakdown)) {
+        earningsBreakdown[key] += getAmount(earnings.breakdown[key]) * allocation;
+      }
+    } else {
+      earningsBreakdown.other += earningsTotal * allocation;
+    }
   }
 
+  for (const key of Object.keys(earningsBreakdown)) {
+    earningsBreakdown[key] = Math.round((earningsBreakdown[key] + Number.EPSILON) * 100) / 100;
+  }
   return {
     eligibleWorkdays,
     regularHours: regularMinutes / 60,
     overtimeHours: overtimeMinutes / 60,
     recordedEarnings,
     incompleteClockOuts,
+    earningsBreakdown,
   };
 }
