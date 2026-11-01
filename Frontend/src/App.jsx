@@ -1530,16 +1530,19 @@ export default function App() {
   const deleteAccount = async () => {
     if (accountDeletionLoading) return;
     const confirmed = window.confirm(
-      "Delete your TimeCloud account and all saved workspace data? This cannot be undone.",
+      "Permanently delete your account and all TimeCloud app data (workspace, attendance, and encrypted salary vault)? Unsaved changes will be discarded. This cannot be undone. Supabase operational logs and backups may be retained under the provider's retention policies.",
     );
     if (!confirmed || !supabase) return;
 
     setAccountDeletionLoading(true);
     try {
-      if (!(await flushSalaryVault())) return;
-      const { error } = await supabase.functions.invoke("delete-account");
-      if (error) {
-        showToast("Account deletion could not be confirmed. Check your account status before retrying.", "error");
+      const { data, error } = await supabase.functions.invoke("delete-account");
+      if (error || data?.success !== true) {
+        const detail = typeof data?.error === "string" ? ` ${data.error}` : "";
+        showToast(
+          `Account deletion could not be confirmed.${detail || " Check your account status before retrying."}`,
+          "error",
+        );
         return;
       }
 
@@ -1554,13 +1557,22 @@ export default function App() {
         addToast("Account deleted, but an older unencrypted salary copy remains in this browser's storage. Clear it manually after preserving any needed data.", "error");
       }
       salaryVaultKeyRef.current = null;
+      salaryVaultRevisionRef.current = 0;
+      setSalaryVaultRecord(null);
+      setSalaryVaultStatus("loading");
       if (signOutError) {
-        showToast("Your account was deleted, but this browser could not clear its saved session. Reload the page.", "error");
+        showToast("Your account and app data were deleted, but this browser could not clear its saved session. Reload the page.", "error");
         return;
       }
-      addToast("Account and associated cloud data deleted.", "info");
-    } catch {
-      showToast("Account deletion could not be confirmed. Check your account status before retrying.", "error");
+      addToast("Account and all associated TimeCloud app data were deleted.", "info");
+    } catch (error) {
+      console.error("Account deletion request failed:", error);
+      showToast(
+        error instanceof Error
+          ? `Account deletion could not be confirmed: ${error.message}`
+          : "Account deletion could not be confirmed. Check your account status before retrying.",
+        "error",
+      );
     } finally {
       setAccountDeletionLoading(false);
     }

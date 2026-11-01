@@ -152,10 +152,12 @@ Safe next migration stages, before any normalization:
 
 ## Account deletion function
 
-The `delete-account` Edge Function verifies the caller's access token, then
-uses the platform-provided service-role secret only in the trusted function
-runtime to delete that caller's Auth account. The foreign-key cascade removes
-the corresponding workspace. Deploy it with:
+The `delete-account` Edge Function verifies the caller's access token, removes
+the caller's rows from `private_salary_vault`, `attendance_punches`, and
+`user_workspaces`, verifies those rows are gone, and then deletes that caller's
+Auth account with the platform-provided service-role secret in the trusted
+function runtime. Missing optional tables are treated as having no rows.
+Deploy it with:
 
 ```sh
 supabase functions deploy delete-account
@@ -166,11 +168,13 @@ function uses Supabase runtime secrets and must retain JWT verification.
 The command deploys to the project linked in step 3.
 
 The function accepts no user ID in its request body; it verifies the bearer
-session with `auth.getUser()` and deletes only that verified user's Auth
-account. Foreign-key cascades remove the workspace, punch rows, and encrypted
-salary-vault row. An older plaintext browser-local copy is not cloud data and
-must be removed separately if the app could not clear it. Do not test deletion
-against a real account without explicit authorization.
+session with `auth.getUser()` and only deletes records belonging to that
+verified user. The app does not sync unsaved edits before deletion. It removes
+the legacy browser-local salary copy after the server confirms deletion.
+Supabase operational logs, provider-managed backups, and point-in-time recovery
+may retain data under the project's retention policies; this application
+cannot erase those provider-managed records. Do not test deletion against a
+real account without explicit authorization.
 
 ## Export, privacy, backup, and restore
 

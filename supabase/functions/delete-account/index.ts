@@ -6,6 +6,16 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const accountDataTables = [
+  "private_salary_vault",
+  "attendance_punches",
+  "user_workspaces",
+] as const;
+
+function isMissingTableError(error: { code?: string } | null) {
+  return error?.code === "PGRST205" || error?.code === "42P01";
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -52,13 +62,79 @@ Deno.serve(async (request) => {
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  for (const table of accountDataTables) {
+    const { error: cleanupError } = await adminClient
+      .from(table)
+      .delete()
+      .eq("user_id", user.id);
+    if (cleanupError && isMissingTableError(cleanupError)) continue;
+    if (cleanupError) {
+      console.error(`Account data cleanup failed for ${table}:`, cleanupError);
+      return Response.json({
+        error: "Account data could not be fully removed. Your account is still active; retry deletion or contact support.",
+      }, {
+        status: 500,
+        headers: corsHeaders,
+      });
+    }
+  }
+
+  for (const table of accountDataTables) {
+    const { data, error: verificationError } = await adminClient
+      .from(table)
+      .select("user_id")
+      .eq("user_id", user.id)
+      .limit(1);
+    if (verificationError && isMissingTableError(verificationError)) continue;
+    if (verificationError || data?.length) {
+      console.error(
+        `Account data cleanup verification failed for ${table}:`,
+        verificationError ?? "An account-owned row remains.",
+      );
+      return Response.json({
+        error: "Account data removal could not be verified. Your account is still active; retry deletion or contact support.",
+      }, {
+        status: 500,
+        headers: corsHeaders,
+      });
+    }
+  }
+
   const { error: deletionError } = await adminClient.auth.admin.deleteUser(user.id);
   if (deletionError) {
-    return Response.json({ error: "Account deletion failed. Please try again later." }, {
+    console.error("Auth account deletion failed after account data cleanup:", deletionError);
+    return Response.json({
+      error: "Your app data was removed, but account deletion did not finish. Please retry deletion or contact support.",
+    }, {
       status: 500,
       headers: corsHeaders,
     });
   }
 
-  return Response.json({ success: true }, { headers: corsHeaders });
+  for (const table of accountDataTables) {
+    const { data, error: verificationError } = await adminClient
+      .from(table)
+      .select("user_id")
+      .eq("user_id", user.id)
+      .limit(1);
+    if (verificationError && isMissingTableError(verificationError)) continue;
+    if (verificationError || data?.length) {
+      console.error(
+        `Post-deletion verification failed for ${table}:`,
+        verificationError ?? "An account-owned row remains after Auth deletion.",
+      );
+      return Response.json({
+        error: "The account was deleted, but removal of all app data could not be verified. Contact support.",
+      }, {
+        status: 500,
+        headers: corsHeaders,
+      });
+    }
+  }
+
+  return Response.json({
+    success: true,
+    deletedTables: accountDataTables,
+  }, { headers: corsHeaders });
 });
