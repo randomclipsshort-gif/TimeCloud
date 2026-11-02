@@ -1,6 +1,6 @@
 export default function FinancialDashboard({
   expenseRows,
-  expenses,
+  monthExpenses,
   totalExpenses,
   remaining,
   percentage,
@@ -14,6 +14,8 @@ export default function FinancialDashboard({
   setExpenseName,
   expenseAmount,
   setExpenseAmount,
+  expenseDate,
+  setExpenseDate,
   expenseCategory,
   setExpenseCategory,
 }) {
@@ -96,7 +98,7 @@ export default function FinancialDashboard({
             </h2>
           </div>
           <span className="text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-100 px-3 py-1 rounded-lg">
-            Recorded earnings and expenses
+            {`Recorded earnings and expenses · ${monthLabel}`}
           </span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
@@ -152,7 +154,7 @@ export default function FinancialDashboard({
             <div
               id="trackerProgressBar"
               className={`h-full rounded-full transition-all duration-500 ${percentage > 85 ? "bg-rose-500" : percentage > 60 ? "bg-amber-500" : "bg-teal-600"}`}
-              style={{ width: `${percentage}%` }}
+              style={{ width: `${Math.min(percentage, 100)}%` }}
             ></div>
           </div>
         </div>
@@ -162,6 +164,21 @@ export default function FinancialDashboard({
               <i className="fa-solid fa-circle-plus text-teal-600 text-sm"></i>
               <span>Add New Expense Entry</span>
             </h3>
+            <div>
+              <label
+                className="block text-[11px] font-semibold text-slate-600 mb-1"
+                htmlFor="expenseDate"
+              >
+                Expense Date
+              </label>
+              <input
+                type="date"
+                id="expenseDate"
+                value={expenseDate}
+                onChange={(event) => setExpenseDate(event.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 shadow-sm"
+              />
+            </div>
             <div>
               <label
                 className="block text-[11px] font-semibold text-slate-600 mb-1"
@@ -238,7 +255,7 @@ export default function FinancialDashboard({
                 id="expenseCountBadge"
                 className="text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full font-medium"
               >
-                {`${expenses.length} item${expenses.length === 1 ? "" : "s"}`}
+                {`${monthExpenses.length} item${monthExpenses.length === 1 ? "" : "s"}`}
               </span>
             </div>
             <div className="overflow-y-auto max-h-[260px] border border-slate-200 rounded-xl bg-white shadow-sm">
@@ -246,6 +263,7 @@ export default function FinancialDashboard({
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 sticky top-0 z-10">
                   <tr>
                     <th className="p-3 font-semibold">Description</th>
+                    <th className="p-3 font-semibold">Date</th>
                     <th className="p-3 font-semibold">Category</th>
                     <th className="p-3 font-semibold text-right">Amount</th>
                     <th className="p-3 font-semibold text-center">Action</th>

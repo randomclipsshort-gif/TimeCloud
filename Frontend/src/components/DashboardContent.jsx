@@ -30,7 +30,7 @@ export default function DashboardContent(props) {
     year,
     record,
     expenseRows,
-    expenses,
+    monthExpenses,
     totalExpenses,
     remaining,
     percentage,
@@ -43,6 +43,8 @@ export default function DashboardContent(props) {
     setExpenseName,
     expenseAmount,
     setExpenseAmount,
+    expenseDate,
+    setExpenseDate,
     expenseCategory,
     setExpenseCategory,
   } = props;
@@ -83,7 +85,7 @@ export default function DashboardContent(props) {
           />
           <FinancialDashboard
             expenseRows={expenseRows}
-            expenses={expenses}
+            monthExpenses={monthExpenses}
             totalExpenses={totalExpenses}
             remaining={remaining}
             percentage={percentage}
@@ -97,6 +99,8 @@ export default function DashboardContent(props) {
             setExpenseName={setExpenseName}
             expenseAmount={expenseAmount}
             setExpenseAmount={setExpenseAmount}
+            expenseDate={expenseDate}
+            setExpenseDate={setExpenseDate}
             expenseCategory={expenseCategory}
             setExpenseCategory={setExpenseCategory}
           />

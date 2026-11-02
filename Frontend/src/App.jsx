@@ -20,6 +20,11 @@ import {
 } from "./utils/payrollDeductions.js";
 import { summarizePayrollEarningsBreakdown } from "./utils/payrollEarningsBreakdown.js";
 import {
+  getBudgetUtilization,
+  getExpenseDate,
+  getExpensesForMonth,
+} from "./utils/expenseTracker.js";
+import {
   getPayrollPeriodForDate,
   getPayrollPeriodForMonth,
   isPayrollPeriodEarningsAvailable,
@@ -567,6 +572,7 @@ export default function App() {
   const [expenses, setExpenses] = useState([]);
   const [expenseName, setExpenseName] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
+  const [expenseDate, setExpenseDate] = useState(() => getManilaDateTime().date);
   const [expenseCategory, setExpenseCategory] = useState("Utilities");
   const [toasts, setToasts] = useState([]);
   const timers = useRef(new Map());
@@ -601,6 +607,12 @@ export default function App() {
 
   const selectedDate = formatDate(year, monthIndex, selectedDay);
   const monthLabel = `${months[monthIndex]} ${year}`;
+  const calendarPayrollMonth = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+  useEffect(() => {
+    if (!expenseDate.startsWith(`${calendarPayrollMonth}-`)) {
+      setExpenseDate(selectedDate);
+    }
+  }, [calendarPayrollMonth, expenseDate, selectedDate]);
   const currentPayrollPeriod = useMemo(
     () => getPayrollPeriodForDate(manilaNow.date),
     [manilaNow.date],
@@ -914,7 +926,6 @@ export default function App() {
       if (record.type === "Leave") return sum + getAmount(record.est);
       return hasValidAttendanceRecord(record) ? sum + getAmount(record.est) : sum;
     }, 0);
-  const calendarPayrollMonth = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
   const payrollDeductions = sumCutoffPayrollDeductions(
     ...[10, 25].map((cutoffDay) => calculateCutoffPayrollDeductions({
       period: getPayrollPeriodForMonth(calendarPayrollMonth, cutoffDay),
@@ -934,11 +945,9 @@ export default function App() {
     .reduce((sum, [, record]) => sum + (
       hasValidAttendanceRecord(record) ? getAttendanceHours(record) : 0
     ), 0);
-  const totalExpenses = expenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const remaining = netPay - totalExpenses;
-  const percentage = netPay > 0
-    ? Math.min(Math.max((totalExpenses / netPay) * 100, 0), 100)
-    : 0;
+  const monthExpenses = getExpensesForMonth(expenses, calendarPayrollMonth);
+  const totalExpenses = monthExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const { remaining, percentage } = getBudgetUtilization(netPay, totalExpenses);
   const workspaceData = useMemo(() => ({
     attendance: serializeWorkspaceForCloud({ attendance }).attendance,
     activeTimeEntry,
@@ -1617,10 +1626,19 @@ export default function App() {
     const name = expenseName.trim();
     const amount = Number(expenseAmount);
     if (!name) return showToast("Please provide a valid expense description.", "warning");
+    if (!getExpenseDate({ date: expenseDate })) {
+      return showToast("Please select a valid expense date.", "warning");
+    }
     if (!Number.isFinite(amount) || amount <= 0) {
       return showToast("Please enter a valid expense amount greater than 0.", "warning");
     }
-    setExpenses((current) => [{ id: Date.now(), name, category: expenseCategory, amount }, ...current]);
+    setExpenses((current) => [{
+      id: Date.now(),
+      name,
+      category: expenseCategory,
+      amount,
+      date: expenseDate,
+    }, ...current]);
     pendingExpenseClearRef.current = true;
     showToast("Expense record added successfully.", "success");
   };
@@ -2395,9 +2413,9 @@ export default function App() {
     </div>
   ));
 
-  const expenseRows = expenses.length === 0 ? (
-    <tr><td colSpan="4" className="p-6 text-center text-slate-400 italic">No expenses recorded for this pay period yet.</td></tr>
-  ) : expenses.map((item) => {
+  const expenseRows = monthExpenses.length === 0 ? (
+    <tr><td colSpan="5" className="p-6 text-center text-slate-400 italic">No expenses recorded for {monthLabel}.</td></tr>
+  ) : monthExpenses.map((item) => {
     const badgeColor = {
       Utilities: "bg-indigo-50 text-indigo-700",
       "Food & Groceries": "bg-emerald-50 text-emerald-700",
@@ -2407,6 +2425,7 @@ export default function App() {
     return (
       <tr key={item.id} className="hover:bg-slate-50 transition">
         <td className="p-3 font-medium text-slate-800">{item.name}</td>
+        <td className="p-3 text-slate-500">{getExpenseDate(item) || "—"}</td>
         <td className="p-3"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${badgeColor}`}>{item.category}</span></td>
         <td className="p-3 font-semibold text-right text-rose-600">{formatCurrency(item.amount)}</td>
         <td className="p-3 text-center">
@@ -2557,7 +2576,7 @@ export default function App() {
         onTimeClockClick={handleTimeClockClick}
         expenseRows={expenseRows}
         record={selectedRecordWithNightDifferential}
-        expenses={expenses}
+        monthExpenses={monthExpenses}
         totalExpenses={totalExpenses}
         grossPay={grossPay}
         payrollDeductions={payrollDeductions}
@@ -2570,6 +2589,8 @@ export default function App() {
         setExpenseName={setExpenseName}
         expenseAmount={expenseAmount}
         setExpenseAmount={setExpenseAmount}
+        expenseDate={expenseDate}
+        setExpenseDate={setExpenseDate}
         expenseCategory={expenseCategory}
         setExpenseCategory={setExpenseCategory}
       />
