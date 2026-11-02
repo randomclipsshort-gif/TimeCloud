@@ -318,7 +318,7 @@ export default function SettingsModal({
         <div
           role="tablist"
           aria-label="System configuration sections"
-          className="mb-6 grid grid-cols-2 gap-2 border-b border-slate-200 pb-4 text-xs font-semibold sm:grid-cols-3"
+          className="mb-6 grid grid-cols-2 gap-2 border-b border-slate-200 pb-4 text-xs font-semibold sm:grid-cols-4"
         >
           {[
             {
@@ -338,12 +338,6 @@ export default function SettingsModal({
               label: "Deductions & Leave",
               tabId: "tabBtnDeductions",
               panelId: "settingsTabDeductions",
-            },
-            {
-              id: "attendance",
-              label: "Attendance & Timekeeping",
-              tabId: "tabBtnAttendance",
-              panelId: "settingsTabAttendance",
             },
             {
               id: "holidays",
@@ -765,77 +759,6 @@ export default function SettingsModal({
           </section>
         </div>
         <div
-          id="settingsTabAttendance"
-          className={
-            activeSettingsTab === "attendance"
-              ? "space-y-5 text-xs"
-              : "space-y-5 text-xs hidden"
-          }
-        >
-          <div>
-            <h4 className="font-bold text-slate-800">Timekeeping rules</h4>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Control when punches are available and how late attendance is
-              classified.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label
-                className="block font-semibold text-slate-700 mb-1"
-                htmlFor="settingEarlyPunchWindow"
-              >
-                Allow early Time In (minutes)
-              </label>
-              <input
-                type="number"
-                id="settingEarlyPunchWindow"
-                min="0"
-                max="120"
-                step="1"
-                value={settingsDraft.earlyPunchWindowMinutes}
-                onChange={(event) =>
-                  updateDraft(
-                    "earlyPunchWindowMinutes",
-                    Math.min(120, Math.max(0, Number(event.target.value) || 0)),
-                  )
-                }
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
-              />
-              <p className="mt-1 text-[11px] text-slate-500">
-                Time In opens this many minutes before the scheduled start.
-                Default: 15.
-              </p>
-            </div>
-            <div>
-              <label
-                className="block font-semibold text-slate-700 mb-1"
-                htmlFor="settingLateGracePeriod"
-              >
-                Late grace period (minutes)
-              </label>
-              <input
-                type="number"
-                id="settingLateGracePeriod"
-                min="0"
-                max="120"
-                step="1"
-                value={settingsDraft.lateGracePeriodMinutes}
-                onChange={(event) =>
-                  updateDraft(
-                    "lateGracePeriodMinutes",
-                    Math.min(120, Math.max(0, Number(event.target.value) || 0)),
-                  )
-                }
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
-              />
-              <p className="mt-1 text-[11px] text-slate-500">
-                Changes Late status only, not punch eligibility. Default: 15.
-              </p>
-            </div>
-          </div>
-        </div>
-        <div
           id="settingsTabGeneral"
           className={
             activeSettingsTab === "general"
@@ -847,6 +770,83 @@ export default function SettingsModal({
             <span className="font-semibold text-slate-700">Primary Timezone:</span>{" "}
             <span className="text-slate-600">Manila (Asia/Manila)</span>
           </div>
+          <section
+            className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+            aria-labelledby="timekeepingRulesHeading"
+          >
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                <i className="fa-solid fa-clock" aria-hidden="true" />
+              </span>
+              <div>
+                <h4
+                  id="timekeepingRulesHeading"
+                  className="font-bold text-slate-800"
+                >
+                  Timekeeping rules
+                </h4>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Control when punches are available and how late attendance is
+                  classified.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label
+                  className="mb-1 block font-semibold text-slate-700"
+                  htmlFor="settingEarlyPunchWindow"
+                >
+                  Allow early Time In (minutes)
+                </label>
+                <input
+                  type="number"
+                  id="settingEarlyPunchWindow"
+                  min="0"
+                  max="120"
+                  step="1"
+                  value={settingsDraft.earlyPunchWindowMinutes}
+                  onChange={(event) =>
+                    updateDraft(
+                      "earlyPunchWindowMinutes",
+                      Math.min(120, Math.max(0, Number(event.target.value) || 0)),
+                    )
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                />
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Time In opens this many minutes before the scheduled start.
+                  Default: 15.
+                </p>
+              </div>
+              <div>
+                <label
+                  className="mb-1 block font-semibold text-slate-700"
+                  htmlFor="settingLateGracePeriod"
+                >
+                  Late grace period (minutes)
+                </label>
+                <input
+                  type="number"
+                  id="settingLateGracePeriod"
+                  min="0"
+                  max="120"
+                  step="1"
+                  value={settingsDraft.lateGracePeriodMinutes}
+                  onChange={(event) =>
+                    updateDraft(
+                      "lateGracePeriodMinutes",
+                      Math.min(120, Math.max(0, Number(event.target.value) || 0)),
+                    )
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                />
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Changes Late status only, not punch eligibility. Default: 15.
+                </p>
+              </div>
+            </div>
+          </section>
           <section
             className="space-y-3 rounded-xl border border-teal-200 bg-teal-50 p-4"
             aria-labelledby="salaryVaultHeading"
