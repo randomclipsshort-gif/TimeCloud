@@ -257,9 +257,6 @@ export default function AttendanceDashboard({
                   <div className="flex items-center justify-between gap-3 py-3">
                     <span className="flex items-center gap-2 font-semibold text-slate-800">
                       Company Allowance
-                      <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-emerald-700">
-                        Add-on
-                      </span>
                     </span>
                     <span id="companyAllowance" className="font-semibold text-slate-800">
                       {`+?${allowanceAmount.toFixed(2)}`}
