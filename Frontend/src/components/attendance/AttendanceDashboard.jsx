@@ -176,7 +176,12 @@ export default function AttendanceDashboard({
             </div>
             <div className="divide-y divide-slate-100 px-4 text-[11px]">
               <div className="flex justify-between gap-3 py-2.5 font-semibold text-slate-700">
-                <span>Base Daily Wage (8 hrs)</span>
+                <span className="flex min-w-0 flex-col">
+                  <span>Base Daily Wage</span>
+                  <span className="mt-0.5 text-[9px] font-normal text-slate-500">
+                    Reference rate · 8 hrs
+                  </span>
+                </span>
                 <span id="baseWage" className="text-right text-slate-900">
                   {record.holidayClassification || record.type === "Unassigned"
                     ? Number(configuredDailyWage) > 0
@@ -203,10 +208,10 @@ export default function AttendanceDashboard({
               </div>
               <div className="flex justify-between gap-3 py-2.5 text-slate-600">
                 <span className="flex min-w-0 flex-col">
-                  <span>Holiday Pay</span>
-                  {displayedHolidayPayRateLabel && (
+                  <span>Holiday Pay Total</span>
+                  {record.holidayClassification && (
                     <span className="mt-0.5 text-[9px] leading-snug text-teal-700">
-                      {displayedHolidayPayRateLabel}
+                      {displayedHolidayPayRateLabel || "Includes base wage"}
                     </span>
                   )}
                 </span>
@@ -249,8 +254,8 @@ export default function AttendanceDashboard({
               </div>
               <div className="flex justify-between gap-3 py-2.5 text-slate-600">
                 <span>Late / Undertime Penalty</span>
-                <span id="penaltyPay" className="font-semibold text-slate-700">
-                  —
+                <span id="penaltyPay" className="font-semibold text-slate-500">
+                  No deduction
                 </span>
               </div>
             </div>
