@@ -25,22 +25,6 @@ export default function FinancialDashboard({
     <div className="w-full shrink-0 flex flex-col gap-6">
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="bg-cardBg rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center space-x-4">
-          <div className="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-xl">
-            <i className="fa-solid fa-calendar-check"></i>
-          </div>
-          <div>
-            <span className="text-xs text-slate-500 font-medium">
-              Tracking Period
-            </span>
-            <h4 className="text-[14px] font-bold text-slate-800 mt-0.5">
-              {financePeriodLabel}
-            </h4>
-            <span className="text-[10px] text-teal-600 font-semibold bg-teal-50 px-1.5 py-0.5 rounded">
-              Earnings estimates
-            </span>
-          </div>
-        </div>
-        <div className="bg-cardBg rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center space-x-4">
           <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">
             <i className="fa-solid fa-money-bill-wave"></i>
           </div>
@@ -53,6 +37,22 @@ export default function FinancialDashboard({
             </h4>
             <span className="text-[10px] text-slate-400">
               {`${totalHours.toFixed(2)} Total Hours`}
+            </span>
+          </div>
+        </div>
+        <div className="bg-cardBg rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center space-x-4">
+          <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-xl">
+            <i className="fa-solid fa-receipt"></i>
+          </div>
+          <div>
+            <span className="text-xs text-slate-500 font-medium">
+              Recorded Expenses
+            </span>
+            <h4 className="text-sm font-bold text-rose-600 mt-0.5">
+              {formatCurrency(totalExpenses)}
+            </h4>
+            <span className="text-[10px] text-slate-400">
+              {`${monthExpenses.length} item${monthExpenses.length === 1 ? "" : "s"} · ${financePeriodLabel}`}
             </span>
           </div>
         </div>
