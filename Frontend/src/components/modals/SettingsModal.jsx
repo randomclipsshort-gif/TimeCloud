@@ -1014,136 +1014,227 @@ export default function SettingsModal({
           }
         >
           <section
-            className="space-y-3"
+            className="space-y-5"
             aria-labelledby="manageHolidaysHeading"
           >
-            <div>
-              <h4
-                id="manageHolidaysHeading"
-                className="font-bold text-slate-800"
-              >
-                Manage Holidays
-              </h4>
-              <p className="mt-1 text-[11px] text-slate-500">
-                The 2026 national list is preloaded. Eid dates can be revised
-                when separately declared.
-              </p>
-            </div>
-            <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-              {settingsDraft.holidays.map((holiday) => (
-                <div
-                  key={holiday.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5"
-                >
-                  <span className="min-w-0">
-                    <span
-                      className={`block truncate font-semibold ${holiday.enabled ? "text-slate-800" : "text-slate-400 line-through"}`}
-                    >
-                      {holiday.name}
-                    </span>
-                    <span className="mt-0.5 block text-[10px] text-slate-500">
-                      {holiday.date} · {holiday.classification || holiday.type}
-                      {holiday.locality ? ` · ${holiday.locality}` : ""}
-                    </span>
-                  </span>
-                  {holiday.dateConfigurable && (
-                    <input
-                      aria-label={`Update ${holiday.name} date`}
-                      type="date"
-                      value={holiday.date}
-                      onChange={(event) =>
-                        updateHolidayDate(holiday.id, event.target.value)
-                      }
-                      className="w-32 shrink-0 rounded border border-slate-200 px-1.5 py-1 text-[10px]"
-                    />
-                  )}
-                  <input
-                    type="checkbox"
-                    checked={holiday.enabled}
-                    onChange={() =>
-                      updateDraft(
-                        "holidays",
-                        settingsDraft.holidays.map((item) =>
-                          item.id === holiday.id
-                            ? { ...item, enabled: !item.enabled }
-                            : item,
-                        ),
-                      )
-                    }
-                    aria-label={`${holiday.enabled ? "Disable" : "Enable"} ${holiday.name}`}
-                    className="h-4 w-4 shrink-0 cursor-pointer accent-teal-600"
-                  />
+            <div className="flex flex-col gap-3 rounded-2xl border border-teal-100 bg-gradient-to-r from-teal-50 to-white p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700">
+                  <i className="fa-solid fa-calendar-days" aria-hidden="true" />
+                </span>
+                <div>
+                  <h4
+                    id="manageHolidaysHeading"
+                    className="font-bold text-slate-800"
+                  >
+                    Manage Holidays
+                  </h4>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                    The 2026 national list is preloaded. Eid dates can be
+                    revised when separately declared.
+                  </p>
                 </div>
-              ))}
+              </div>
+              <span className="w-fit rounded-full border border-teal-100 bg-white px-3 py-1 text-[10px] font-semibold text-teal-700">
+                {`${settingsDraft.holidays.filter((holiday) => holiday.enabled).length} of ${settingsDraft.holidays.length} active`}
+              </span>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-3">
+                <div>
+                  <h5 className="text-xs font-bold text-slate-800">
+                    Holiday calendar
+                  </h5>
+                  <p className="mt-0.5 text-[10px] text-slate-500">
+                    Update movable dates or turn holidays on and off.
+                  </p>
+                </div>
+                <i className="fa-solid fa-calendar-check text-teal-600" aria-hidden="true" />
+              </div>
+              <div className="max-h-72 space-y-2 overflow-y-auto p-3">
+                {settingsDraft.holidays.map((holiday) => (
+                  <div
+                    key={holiday.id}
+                    className={`flex flex-col gap-3 rounded-xl border p-3 transition sm:flex-row sm:items-center sm:justify-between ${
+                      holiday.enabled
+                        ? "border-slate-200 bg-white"
+                        : "border-slate-100 bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                        holiday.enabled
+                          ? "bg-teal-50 text-teal-700"
+                          : "bg-slate-200 text-slate-400"
+                      }`}>
+                        <i className="fa-solid fa-calendar-day" aria-hidden="true" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span
+                          className={`block truncate font-semibold ${holiday.enabled ? "text-slate-800" : "text-slate-400"}`}
+                        >
+                          {holiday.name}
+                        </span>
+                        <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
+                          <span>{holiday.classification || holiday.type}</span>
+                          {holiday.locality && (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span>{holiday.locality}</span>
+                            </>
+                          )}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-100 pt-2 sm:border-0 sm:pt-0">
+                      {holiday.dateConfigurable ? (
+                        <label className="flex items-center gap-2 text-[10px] font-medium text-slate-500">
+                          <span>Date</span>
+                          <input
+                            aria-label={`Update ${holiday.name} date`}
+                            type="date"
+                            value={holiday.date}
+                            onChange={(event) =>
+                              updateHolidayDate(holiday.id, event.target.value)
+                            }
+                            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] text-slate-700 outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                        </label>
+                      ) : (
+                        <span className="rounded-lg bg-slate-50 px-2 py-1.5 text-[10px] font-medium text-slate-600">
+                          {holiday.date}
+                        </span>
+                      )}
+                      <label className="flex cursor-pointer items-center gap-2">
+                        <span className={`text-[10px] font-semibold ${
+                          holiday.enabled ? "text-teal-700" : "text-slate-400"
+                        }`}>
+                          {holiday.enabled ? "Active" : "Off"}
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={holiday.enabled}
+                          onChange={() =>
+                            updateDraft(
+                              "holidays",
+                              settingsDraft.holidays.map((item) =>
+                                item.id === holiday.id
+                                  ? { ...item, enabled: !item.enabled }
+                                  : item,
+                              ),
+                            )
+                          }
+                          aria-label={`${holiday.enabled ? "Disable" : "Enable"} ${holiday.name}`}
+                          className="h-4 w-4 cursor-pointer accent-teal-600"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
             <form
               onSubmit={handleAddHoliday}
-              className="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2"
+              className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
             >
-              <label className="sr-only" htmlFor="customHolidayName">
-                Holiday name
-              </label>
-              <input
-                id="customHolidayName"
-                type="text"
-                value={holidayName}
-                onChange={(event) => setHolidayName(event.target.value)}
-                placeholder="Holiday name"
-                maxLength={80}
-                required
-                className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
-              />
-              <label className="sr-only" htmlFor="customHolidayDate">
-                Holiday date
-              </label>
-              <input
-                id="customHolidayDate"
-                type="date"
-                value={holidayDate}
-                onChange={(event) => setHolidayDate(event.target.value)}
-                required
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
-              />
-              <label className="sr-only" htmlFor="customHolidayType">
-                Holiday classification
-              </label>
-              <select
-                id="customHolidayType"
-                value={holidayType}
-                onChange={(event) => setHolidayType(event.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800"
-              >
-                <option value="regular-holiday">Regular Holiday</option>
-                <option value="special-non-working">
-                  Special Non-Working Day
-                </option>
-                <option value="special-working">Special Working Day</option>
-                <option value="local-holiday">Local Holiday</option>
-                <option value="ordinary-working">Ordinary Working Day</option>
-                <option value="company-break">Company Break (Paid)</option>
-              </select>
-              {holidayType === "local-holiday" && (
-                <input
-                  value={holidayLocality}
-                  onChange={(event) => setHolidayLocality(event.target.value)}
-                  placeholder="Locality (required)"
-                  required
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800"
-                />
-              )}
-              <input
-                value={holidayDescription}
-                onChange={(event) => setHolidayDescription(event.target.value)}
-                placeholder="Description (optional)"
-                maxLength={200}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800"
-              />
-              <button
-                type="submit"
-                className="rounded-lg bg-teal-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-700 sm:col-span-2"
-              >
-                Add
-              </button>
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-teal-700 shadow-sm">
+                  <i className="fa-solid fa-circle-plus" aria-hidden="true" />
+                </span>
+                <div>
+                  <h5 className="text-xs font-bold text-slate-800">
+                    Add a holiday
+                  </h5>
+                  <p className="mt-0.5 text-[10px] text-slate-500">
+                    Add a custom holiday to your calendar.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-semibold text-slate-600">
+                    Holiday name
+                  </span>
+                  <input
+                    id="customHolidayName"
+                    type="text"
+                    value={holidayName}
+                    onChange={(event) => setHolidayName(event.target.value)}
+                    placeholder="e.g. Company anniversary"
+                    maxLength={80}
+                    required
+                    className="w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-semibold text-slate-600">
+                    Date
+                  </span>
+                  <input
+                    id="customHolidayDate"
+                    type="date"
+                    value={holidayDate}
+                    onChange={(event) => setHolidayDate(event.target.value)}
+                    required
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-semibold text-slate-600">
+                    Classification
+                  </span>
+                  <select
+                    id="customHolidayType"
+                    value={holidayType}
+                    onChange={(event) => setHolidayType(event.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="regular-holiday">Regular Holiday</option>
+                    <option value="special-non-working">
+                      Special Non-Working Day
+                    </option>
+                    <option value="special-working">Special Working Day</option>
+                    <option value="local-holiday">Local Holiday</option>
+                    <option value="ordinary-working">Ordinary Working Day</option>
+                    <option value="company-break">Company Break (Paid)</option>
+                  </select>
+                </label>
+                {holidayType === "local-holiday" && (
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] font-semibold text-slate-600">
+                      Locality
+                    </span>
+                    <input
+                      value={holidayLocality}
+                      onChange={(event) => setHolidayLocality(event.target.value)}
+                      placeholder="Required for local holidays"
+                      required
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </label>
+                )}
+                <label className="block sm:col-span-2">
+                  <span className="mb-1 block text-[10px] font-semibold text-slate-600">
+                    Description <span className="font-normal text-slate-400">(optional)</span>
+                  </span>
+                  <input
+                    value={holidayDescription}
+                    onChange={(event) => setHolidayDescription(event.target.value)}
+                    placeholder="Add a note about this holiday"
+                    maxLength={200}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </label>
+              </div>
+              <div className="flex justify-end border-t border-slate-200 pt-3">
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+                >
+                  <i className="fa-solid fa-plus" aria-hidden="true" />
+                  <span>Add holiday</span>
+                </button>
+              </div>
             </form>
           </section>
         </div>
