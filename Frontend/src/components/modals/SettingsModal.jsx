@@ -1029,20 +1029,6 @@ export default function SettingsModal({
                 when separately declared.
               </p>
             </div>
-            <label className="block">
-              <span className="mb-1 block font-semibold text-slate-700">
-                Active locality (optional)
-              </span>
-              <input
-                type="text"
-                value={settingsDraft.selectedLocality}
-                onChange={(event) =>
-                  updateDraft("selectedLocality", event.target.value)
-                }
-                placeholder="Enter locality to display configured local holidays"
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800"
-              />
-            </label>
             <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
               {settingsDraft.holidays.map((holiday) => (
                 <div
