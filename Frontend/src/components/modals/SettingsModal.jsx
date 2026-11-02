@@ -483,22 +483,51 @@ export default function SettingsModal({
           id="settingsTabDeductions"
           className={
             activeSettingsTab === "deductions"
-              ? "space-y-5 text-xs"
-              : "space-y-5 text-xs hidden"
+              ? "space-y-6 text-xs"
+              : "space-y-6 text-xs hidden"
           }
         >
-          <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-col gap-3 rounded-2xl border border-teal-100 bg-gradient-to-r from-teal-50 to-white p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700">
+                <i className="fa-solid fa-wallet" aria-hidden="true" />
+              </span>
+              <div>
+                <h4 className="font-bold text-slate-800">
+                  Deductions &amp; Leave
+                </h4>
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                  Configure employee contributions and personal leave credits.
+                  Estimates are planning guidance, not payroll advice.
+                </p>
+              </div>
+            </div>
+            <span className="w-fit rounded-full border border-teal-100 bg-white px-3 py-1 text-[10px] font-semibold text-teal-700">
+              {`₱${payrollDeductions.total.toFixed(2)} estimated`}
+            </span>
+          </div>
+          <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             {salaryVaultStatus !== "unlocked" && (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-900">
+              <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-900">
+                <i className="fa-solid fa-lock mt-0.5 shrink-0" aria-hidden="true" />
                 {salaryVaultStatus === "unavailable"
                   ? "Apply the Supabase salary-vault migration to enable private contribution settings."
                   : "Unlock or create your encrypted salary vault in General Preferences to edit and sync contribution settings."}
               </p>
             )}
-            <label className="block">
-              <span className="mb-1 block font-semibold text-slate-700">
-                Contribution amount source
-              </span>
+            <div className="grid gap-4 rounded-xl border border-slate-100 bg-slate-50/80 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(15rem,0.8fr)] sm:items-center">
+              <div>
+                <label
+                  className="block font-bold text-slate-800"
+                  htmlFor="payrollDeductionMode"
+                >
+                  Contribution amount source
+                </label>
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                  Choose estimates or enter amounts configured by your payroll
+                  administrator.
+                </p>
+              </div>
               <select
                 id="payrollDeductionMode"
                 value={settingsDraft.payrollDeductionMode}
@@ -506,20 +535,25 @@ export default function SettingsModal({
                   updateDraft("payrollDeductionMode", event.target.value)
                 }
                 disabled={salaryVaultStatus !== "unlocked"}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="automatic">Automatic planning estimates</option>
                 <option value="manual">Enter configured amounts</option>
               </select>
-            </label>
-            <p className="text-[11px] text-slate-600">
-              Configure each employee contribution independently. Legacy manual
-              per-paycheck values remain set to Every cutoff; automatic estimates
-              default to splitting the monthly amount evenly. With automatic
-              estimates, Every cutoff applies the full estimated monthly amount
-              at both cutoffs; Monthly assigns it to one cutoff.
-            </p>
-            <div className="space-y-3">
+            </div>
+            <div>
+              <div className="mb-3 flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                  <i className="fa-solid fa-receipt" aria-hidden="true" />
+                </span>
+                <div>
+                  <h5 className="font-bold text-slate-800">Employee contributions</h5>
+                  <p className="mt-0.5 text-[10px] text-slate-500">
+                    Set a schedule and amount for each contribution.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3">
               {payrollContributions.map(({ id, label, manualAmountKey }) => {
                 const frequency = settingsDraft[`${id}Frequency`];
                 const isCustom = frequency === "custom";
@@ -528,16 +562,22 @@ export default function SettingsModal({
                 const amountLabel = usesMonthlyAmount
                   ? "Monthly amount"
                   : "Amount each cutoff";
-                const monthlyAmount = payrollDeductions?.items?.find((item) => item.id === id)?.amount;
-                const automaticAmountLabel = frequency === "custom"
-                  ? "Configured total across cutoffs"
-                  : "Estimated total across cutoffs";
+                const monthlyAmount = payrollDeductions?.items?.find(
+                  (item) => item.id === id,
+                )?.amount;
+                const automaticAmountLabel =
+                  frequency === "custom"
+                    ? "Configured total across cutoffs"
+                    : "Estimated total across cutoffs";
                 return (
-                  <div key={id} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div
+                    key={id}
+                    className="rounded-xl border border-slate-200 bg-white p-4 transition hover:border-teal-200 hover:shadow-sm"
+                  >
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <label className="block">
-                        <span className="mb-1 block font-semibold text-slate-700">
-                          {label} employee contribution frequency
+                        <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                          {label} schedule
                         </span>
                         <select
                           id={`${id}Frequency`}
@@ -546,16 +586,21 @@ export default function SettingsModal({
                             updateDraft(`${id}Frequency`, event.target.value)
                           }
                           disabled={salaryVaultStatus !== "unlocked"}
-                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {Object.entries(payrollFrequencyLabels).map(([value, optionLabel]) => (
-                            <option key={value} value={value}>{optionLabel}</option>
-                          ))}
+                          {Object.entries(payrollFrequencyLabels).map(
+                            ([value, optionLabel]) => (
+                              <option key={value} value={value}>
+                                {optionLabel}
+                              </option>
+                            ),
+                          )}
                         </select>
                       </label>
-                      {settingsDraft.payrollDeductionMode === "manual" && !isCustom ? (
+                      {settingsDraft.payrollDeductionMode === "manual" &&
+                      !isCustom ? (
                         <label className="block">
-                          <span className="mb-1 block font-semibold text-slate-700">
+                          <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                             {label} {amountLabel} (₱)
                           </span>
                           <input
@@ -568,16 +613,16 @@ export default function SettingsModal({
                               updateDraft(manualAmountKey, event.target.value)
                             }
                             disabled={salaryVaultStatus !== "unlocked"}
-                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium text-slate-800 focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
                           />
                         </label>
                       ) : settingsDraft.payrollDeductionMode === "automatic" ? (
                         <div>
-                          <span className="mb-1 block font-semibold text-slate-700">
+                          <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                             {automaticAmountLabel}
                           </span>
-                          <output className="block rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-800">
-                            {Number(monthlyAmount || 0).toFixed(2)}
+                          <output className="block rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-semibold text-slate-800">
+                            ₱{Number(monthlyAmount || 0).toFixed(2)}
                           </output>
                         </div>
                       ) : null}
@@ -591,7 +636,10 @@ export default function SettingsModal({
                           id={`${id}MonthlyCutoff`}
                           value={settingsDraft[`${id}MonthlyCutoff`]}
                           onChange={(event) =>
-                            updateDraft(`${id}MonthlyCutoff`, event.target.value)
+                            updateDraft(
+                              `${id}MonthlyCutoff`,
+                              event.target.value,
+                            )
                           }
                           disabled={salaryVaultStatus !== "unlocked"}
                           className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
@@ -617,7 +665,9 @@ export default function SettingsModal({
                               min="0"
                               step="0.01"
                               value={settingsDraft[key]}
-                              onChange={(event) => updateDraft(key, event.target.value)}
+                              onChange={(event) =>
+                                updateDraft(key, event.target.value)
+                              }
                               disabled={salaryVaultStatus !== "unlocked"}
                               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium text-slate-800 focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
                             />
@@ -628,13 +678,14 @@ export default function SettingsModal({
                   </div>
                 );
               })}
+              </div>
             </div>
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-900">
-              <p className="font-semibold">
-                Planning estimates only; verify actual deductions with your
-                payroll or HR.
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-relaxed text-amber-900">
+              <p className="flex items-center gap-2 font-semibold">
+                <i className="fa-solid fa-circle-info" aria-hidden="true" />
+                Planning estimates only; verify actual deductions with payroll or HR.
               </p>
-              <p className="mt-1">
+              <p className="mt-2">
                 Automatic mode uses simplified assumptions: SSS employee share
                 at 5% of a ₱5,000–₱35,000 salary-credit step; PhilHealth at 2.5%
                 of a ₱10,000–₱100,000 base; Pag-IBIG at 1% up to ₱1,500 and 2%
@@ -645,20 +696,28 @@ export default function SettingsModal({
                 not included or deducted from net pay.
               </p>
             </div>
-            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700">
-              <span>Estimated total across both cutoffs</span>
+            <div className="flex items-center justify-between rounded-xl bg-slate-800 px-4 py-3 text-xs font-semibold text-white">
+              <span>Estimated employee contributions · both cutoffs</span>
               <span>₱{payrollDeductions.total.toFixed(2)}</span>
             </div>
           </div>
-          <div className="pt-4 border-t border-slate-100">
-            <span className="font-bold text-slate-800 block mb-3">
-              <i className="fa-solid fa-umbrella-beach text-teal-600 mr-1.5"></i>
-              Personal Leave Credits
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <section className="space-y-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                <i className="fa-solid fa-umbrella-beach" aria-hidden="true" />
+              </span>
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Vacation Leave (VL)
+                <h5 className="font-bold text-slate-800">Personal Leave Credits</h5>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Set available balances in days. Changes update leave requests.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <label className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500" htmlFor="settingLeaveVL">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-50 text-teal-700">VL</span>
+                  Vacation Leave
                 </label>
                 <input
                   type="number"
@@ -671,12 +730,13 @@ export default function SettingsModal({
                     })
                   }
                   min="0"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Sick Leave (SL)
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <label className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500" htmlFor="settingLeaveSL">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 text-rose-700">SL</span>
+                  Sick Leave
                 </label>
                 <input
                   type="number"
@@ -689,12 +749,13 @@ export default function SettingsModal({
                     })
                   }
                   min="0"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Emergency Leave (EL)
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <label className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500" htmlFor="settingLeaveEL">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-700">EL</span>
+                  Emergency Leave
                 </label>
                 <input
                   type="number"
@@ -707,20 +768,15 @@ export default function SettingsModal({
                     })
                   }
                   min="0"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
             </div>
-          </div>
-          <div className="p-4 bg-teal-50/50 border border-teal-100 rounded-2xl">
-            <span className="font-bold text-teal-900 block mb-1">
-              Leave Allocation &amp; Deduction Note
-            </span>
-            <span className="text-teal-700 text-[11px]">
-              Configuring leave credits here dynamically updates available
-              balances when filing leave requests across the system.
-            </span>
-          </div>
+            <p className="flex items-start gap-2 rounded-xl border border-teal-100 bg-teal-50/70 p-3 text-[11px] leading-relaxed text-teal-800">
+              <i className="fa-solid fa-circle-info mt-0.5 shrink-0" aria-hidden="true" />
+              These balances update available credits when filing leave requests.
+            </p>
+          </section>
         </div>
         <div
           id="settingsTabAttendance"
