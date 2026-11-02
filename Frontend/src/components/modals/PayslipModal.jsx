@@ -25,17 +25,13 @@ export default function PayslipModal({
   const formatUnits = (units) => Number.isInteger(units)
     ? String(units)
     : units.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
-  const formatEarningsItemLabel = (item) => {
+  const formatEarningsItemCalculation = (item) => {
     if (item.id === "lateUndertime") {
       return `Late/UT · Late ${formatUnits(item.lateMinutes)} min · UT ${formatUnits(item.undertimeMinutes)} min`;
     }
-    if (item.id === "overtime") {
-      return `${item.label} (${formatUnits(item.units)} hrs OT)`;
-    }
-    if (item.units > 0) {
-      return `${item.label} (${formatUnits(item.units)} ${item.units === 1 ? "day" : "days"} @ ${formatCurrency(item.rate)})`;
-    }
-    return item.label;
+    if (item.units <= 0) return null;
+    const rateUnit = item.unit === "hours" ? "hour" : item.unit.slice(0, -1);
+    return `${formatUnits(item.units)} ${item.unit} × ${formatCurrency(item.rate)}/${rateUnit}`;
   };
 
   return (
@@ -122,18 +118,29 @@ export default function PayslipModal({
         <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center gap-3 border-b border-teal-100 bg-teal-50/70 px-4 py-3">
-              <h4 className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wider text-teal-900">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-teal-700">
-                  <i className="fa-solid fa-arrow-trend-up" aria-hidden="true"></i>
-                </span>
-                Gross Earnings Breakdown
-              </h4>
+              <div>
+                <h4 className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wider text-teal-900">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-teal-700">
+                    <i className="fa-solid fa-arrow-trend-up" aria-hidden="true"></i>
+                  </span>
+                  Gross Earnings Breakdown
+                </h4>
+                <p className="ml-9 mt-1 text-[9px] font-medium text-teal-800/70">
+                  Units × rate = line total
+                </p>
+              </div>
             </div>
             <div className="divide-y divide-slate-100 px-4">
               {payrollEarningsBreakdown.items.map((item) => (
                 <div key={item.id} className="flex flex-wrap items-start justify-between gap-2 py-3 text-xs">
                   <span className="min-w-0 flex-1 text-slate-600">
-                    {formatEarningsItemLabel(item)}
+                    <span className="block">{item.label}</span>
+                    {payrollPeriodEarningsAvailable &&
+                      formatEarningsItemCalculation(item) && (
+                        <span className="mt-1 block text-[10px] text-slate-400">
+                          {formatEarningsItemCalculation(item)}
+                        </span>
+                      )}
                     {item.id === "lateUndertime" && (
                       <span className="ml-1 text-[10px] text-slate-400">(no deduction configured)</span>
                     )}
