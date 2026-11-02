@@ -30,8 +30,18 @@ export default function PayslipModal({
       return `Late/UT · Late ${formatUnits(item.lateMinutes)} min · UT ${formatUnits(item.undertimeMinutes)} min`;
     }
     if (item.units <= 0) return null;
+    if (item.id === "regularHoliday" || item.id === "specialHoliday") {
+      const baseWage = Number(dailyWage);
+      if (!Number.isFinite(baseWage) || baseWage <= 0) return null;
+      const effectiveHolidayRate = Math.round((item.rate / baseWage) * 10000) / 100;
+      const dayLabel = item.units === 1 ? "day" : "days";
+      return `${formatUnits(item.units)} ${dayLabel} × ${formatCurrency(baseWage)} base wage × ${formatUnits(effectiveHolidayRate)}% effective holiday rate = ${formatCurrency(item.total)}`;
+    }
     const rateUnit = item.unit === "hours" ? "hour" : item.unit.slice(0, -1);
-    return `${formatUnits(item.units)} ${item.unit} × ${formatCurrency(item.rate)}/${rateUnit}`;
+    const unitLabel = item.unit === "days" && item.units === 1
+      ? "day"
+      : item.unit;
+    return `${formatUnits(item.units)} ${unitLabel} × ${formatCurrency(item.rate)}/${rateUnit}`;
   };
 
   return (
