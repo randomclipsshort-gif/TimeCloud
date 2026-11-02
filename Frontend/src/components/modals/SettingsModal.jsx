@@ -291,8 +291,8 @@ export default function SettingsModal({
       aria-hidden={!open}
       style={{ display: open ? "flex" : "none" }}
     >
-      <div className="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-3xl p-8 shadow-2xl max-h-[92vh] overflow-y-auto">
-        <div className="flex justify-between items-center pb-4 border-b border-slate-200 mb-6">
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-cardBg shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 pb-4 pt-5 sm:px-8 sm:pt-8">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 font-bold text-lg">
               <i className="fa-solid fa-gear"></i>
@@ -318,7 +318,7 @@ export default function SettingsModal({
         <div
           role="tablist"
           aria-label="System configuration sections"
-          className="mb-6 grid grid-cols-2 gap-2 border-b border-slate-200 pb-4 text-xs font-semibold sm:grid-cols-4"
+          className="mx-5 grid shrink-0 grid-cols-2 gap-2 border-b border-slate-200 py-3 text-xs font-semibold sm:mx-8 sm:grid-cols-4"
         >
           {[
             {
@@ -364,6 +364,7 @@ export default function SettingsModal({
             </button>
           ))}
         </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8">
         <div
           id="settingsTabEarnings"
           className={
@@ -1383,7 +1384,8 @@ export default function SettingsModal({
             </form>
           </section>
         </div>
-        <div className="mt-6 space-y-4 border-t border-slate-200 pt-4 text-xs">
+        </div>
+        <div className="shrink-0 space-y-4 border-t border-slate-200 bg-cardBg px-5 py-4 text-xs sm:px-8">
           <p className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 leading-relaxed text-slate-600">
             <i
               className="fa-solid fa-circle-info mt-0.5 shrink-0 text-teal-600"
