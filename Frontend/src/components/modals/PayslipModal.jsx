@@ -33,9 +33,16 @@ export default function PayslipModal({
     if (item.id === "regularHoliday" || item.id === "specialHoliday") {
       const baseWage = Number(dailyWage);
       if (!Number.isFinite(baseWage) || baseWage <= 0) return null;
-      const effectiveHolidayRate = Math.round((item.rate / baseWage) * 10000) / 100;
+      const basePay = baseWage * item.units;
+      const premiumAmount = Math.round((item.total - basePay + Number.EPSILON) * 100) / 100;
+      const premiumRate = basePay > 0
+        ? Math.round((premiumAmount / basePay) * 10000) / 100
+        : 0;
       const dayLabel = item.units === 1 ? "day" : "days";
-      return `${formatUnits(item.units)} ${dayLabel} × ${formatCurrency(baseWage)} base wage × ${formatUnits(effectiveHolidayRate)}% effective holiday rate = ${formatCurrency(item.total)}`;
+      const basePayCalculation = `${formatUnits(item.units)} ${dayLabel} × ${formatCurrency(baseWage)}`;
+      return premiumAmount > 0
+        ? `${basePayCalculation} + ${formatUnits(premiumRate)}% holiday premium (${formatCurrency(premiumAmount)})`
+        : `${basePayCalculation} base wage (${formatUnits(Math.round((item.rate / baseWage) * 10000) / 100)}% holiday rate)`;
     }
     const rateUnit = item.unit === "hours" ? "hour" : item.unit.slice(0, -1);
     const unitLabel = item.unit === "days" && item.units === 1
