@@ -368,94 +368,183 @@ export default function SettingsModal({
           id="settingsTabEarnings"
           className={
             activeSettingsTab === "earnings"
-              ? "space-y-5 text-xs"
-              : "space-y-5 text-xs hidden"
+              ? "space-y-6 text-xs"
+              : "space-y-6 text-xs hidden"
           }
         >
           {activeSettingsTab === "earnings" && (
             <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Daily Base Wage (PHP)
-              </label>
-              <input
-                type="number"
-                id="settingBaseWage"
-                min="0"
-                step="0.01"
-                disabled={salaryVaultStatus !== "unlocked"}
-                value={settingsDraft.dailyWage}
-                onChange={(event) =>
-                  updateDraft("dailyWage", event.target.value)
-                }
-                placeholder="Enter daily wage"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none disabled:cursor-not-allowed disabled:opacity-60"
-              />
-            </div>
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Company Allowance (Daily) (₱)
-              </label>
-              <input
-                type="number"
-                id="settingDailyAllowance"
-                min="0"
-                step="0.01"
-                disabled={salaryVaultStatus !== "unlocked"}
-                value={settingsDraft.dailyAllowance}
-                onChange={(event) =>
-                  updateDraft("dailyAllowance", event.target.value)
-                }
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none disabled:cursor-not-allowed disabled:opacity-60"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Night Differential (%)
-              </label>
-              <input
-                type="number"
-                id="settingNightDiff"
-                min="0"
-                step="0.1"
-                disabled={salaryVaultStatus !== "unlocked"}
-                value={settingsDraft.nightDifferential}
-                onChange={(event) =>
-                  updateDraft("nightDifferential", event.target.value)
-                }
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none disabled:cursor-not-allowed disabled:opacity-60"
-              />
-            </div>
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Overtime Multiplier
-              </label>
-              <input
-                type="number"
-                id="settingOtMultiplier"
-                min="0.01"
-                step="0.05"
-                disabled={salaryVaultStatus !== "unlocked"}
-                value={settingsDraft.overtimeMultiplier}
-                onChange={(event) =>
-                  updateDraft("overtimeMultiplier", event.target.value)
-                }
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-teal-500 outline-none disabled:cursor-not-allowed disabled:opacity-60"
-              />
-              <p className="mt-1 text-[11px] text-slate-500">
-                Overtime pay = hourly rate × overtime hours × this multiplier.
-              </p>
-            </div>
-          </div>
-          <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-600">
-            Holiday-pay estimates use the configured daily wage and recorded
-            hours. Calculations run locally after unlocking the encrypted salary
-            vault. Confirm eligibility in Manage Holidays; company-specific pay
-            rules must be verified separately.
-          </p>
+              <div className="flex flex-col gap-3 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 to-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700">
+                    <i className="fa-solid fa-money-bill-wave" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <h4 className="font-bold text-slate-800">Earnings &amp; Rates</h4>
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                      Set the rates used for your local earnings estimates.
+                      Salary settings are stored in the encrypted vault.
+                    </p>
+                  </div>
+                </div>
+                <span className={`w-fit rounded-full border px-3 py-1 text-[10px] font-semibold ${
+                  salaryVaultStatus === "unlocked"
+                    ? "border-emerald-100 bg-white text-emerald-700"
+                    : "border-amber-200 bg-white text-amber-800"
+                }`}>
+                  {salaryVaultStatus === "unlocked"
+                    ? "Vault unlocked"
+                    : salaryVaultStatus === "loading"
+                      ? "Checking vault"
+                      : salaryVaultStatus === "unavailable"
+                        ? "Vault unavailable"
+                        : salaryVaultStatus === "uninitialized"
+                          ? "Vault setup needed"
+                          : "Vault locked"}
+                </span>
+              </div>
+              {salaryVaultStatus !== "unlocked" && (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-relaxed text-amber-900">
+                  <i className="fa-solid fa-lock mt-0.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    {salaryVaultStatus === "unavailable"
+                      ? "Apply the pending Supabase migration to enable encrypted salary settings."
+                      : salaryVaultStatus === "loading"
+                        ? "Checking encrypted salary vault access."
+                        : salaryVaultStatus === "uninitialized"
+                          ? "Create your encrypted salary vault in General Preferences to edit these settings."
+                          : "Unlock your encrypted salary vault in General Preferences to edit these settings."}
+                  </span>
+                </div>
+              )}
+              <section
+                className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                aria-labelledby="earningsRatesHeading"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
+                    <i className="fa-solid fa-sliders" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <h5 id="earningsRatesHeading" className="font-bold text-slate-800">
+                      Pay rates
+                    </h5>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Values apply to earnings calculations and estimates.
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                    <label
+                      className="mb-2 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                      htmlFor="settingBaseWage"
+                    >
+                      Daily Base Wage (₱)
+                    </label>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs font-semibold text-slate-400">
+                        ₱
+                      </span>
+                      <input
+                        type="number"
+                        id="settingBaseWage"
+                        min="0"
+                        step="0.01"
+                        disabled={salaryVaultStatus !== "unlocked"}
+                        value={settingsDraft.dailyWage}
+                        onChange={(event) =>
+                          updateDraft("dailyWage", event.target.value)
+                        }
+                        placeholder="0.00"
+                        className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-8 pr-3 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                    <label
+                      className="mb-2 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                      htmlFor="settingDailyAllowance"
+                    >
+                      Company Allowance · Daily (₱)
+                    </label>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs font-semibold text-slate-400">
+                        ₱
+                      </span>
+                      <input
+                        type="number"
+                        id="settingDailyAllowance"
+                        min="0"
+                        step="0.01"
+                        disabled={salaryVaultStatus !== "unlocked"}
+                        value={settingsDraft.dailyAllowance}
+                        onChange={(event) =>
+                          updateDraft("dailyAllowance", event.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-8 pr-3 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                    <label
+                      className="mb-2 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                      htmlFor="settingNightDiff"
+                    >
+                      Night Differential
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        id="settingNightDiff"
+                        min="0"
+                        step="0.1"
+                        disabled={salaryVaultStatus !== "unlocked"}
+                        value={settingsDraft.nightDifferential}
+                        onChange={(event) =>
+                          updateDraft("nightDifferential", event.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-9 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-slate-400">
+                        %
+                      </span>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                    <label
+                      className="mb-2 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                      htmlFor="settingOtMultiplier"
+                    >
+                      Overtime Multiplier
+                    </label>
+                    <input
+                      type="number"
+                      id="settingOtMultiplier"
+                      min="0.01"
+                      step="0.05"
+                      disabled={salaryVaultStatus !== "unlocked"}
+                      value={settingsDraft.overtimeMultiplier}
+                      onChange={(event) =>
+                        updateDraft("overtimeMultiplier", event.target.value)
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                    <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
+                      Overtime pay = hourly rate × overtime hours × this multiplier.
+                    </p>
+                  </div>
+                </div>
+              </section>
+              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-relaxed text-amber-900">
+                <i className="fa-solid fa-circle-info mt-0.5 shrink-0" aria-hidden="true" />
+                <p>
+                  Holiday-pay estimates use the configured daily wage and
+                  recorded hours. Confirm employee eligibility in Manage
+                  Holidays; company-specific pay rules should be verified
+                  separately.
+                </p>
+              </div>
             </>
           )}
         </div>
