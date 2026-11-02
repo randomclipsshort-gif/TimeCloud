@@ -801,45 +801,9 @@ export default function SettingsModal({
               : "space-y-5 text-xs hidden"
           }
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Workspace
-              </label>
-              <input
-                type="text"
-                value="Personal"
-                readOnly
-                className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-500 font-medium"
-              />
-            </div>
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Primary Timezone
-              </label>
-              <select
-                disabled
-                className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-500 font-medium"
-              >
-                <option value="Asia/Manila">Manila (Asia/Manila)</option>
-              </select>
-            </div>
-          </div>
-          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
-            <div>
-              <span className="font-bold text-slate-800 block">
-                Auto-Lock Inactive Sessions
-              </span>
-              <span className="text-slate-500 text-[11px]">
-                Session expiration is managed by Supabase authentication.
-              </span>
-            </div>
-            <input
-              type="checkbox"
-              disabled
-              className="w-4 h-4 accent-teal-600 rounded cursor-not-allowed"
-              aria-label="Session timeout managed by Supabase"
-            />
+          <div className="text-xs">
+            <span className="font-semibold text-slate-700">Primary Timezone:</span>{" "}
+            <span className="text-slate-600">Manila (Asia/Manila)</span>
           </div>
           <section
             className="space-y-3 rounded-xl border border-teal-200 bg-teal-50 p-4"

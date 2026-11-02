@@ -74,14 +74,6 @@ export default function PayslipModal({
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500">
-              Account:
-            </span>
-            <span className="font-semibold text-slate-800">
-              Personal workspace
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">
               Configured Daily Wage:
             </span>
             <span className="font-semibold text-slate-800">
