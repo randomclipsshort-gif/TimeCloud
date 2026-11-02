@@ -89,7 +89,7 @@ export default function PayslipModal({
                 <i className={`fa-solid ${icon} text-teal-600`} aria-hidden="true"></i>
                 {label}
               </span>
-              <span className={`mt-1.5 block truncate text-xs font-semibold text-slate-800 ${label === "Employee" ? "capitalize" : ""}`} title={value}>
+              <span className={`mt-1.5 block truncate text-xs font-semibold text-slate-800 ${label === "Employee" ? "uppercase" : ""}`} title={value}>
                 {value}
               </span>
             </div>
