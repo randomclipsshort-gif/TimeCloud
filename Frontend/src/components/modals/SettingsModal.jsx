@@ -571,9 +571,6 @@ export default function SettingsModal({
                 </p>
               </div>
             </div>
-            <span className="w-fit rounded-full border border-teal-100 bg-white px-3 py-1 text-[10px] font-semibold text-teal-700">
-              {`₱${payrollDeductions.total.toFixed(2)} estimated`}
-            </span>
           </div>
           <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             {salaryVaultStatus !== "unlocked" && (
