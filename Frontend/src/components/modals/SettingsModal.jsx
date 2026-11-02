@@ -318,7 +318,7 @@ export default function SettingsModal({
         <div
           role="tablist"
           aria-label="System configuration sections"
-          className="mb-6 grid grid-cols-2 gap-2 border-b border-slate-200 pb-4 text-xs font-semibold sm:grid-cols-3 lg:grid-cols-5"
+          className="mb-6 grid grid-cols-2 gap-2 border-b border-slate-200 pb-4 text-xs font-semibold sm:grid-cols-3"
         >
           {[
             {
@@ -360,10 +360,10 @@ export default function SettingsModal({
               aria-selected={activeSettingsTab === tab.id}
               aria-controls={tab.panelId}
               data-action={`switchSettingsTab('${tab.id}')`}
-              className={`flex min-h-10 items-center justify-center text-center leading-tight focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${
+              className={`flex min-h-10 w-full min-w-0 items-center justify-center whitespace-normal break-words px-3 py-2 text-center leading-tight focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${
                 activeSettingsTab === tab.id
-                  ? "px-4 py-2 rounded-xl bg-teal-600 text-white transition cursor-pointer shadow-xs"
-                  : "px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer"
+                  ? "rounded-xl bg-teal-600 text-white transition cursor-pointer shadow-xs"
+                  : "rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer"
               }`}
             >
               {tab.label}
