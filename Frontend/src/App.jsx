@@ -819,7 +819,7 @@ export default function App() {
         overtimeMultiplier: Number(overtimeMultiplier),
       })
     : null;
-  const selectedNightDifferentialPay = (() => {
+  const selectedNightDifferential = (() => {
     const applicableDailyWage = selectedHoliday ? Number(dailyWage) : getAmount(selectedAttendanceRecord.base);
     const rate = Number(nightDifferential);
     const nightHours = getNightShiftMinutes(
@@ -834,9 +834,14 @@ export default function App() {
       !Number.isFinite(rate) ||
       rate <= 0 ||
       nightHours <= 0
-    ) return null;
-    return (applicableDailyWage / 8) * nightHours * (rate / 100);
+    ) return { amount: null, calculation: null };
+    return {
+      amount: (applicableDailyWage / 8) * nightHours * (rate / 100),
+      calculation: `₱${(applicableDailyWage / 8).toFixed(2)}/hr × ${nightHours.toFixed(2)} eligible hrs × ${rate}%`,
+    };
   })();
+  const selectedNightDifferentialPay = selectedNightDifferential.amount;
+  const selectedNightDifferentialCalculation = selectedNightDifferential.calculation;
   const selectedOvertimePay = selectedHoliday
     ? selectedHolidayPay?.overtimePay != null
       ? selectedHolidayPay.overtimePay + (selectedAttendanceRecord.overtimeAmount || 0)
@@ -861,7 +866,7 @@ export default function App() {
       const hourlyRate = Number(dailyWage) / 8 * holidayMultiplier;
       return `${selectedHolidayPay.overtimeHours}h × ₱${hourlyRate.toFixed(2)}/hr × ${multiplier}x`;
     }
-    return `Hourly rate × OT hours × ${multiplier}x`;
+    return null;
   })();
   const allowanceAmount = Number(dailyAllowance);
   const hasDailyAllowance = Number.isFinite(allowanceAmount) && allowanceAmount >= 0;
@@ -2566,6 +2571,7 @@ export default function App() {
         dailyAllowance={dailyAllowance}
         holidayWorkedHours={selectedWorkedHours}
         nightDifferentialPay={selectedNightDifferentialPay}
+        nightDifferentialCalculation={selectedNightDifferentialCalculation}
         overtimePay={selectedOvertimePay}
         overtimeCalculation={selectedOvertimeCalculation}
         configuredDailyWage={dailyWage}

@@ -21,6 +21,7 @@ export default function DashboardContent(props) {
     dailyAllowance,
     holidayWorkedHours,
     nightDifferentialPay,
+    nightDifferentialCalculation,
     overtimePay,
     overtimeCalculation,
     configuredDailyWage,
@@ -69,6 +70,7 @@ export default function DashboardContent(props) {
             dailyAllowance={dailyAllowance}
             holidayWorkedHours={holidayWorkedHours}
             nightDifferentialPay={nightDifferentialPay}
+            nightDifferentialCalculation={nightDifferentialCalculation}
             overtimePay={overtimePay}
             overtimeCalculation={overtimeCalculation}
             configuredDailyWage={configuredDailyWage}
