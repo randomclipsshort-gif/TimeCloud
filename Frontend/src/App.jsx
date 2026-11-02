@@ -1696,17 +1696,14 @@ export default function App() {
       amount,
       date: expenseDate,
     }, ...current]);
-    const expensePeriod = getPayrollPeriodForDate(expenseDate);
-    const [periodYear, periodMonth] = expensePeriod.endDate.split("-").map(Number);
-    setYear(periodYear);
-    setMonthIndex(periodMonth - 1);
+    const [expenseYear, expenseMonth, expenseDay] = expenseDate.split("-").map(Number);
+    setYear(expenseYear);
+    setMonthIndex(expenseMonth - 1);
     setSelectedDay(Math.min(
-      Number(expenseDate.slice(8, 10)),
-      new Date(Date.UTC(periodYear, periodMonth, 0)).getUTCDate(),
+      expenseDay,
+      new Date(Date.UTC(expenseYear, expenseMonth, 0)).getUTCDate(),
     ));
-    setFinanceTrackingScope(
-      expensePeriod.endDate.endsWith("-10") ? "cutoff-10" : "cutoff-25",
-    );
+    setFinanceTrackingScope("month");
     pendingExpenseClearRef.current = true;
     showToast("Expense record added successfully.", "success");
   };
