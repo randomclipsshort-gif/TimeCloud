@@ -129,6 +129,14 @@ export default function AttendanceDashboard({
     (Number.isFinite(lateMinutes) && lateMinutes > 0) ||
     (Number.isFinite(undertimeMinutes) && undertimeMinutes > 0),
   );
+  const attendanceExceptions = [
+    Number.isFinite(lateMinutes) && lateMinutes > 0
+      ? `Late ${lateMinutes} min`
+      : record.late ? "Late" : null,
+    Number.isFinite(undertimeMinutes) && undertimeMinutes > 0
+      ? `Undertime ${undertimeMinutes} min`
+      : record.undertime ? "Undertime" : null,
+  ].filter(Boolean).join(" ? ");
 
   return (
     <div className="w-full shrink-0 grid grid-cols-1 items-start md:grid-cols-12 gap-6">
@@ -214,127 +222,103 @@ export default function AttendanceDashboard({
                 Starting pay + additions − deductions
               </div>
             </div>
-            <div className="space-y-4 p-4 text-[11px]">
-              {record.holidayClassification && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                    Holiday calculation reference · not added separately
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-600">Base daily wage · 8 hrs</span>
-                    <span id="baseWage" className="font-semibold text-slate-800">
-                      {Number(configuredDailyWage) > 0
-                        ? `₱${Number(configuredDailyWage).toFixed(2)}`
-                        : "Required for estimate"}
-                    </span>
-                  </div>
+            <div className="space-y-3 p-4 text-[11px]">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <div className="mb-1.5 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                  <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
+                  Reference rate ? not added separately
                 </div>
-              )}
-
-              <div>
-                <h4 className="mb-2 text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                  Starting pay
-                </h4>
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 px-3 py-3">
-                  <span className="flex min-w-0 flex-col">
-                    <span className="font-semibold text-teal-900">
-                      {record.holidayClassification ? "Holiday pay total" : "Base pay"}
-                    </span>
-                    <span className="mt-1 text-[9px] leading-snug text-teal-800">
-                      {record.holidayClassification
-                        ? `${displayedHolidayPayRateLabel || "Includes base wage"} · replaces base pay`
-                        : "For the recorded shift"}
-                    </span>
-                  </span>
-                  <span
-                    id={record.holidayClassification ? "holidayPay" : "basePay"}
-                    className="shrink-0 text-right font-bold text-teal-800"
-                  >
-                    {record.holidayClassification
-                      ? holidayPayEstimate?.regularPay != null
-                        ? `₱${holidayPayEstimate.regularPay.toFixed(2)}`
-                        : "See estimate details"
-                      : startingPay != null
-                        ? `₱${startingPay.toFixed(2)}`
-                        : "—"}
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-slate-600">Base Daily Wage ? 8 hrs</span>
+                  <span id="baseWage" className="font-semibold text-slate-800">
+                    {record.holidayClassification || record.type === "Unassigned"
+                      ? Number(configuredDailyWage) > 0
+                        ? `?${Number(configuredDailyWage).toFixed(2)}`
+                        : record.holidayClassification
+                          ? "Required for estimate"
+                          : record.base
+                      : record.base}
                   </span>
                 </div>
               </div>
 
-              {(hasAllowance || hasNightDifferential || hasOvertime) && (
-              <div>
-                <h4 className="mb-1 text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                  Added to starting pay
-                </h4>
-                <div className="divide-y divide-slate-100">
-                  {hasAllowance && (
-                  <div className="flex justify-between gap-3 py-2.5">
-                    <span className="flex min-w-0 flex-col">
-                      <span className="text-slate-700">+ Company allowance</span>
-                      <span className="mt-0.5 text-[9px] text-slate-500">Added separately</span>
-                    </span>
-                    <span id="companyAllowance" className="font-semibold text-slate-800">
-                      {allowanceIncluded ? `+₱${allowanceAmount.toFixed(2)}` : "—"}
-                    </span>
+              {(hasAllowance || record.holidayClassification || hasNightDifferential || hasOvertime) && (
+                <div>
+                  <h4 className="mb-1.5 px-1 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                    Pay components
+                  </h4>
+                  <div className="divide-y divide-slate-100">
+                    {record.holidayClassification && (
+                      <div className="mb-1 flex justify-between gap-3 rounded-xl border border-teal-100 bg-teal-50/70 px-3 py-3">
+                        <span className="flex min-w-0 flex-col">
+                          <span className="font-semibold text-teal-900">Holiday Pay Total</span>
+                          <span className="mt-1 text-[9px] leading-snug text-teal-800">
+                            {displayedHolidayPayRateLabel || "Includes base wage"}
+                          </span>
+                        </span>
+                        <span id="holidayPay" className="shrink-0 text-right font-bold text-teal-800">
+                          {holidayPayEstimate?.regularPay != null
+                            ? `?${holidayPayEstimate.regularPay.toFixed(2)}`
+                            : "See estimate details"}
+                        </span>
+                      </div>
+                    )}
+                    {hasAllowance && (
+                      <div className="flex justify-between gap-3 py-2.5 text-slate-600">
+                        <span className="flex items-center gap-2">
+                          <i className="fa-solid fa-plus text-[9px] text-teal-600" aria-hidden="true"></i>
+                          Company Allowance
+                        </span>
+                        <span id="companyAllowance" className="font-semibold text-slate-800">
+                          {`+?${allowanceAmount.toFixed(2)}`}
+                        </span>
+                      </div>
+                    )}
+                    {hasNightDifferential && (
+                      <div className="flex justify-between gap-3 py-2.5 text-slate-600">
+                        <span className="flex items-center gap-2">
+                          <i className="fa-solid fa-plus text-[9px] text-teal-600" aria-hidden="true"></i>
+                          Night Differential
+                        </span>
+                        <span id="nightDifferentialPay" className="font-semibold text-slate-800">
+                          {`+?${displayedNightDifferentialPay.toFixed(2)}`}
+                        </span>
+                      </div>
+                    )}
+                    {hasOvertime && (
+                      <div className="flex justify-between gap-3 py-2.5 text-slate-600">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <i className="fa-solid fa-plus text-[9px] text-teal-600" aria-hidden="true"></i>
+                          <span className="flex min-w-0 flex-col">
+                            <span>Overtime</span>
+                            {overtimeCalculation && (
+                              <span className="mt-0.5 text-[9px] leading-snug text-slate-500">
+                                {overtimeCalculation}
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                        <span id="overtimePay" className="shrink-0 text-right font-semibold text-slate-800">
+                          {`+?${displayedOvertimePay.toFixed(2)}`}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  )}
-                  {hasNightDifferential && (
-                  <div className="flex justify-between gap-3 py-2.5">
-                    <span className="flex min-w-0 flex-col">
-                      <span className="text-slate-700">+ Night differential</span>
-                      <span className="mt-0.5 text-[9px] leading-snug text-slate-500">
-                        {nightDifferentialCalculation || "No night differential calculated"}
-                      </span>
-                    </span>
-                    <span id="nightDifferentialPay" className="shrink-0 font-semibold text-slate-800">
-                      {displayedNightDifferentialPay != null
-                        ? `+₱${displayedNightDifferentialPay.toFixed(2)}`
-                        : "—"}
-                    </span>
-                  </div>
-                  )}
-                  {hasOvertime && (
-                  <div className="flex justify-between gap-3 py-2.5">
-                    <span className="flex min-w-0 flex-col">
-                      <span className="text-slate-700">+ Overtime</span>
-                      <span className="mt-0.5 text-[9px] leading-snug text-slate-500">
-                        {overtimeCalculation ||
-                          (displayedOvertimePay > 0
-                            ? "Recorded overtime amount"
-                            : "No overtime recorded")}
-                      </span>
-                    </span>
-                    <span id="overtimePay" className="shrink-0 font-semibold text-slate-800">
-                      {displayedOvertimePay != null
-                        ? `+₱${displayedOvertimePay.toFixed(2)}`
-                        : record.holidayClassification &&
-                            holidayPayEstimate?.amount === null
-                          ? "See estimate details"
-                          : "—"}
-                    </span>
-                  </div>
-                  )}
                 </div>
-              </div>
               )}
 
               {hasLateOrUndertime && (
-              <div className="border-t border-slate-200 pt-3">
-                <h4 className="mb-2 text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                  Deductions
-                </h4>
-                <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
-                  <span className="flex flex-col">
-                    <span className="text-slate-700">Late / undertime</span>
-                    <span className="mt-0.5 text-[9px] text-slate-500">
-                      No deduction configured
+                <div className="border-t border-slate-200 pt-3">
+                  <h4 className="mb-2 px-1 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                    Attendance exceptions
+                  </h4>
+                  <div className="flex justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
+                    <span className="text-slate-600">{attendanceExceptions}</span>
+                    <span id="penaltyPay" className="shrink-0 font-semibold text-slate-500">
+                      Not deducted
                     </span>
-                  </span>
-                  <span id="penaltyPay" className="font-semibold text-slate-500">
-                    Not deducted
-                  </span>
+                  </div>
                 </div>
-              </div>
               )}
             </div>
           </div>
