@@ -1,6 +1,9 @@
 export default function FinancialDashboard({
   expenseRows,
   monthExpenses,
+  financeTrackingScope,
+  setFinanceTrackingScope,
+  financePeriodLabel,
   totalExpenses,
   remaining,
   percentage,
@@ -8,7 +11,6 @@ export default function FinancialDashboard({
   grossPay,
   payrollDeductions,
   totalHours,
-  monthLabel,
   formatCurrency,
   expenseName,
   setExpenseName,
@@ -28,10 +30,10 @@ export default function FinancialDashboard({
           </div>
           <div>
             <span className="text-xs text-slate-500 font-medium">
-              Selected Month
+              Tracking Period
             </span>
             <h4 className="text-[14px] font-bold text-slate-800 mt-0.5">
-              {monthLabel}
+              {financePeriodLabel}
             </h4>
             <span className="text-[10px] text-teal-600 font-semibold bg-teal-50 px-1.5 py-0.5 rounded">
               Earnings estimates
@@ -60,7 +62,9 @@ export default function FinancialDashboard({
           </div>
           <div>
             <span className="text-xs text-slate-500 font-medium">
-              Estimated Monthly Deductions
+              {financeTrackingScope === "month"
+                ? "Estimated Monthly Deductions"
+                : "Estimated Cutoff Deductions"}
             </span>
             <h4 className="text-sm font-bold text-slate-800 mt-0.5">
               {formatCurrency(payrollDeductions.total)}
@@ -97,9 +101,32 @@ export default function FinancialDashboard({
               Earnings Estimate &amp; Expense Tracker
             </h2>
           </div>
-          <span className="text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-100 px-3 py-1 rounded-lg">
-            {`Recorded earnings and expenses · ${monthLabel}`}
-          </span>
+          <div className="flex flex-col sm:items-end gap-2">
+            <span className="text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-100 px-3 py-1 rounded-lg">
+              {`Recorded earnings and expenses · ${financePeriodLabel}`}
+            </span>
+            <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1" aria-label="Finance tracking period">
+              {[
+                { value: "cutoff-10", label: "1st cutoff (26–10)" },
+                { value: "cutoff-25", label: "2nd cutoff (11–25)" },
+                { value: "month", label: "Full month" },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={financeTrackingScope === option.value}
+                  onClick={() => setFinanceTrackingScope(option.value)}
+                  className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition ${
+                    financeTrackingScope === option.value
+                      ? "bg-white text-teal-700 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4">

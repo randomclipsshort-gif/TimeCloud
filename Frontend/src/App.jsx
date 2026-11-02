@@ -23,8 +23,10 @@ import {
   getBudgetUtilization,
   getExpenseDate,
   getExpensesForMonth,
+  getExpensesForPeriod,
 } from "./utils/expenseTracker.js";
 import {
+  formatPayrollPeriod,
   getPayrollPeriodForDate,
   getPayrollPeriodForMonth,
   isPayrollPeriodEarningsAvailable,
@@ -558,6 +560,7 @@ export default function App() {
   const [year, setYear] = useState(() => Number(initialCalendarDate.slice(0, 4)));
   const [monthCarouselMotion, setMonthCarouselMotion] = useState(null);
   const [selectedDay, setSelectedDay] = useState(() => Number(initialCalendarDate.slice(8, 10)));
+  const [financeTrackingScope, setFinanceTrackingScope] = useState("cutoff-10");
   const [attendance, setAttendance] = useState({});
   const [activeTimeEntry, setActiveTimeEntry] = useState(null);
   const [holidays, setHolidays] = useState(() =>
@@ -953,6 +956,60 @@ export default function App() {
   const monthExpenses = getExpensesForMonth(expenses, calendarPayrollMonth);
   const totalExpenses = monthExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const { remaining, percentage } = getBudgetUtilization(netPay, totalExpenses);
+  const financeCutoffPeriods = useMemo(
+    () => [10, 25].map((cutoffDay) => getPayrollPeriodForMonth(calendarPayrollMonth, cutoffDay)),
+    [calendarPayrollMonth],
+  );
+  const financeCutoffSummaries = useMemo(
+    () => financeCutoffPeriods.map((period) =>
+      summarizePayrollPeriod(attendance, period, getPayrollRecordEarnings)),
+    [attendance, financeCutoffPeriods, getPayrollRecordEarnings],
+  );
+  const financeCutoffMonthlyGross = financeCutoffSummaries.reduce(
+    (sum, summary) => sum + summary.recordedEarnings,
+    0,
+  );
+  const financeCutoffDeductions = useMemo(
+    () => financeCutoffPeriods.map((period) => calculateCutoffPayrollDeductions({
+      period,
+      mode: payrollDeductionSettings.payrollDeductionMode,
+      monthlyGrossPay: financeCutoffMonthlyGross,
+      manualPerPaycheck: {
+        sss: payrollDeductionSettings.manualSssPerPaycheck,
+        philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
+        pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
+      },
+      settings: payrollDeductionSettings,
+    })),
+    [financeCutoffMonthlyGross, financeCutoffPeriods, payrollDeductionSettings],
+  );
+  const selectedFinanceCutoffIndex = financeTrackingScope === "cutoff-25" ? 1 : 0;
+  const selectedFinancePeriod = financeCutoffPeriods[selectedFinanceCutoffIndex];
+  const financeExpenses = financeTrackingScope === "month"
+    ? monthExpenses
+    : getExpensesForPeriod(expenses, selectedFinancePeriod);
+  const financeTotalExpenses = financeExpenses.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0,
+  );
+  const financeGrossPay = financeTrackingScope === "month"
+    ? grossPay
+    : financeCutoffSummaries[selectedFinanceCutoffIndex].recordedEarnings;
+  const financePayrollDeductions = financeTrackingScope === "month"
+    ? payrollDeductions
+    : financeCutoffDeductions[selectedFinanceCutoffIndex];
+  const financeNetPay = Math.max(0, financeGrossPay - financePayrollDeductions.total);
+  const financeTotalHours = financeTrackingScope === "month"
+    ? totalHours
+    : financeCutoffSummaries[selectedFinanceCutoffIndex].regularHours +
+      financeCutoffSummaries[selectedFinanceCutoffIndex].overtimeHours;
+  const financePeriodLabel = financeTrackingScope === "month"
+    ? `Full month · ${monthLabel}`
+    : formatPayrollPeriod(selectedFinancePeriod);
+  const {
+    remaining: financeRemaining,
+    percentage: financePercentage,
+  } = getBudgetUtilization(financeNetPay, financeTotalExpenses);
   const workspaceData = useMemo(() => ({
     attendance: serializeWorkspaceForCloud({ attendance }).attendance,
     activeTimeEntry,
@@ -2418,9 +2475,9 @@ export default function App() {
     </div>
   ));
 
-  const expenseRows = monthExpenses.length === 0 ? (
-    <tr><td colSpan="5" className="p-6 text-center text-slate-400 italic">No expenses recorded for {monthLabel}.</td></tr>
-  ) : monthExpenses.map((item) => {
+  const expenseRows = financeExpenses.length === 0 ? (
+    <tr><td colSpan="5" className="p-6 text-center text-slate-400 italic">No expenses recorded for {financePeriodLabel}.</td></tr>
+  ) : financeExpenses.map((item) => {
     const badgeColor = {
       Utilities: "bg-indigo-50 text-indigo-700",
       "Food & Groceries": "bg-emerald-50 text-emerald-700",
@@ -2582,14 +2639,17 @@ export default function App() {
         onTimeClockClick={handleTimeClockClick}
         expenseRows={expenseRows}
         record={selectedRecordWithNightDifferential}
-        monthExpenses={monthExpenses}
-        totalExpenses={totalExpenses}
-        grossPay={grossPay}
-        payrollDeductions={payrollDeductions}
-        remaining={remaining}
-        percentage={percentage}
-        netPay={netPay}
-        totalHours={totalHours}
+        monthExpenses={financeExpenses}
+        totalExpenses={financeTotalExpenses}
+        grossPay={financeGrossPay}
+        payrollDeductions={financePayrollDeductions}
+        remaining={financeRemaining}
+        percentage={financePercentage}
+        netPay={financeNetPay}
+        totalHours={financeTotalHours}
+        financeTrackingScope={financeTrackingScope}
+        setFinanceTrackingScope={setFinanceTrackingScope}
+        financePeriodLabel={financePeriodLabel}
         formatCurrency={formatCurrency}
         expenseName={expenseName}
         setExpenseName={setExpenseName}

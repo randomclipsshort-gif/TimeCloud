@@ -39,6 +39,21 @@ export function getExpensesForMonth(expenses, month) {
   return expenses.filter((expense) => getExpenseDate(expense)?.startsWith(`${month}-`));
 }
 
+export function getExpensesForPeriod(expenses, period) {
+  if (
+    !Array.isArray(expenses) ||
+    !isValidDateKey(period?.startDate) ||
+    !isValidDateKey(period?.endDate) ||
+    period.startDate > period.endDate
+  ) {
+    return [];
+  }
+  return expenses.filter((expense) => {
+    const date = getExpenseDate(expense);
+    return date && date >= period.startDate && date <= period.endDate;
+  });
+}
+
 export function getBudgetUtilization(netEarnings, totalExpenses) {
   const net = Number(netEarnings);
   const expenses = Number(totalExpenses);

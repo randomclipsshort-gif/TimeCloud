@@ -32,6 +32,9 @@ export default function DashboardContent(props) {
     record,
     expenseRows,
     monthExpenses,
+    financeTrackingScope,
+    setFinanceTrackingScope,
+    financePeriodLabel,
     totalExpenses,
     remaining,
     percentage,
@@ -88,6 +91,9 @@ export default function DashboardContent(props) {
           <FinancialDashboard
             expenseRows={expenseRows}
             monthExpenses={monthExpenses}
+            financeTrackingScope={financeTrackingScope}
+            setFinanceTrackingScope={setFinanceTrackingScope}
+            financePeriodLabel={financePeriodLabel}
             totalExpenses={totalExpenses}
             remaining={remaining}
             percentage={percentage}
@@ -95,7 +101,6 @@ export default function DashboardContent(props) {
             grossPay={grossPay}
             payrollDeductions={payrollDeductions}
             totalHours={totalHours}
-            monthLabel={monthLabel}
             formatCurrency={formatCurrency}
             expenseName={expenseName}
             setExpenseName={setExpenseName}
