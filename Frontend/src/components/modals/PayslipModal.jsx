@@ -42,169 +42,169 @@ export default function PayslipModal({
   };
 
   return (
-  <div id="payslipModal" className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-hidden={!open} style={{ display: open ? "flex" : "none" }}>
-    <div className="bg-cardBg rounded-2xl border border-slate-200 w-full max-w-3xl p-8 shadow-2xl max-h-[92vh] overflow-y-auto">
-      <div className="flex justify-between items-center pb-4 border-b border-slate-200 mb-6">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 font-bold text-lg">
-            <i className="fa-regular fa-file-lines"></i>
+  <div id="payslipModal" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-hidden={!open} style={{ display: open ? "flex" : "none" }}>
+    <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 shadow-2xl">
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5 py-4 sm:px-7">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
+            <i className="fa-regular fa-file-lines text-lg" aria-hidden="true"></i>
           </div>
-          <div>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-teal-700">
-              Personal Earnings Summary — Estimate Only
+          <div className="min-w-0">
+            <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-teal-700">
+              Personal earnings summary
             </span>
-            <h3 className="font-extrabold text-xl text-textMain">
+            <h3 className="truncate text-lg font-extrabold text-slate-900 sm:text-xl">
               {periodLabel}
             </h3>
           </div>
         </div>
-        <button type="button" aria-label="Close modal" data-action="closeModal(&#x27;payslipModal&#x27;)" className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer">
-          <i className="fa-solid fa-xmark text-lg"></i>
+        <button type="button" aria-label="Close payslip" data-action="closeModal(&#x27;payslipModal&#x27;)" className="ml-3 shrink-0 rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700">
+          <i className="fa-solid fa-xmark text-lg" aria-hidden="true"></i>
         </button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mb-6 text-xs">
-        <div className="space-y-1.5">
-          <div className="flex justify-between">
-            <span className="text-slate-500">
-              Employee Name:
-            </span>
-            <span className="font-bold text-slate-800">
-              {userName}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">
-              Configured Daily Wage:
-            </span>
-            <span className="font-semibold text-slate-800">
-              {Number(dailyWage) > 0 ? formatCurrency(Number(dailyWage)) : "Not set"}
-            </span>
-          </div>
-        </div>
-        <div className="space-y-1.5 sm:border-l sm:border-slate-200 sm:pl-4">
-          <div className="flex justify-between">
-            <span className="text-slate-500">
-              Pay Period:
-            </span>
-            <span className="font-semibold text-slate-800">
-              {periodLabel}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">
-              Recorded Hours:
-            </span>
-            <span className="font-semibold text-teal-700">
-              {`${recordedHours.toFixed(2)} hours`}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">
-              Payroll Status:
-            </span>
-            <span className="font-semibold text-slate-800">
-              Estimate only
-            </span>
-          </div>
-        </div>
-      </div>
-      <div className="bg-gradient-to-r from-teal-600 to-teal-700 text-white rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-md mb-6 gap-4">
-        <div>
-          <span className="text-xs font-semibold uppercase tracking-wider opacity-90 block">
-            Gross Earnings Estimate
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-7 sm:py-6">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[10px] font-semibold text-amber-800">
+            <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
+            Estimate only · not finalized payroll
           </span>
-          <span className="text-3xl font-black">
-            {earningsLabel}
-            <span className="text-sm font-normal opacity-90">
-              {payrollPeriodEarningsAvailable ? " PHP" : ""}
-            </span>
+          <span className="text-[11px] font-medium text-slate-500">
+            {`${recordedHours.toFixed(2)} recorded hours`}
           </span>
         </div>
-        <button type="button" onClick={() => window.print()} className="bg-white text-teal-700 hover:bg-slate-100 px-4 py-2.5 rounded-xl text-xs font-bold shadow transition flex items-center space-x-2 cursor-pointer">
-          <i className="fa-solid fa-print"></i>
-          <span>
-            Print Summary
-          </span>
-        </button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
-            <h4 className="font-bold text-xs uppercase tracking-wider text-teal-800 flex items-center space-x-1.5">
-              <i className="fa-solid fa-plus-circle text-teal-600"></i>
-              <span>
-                Gross Earnings Breakdown
+        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            ["Employee", userName, "fa-user"],
+            ["Pay period", periodLabel, "fa-calendar"],
+            [
+              "Daily wage",
+              !payrollPeriodEarningsAvailable
+                ? "Private — unlock salary vault"
+                : Number(dailyWage) > 0
+                  ? formatCurrency(Number(dailyWage))
+                  : "Not set",
+              "fa-coins",
+            ],
+            ["Recorded hours", `${recordedHours.toFixed(2)} hrs`, "fa-clock"],
+          ].map(([label, value, icon]) => (
+            <div key={label} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3">
+              <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                <i className={`fa-solid ${icon} text-teal-600`} aria-hidden="true"></i>
+                {label}
               </span>
-            </h4>
-            <span className="text-xs font-extrabold text-teal-700">
+              <span className="mt-1.5 block truncate text-xs font-semibold text-slate-800" title={value}>
+                {value}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl bg-gradient-to-br from-teal-700 to-teal-600 p-5 text-white shadow-sm">
+            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-teal-100">
+              Gross earnings estimate
+            </span>
+            <span className="mt-2 block break-words text-3xl font-extrabold tracking-tight">
               {earningsLabel}
             </span>
-          </div>
-          <div className="space-y-2.5 text-xs text-slate-600">
-            {payrollEarningsBreakdown.items.map((item) => (
-              <div key={item.id} className="flex flex-wrap justify-between gap-2">
-                <span>
-                  {formatEarningsItemLabel(item)}
-                  {item.id === "lateUndertime" && (
-                    <span className="ml-1 text-slate-400">(no deduction configured)</span>
-                  )}
-                </span>
-                <span className="font-semibold text-slate-800">
-                  {item.informational
-                    ? "Not deducted"
-                    : payrollPeriodEarningsAvailable
-                      ? formatCurrency(item.total)
-                      : "Private"}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
-            <h4 className="font-bold text-xs uppercase tracking-wider text-rose-800 flex items-center space-x-1.5">
-              <i className="fa-solid fa-minus-circle text-rose-600"></i>
-              <span>
-                Deductions &amp; Contributions
-              </span>
-            </h4>
-            <span className="text-xs font-extrabold text-rose-700">
-              {deductionsLabel}
+            <span className="mt-1 block text-[10px] text-teal-100">
+              For this payroll period
             </span>
           </div>
-          <div className="space-y-2.5 text-xs text-slate-600">
-            {cutoffPayrollDeductions.items.map((item) => (
-              <div key={item.id} className="flex flex-wrap justify-between gap-2">
-                <span>{item.label} employee contribution</span>
-                <span className="font-semibold text-slate-800">
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 shadow-sm">
+            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-800">
+              Net pay after deductions
+            </span>
+            <span className="mt-2 block break-words text-3xl font-extrabold tracking-tight text-emerald-700">
+              {netPayLabel}
+            </span>
+            <span className="mt-1 block text-[10px] text-emerald-700">
+              Employee contributions deducted
+            </span>
+          </div>
+        </div>
+        <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between gap-3 border-b border-teal-100 bg-teal-50/70 px-4 py-3">
+              <h4 className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wider text-teal-900">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-teal-700">
+                  <i className="fa-solid fa-arrow-trend-up" aria-hidden="true"></i>
+                </span>
+                Gross Earnings Breakdown
+              </h4>
+              <span className="text-[10px] font-bold text-teal-800">{earningsLabel}</span>
+            </div>
+            <div className="divide-y divide-slate-100 px-4">
+              {payrollEarningsBreakdown.items.map((item) => (
+                <div key={item.id} className="flex flex-wrap items-start justify-between gap-2 py-3 text-xs">
+                  <span className="min-w-0 flex-1 text-slate-600">
+                    {formatEarningsItemLabel(item)}
+                    {item.id === "lateUndertime" && (
+                      <span className="ml-1 text-[10px] text-slate-400">(no deduction configured)</span>
+                    )}
+                  </span>
+                  <span className={`shrink-0 font-semibold ${item.informational ? "text-slate-400" : "text-slate-800"}`}>
+                    {item.informational
+                      ? "Not deducted"
+                      : payrollPeriodEarningsAvailable
+                        ? formatCurrency(item.total)
+                        : "Private"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between gap-3 border-b border-rose-100 bg-rose-50/70 px-4 py-3">
+              <h4 className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wider text-rose-900">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-rose-600">
+                  <i className="fa-solid fa-arrow-trend-down" aria-hidden="true"></i>
+                </span>
+                Deductions &amp; Contributions
+              </h4>
+              <span className="text-[10px] font-bold text-rose-800">{deductionsLabel}</span>
+            </div>
+            <div className="px-4">
+              {cutoffPayrollDeductions.items.map((item) => (
+                <div key={item.id} className="flex flex-wrap justify-between gap-2 border-b border-slate-100 py-3 text-xs">
+                  <span className="text-slate-600">{item.label} employee contribution</span>
+                  <span className="font-semibold text-slate-800">
+                    {payrollPeriodEarningsAvailable
+                      ? formatCurrency(item.amount)
+                      : "Private"}
+                  </span>
+                </div>
+              ))}
+              <div className="flex justify-between gap-2 py-3 text-xs">
+                <span className="font-semibold text-slate-700">Total employee contributions</span>
+                <span className="font-bold text-rose-700">
                   {payrollPeriodEarningsAvailable
-                    ? formatCurrency(item.amount)
+                    ? formatCurrency(cutoffPayrollDeductions.employeeContributionTotal)
                     : "Private"}
                 </span>
               </div>
-            ))}
-            <div className="flex justify-between border-t border-slate-100 pt-2">
-              <span>Total employee contributions</span>
-              <span className="font-semibold text-slate-800">
-                {payrollPeriodEarningsAvailable
-                  ? formatCurrency(cutoffPayrollDeductions.employeeContributionTotal)
-                  : "Private"}
-              </span>
+              <div className="mb-4 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-3 text-xs">
+                <span className="font-bold text-emerald-900">Net pay</span>
+                <span className="font-extrabold text-emerald-700">{netPayLabel}</span>
+              </div>
             </div>
-            <div className="flex justify-between font-bold text-slate-800">
-              <span>Net pay after deductions</span>
-              <span>{netPayLabel}</span>
-            </div>
-          </div>
+          </section>
         </div>
-      </div>
-      <div className="flex items-center justify-between pt-4 border-t border-slate-200 text-xs text-slate-500">
-        <span>
+        <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] leading-relaxed text-slate-500">
           Estimates are not finalized payroll or guaranteed legal entitlements.
-        </span>
-        <button data-action="closeModal(&#x27;payslipModal&#x27;)" className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-xl transition cursor-pointer">
-          Close Window
-        </button>
+          Confirm actual pay and deductions with your payroll administrator.
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+        <span className="text-[10px] text-slate-400">Personal payroll estimate</span>
+        <div className="flex justify-end gap-2">
+          <button type="button" data-action="closeModal(&#x27;payslipModal&#x27;)" className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-200">
+            Close
+          </button>
+          <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-800">
+            <i className="fa-solid fa-print" aria-hidden="true"></i>
+            Print summary
+          </button>
+        </div>
       </div>
     </div>
   </div>
