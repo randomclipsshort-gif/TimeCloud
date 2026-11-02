@@ -95,75 +95,89 @@ export default function AttendanceDashboard({
 
   return (
     <div className="w-full shrink-0 grid grid-cols-1 items-start md:grid-cols-12 gap-6">
-      <section className="md:col-span-4 bg-cardBg rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between">
+      <section className="md:col-span-4 bg-cardBg rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col justify-between">
         <div>
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
-            <div>
-              <h2 className="text-lg font-bold text-textMain">
-                Attendance Breakdown
-              </h2>
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
+                <i className="fa-solid fa-clipboard-list text-lg" aria-hidden="true"></i>
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-base font-bold text-textMain">
+                  Attendance Breakdown
+                </h2>
+                <p className="mt-0.5 text-[11px] text-textMuted">
+                  Selected day summary
+                </p>
+              </div>
             </div>
             <span
               id="selectedDateBadge"
-              className="text-xs font-semibold bg-slate-100 border border-slate-200 text-slate-700 px-2.5 py-1 rounded-md"
+              className="shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700"
             >
               {selectedDate}
             </span>
           </div>
-          <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 mb-6">
-            <div className="flex items-center justify-between">
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <span
                 id="workdayTypeBadge"
-                className={`text-xs font-bold tracking-wider ${workdayBadgeTextColor}`}
+                className={`rounded-full bg-white px-2.5 py-1 text-[10px] font-bold tracking-wide ring-1 ring-slate-200 ${workdayBadgeTextColor}`}
               >
                 {workdayBadgeLabel}
               </span>
               <span
                 id="wageRateText"
-                className="text-xs font-semibold text-teal-700"
+                className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-700"
               >
+                <i className="fa-solid fa-percent text-[9px]" aria-hidden="true"></i>
                 {`Wage Rate: ${holidayRateLabel}`}
               </span>
             </div>
             <div
               id="shiftTitle"
-              className={`text-base font-bold ${shiftTitleColor}`}
+              className={`text-sm font-bold ${shiftTitleColor}`}
             >
               {record.holidayName || record.shift}
             </div>
-            <div id="shiftSubTitle" className="text-xs text-textMuted mt-0.5">
+            <div id="shiftSubTitle" className="mt-1 text-[11px] leading-relaxed text-textMuted">
               {record.holidayName
                 ? `${record.holidayDutyLabel} · ${record.shift}${record.holidayDescription ? ` · ${record.holidayDescription}` : ""}`
                 : record.wageRate}
             </div>
           </div>
-          <div className="bg-teal-50/50 border border-teal-100 rounded-xl p-4 mb-6">
-            <div className="mb-3 border-b border-teal-100/60 pb-4">
-              <div className="flex flex-col items-start gap-1">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-teal-800">
-                  Estimated Daily Earnings
-                </span>
-                <span
-                  id="estEarnings"
-                  className="text-2xl leading-tight font-extrabold tracking-tight text-teal-800"
-                >
-                  {estimatedEarnings != null
-                    ? `₱${estimatedEarnings.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : record.holidayClassification
-                      ? "Estimate unavailable"
-                      : record.est}
+          <div className="mb-4 overflow-hidden rounded-2xl border border-teal-100 bg-white">
+            <div className="bg-gradient-to-r from-teal-50 to-emerald-50 px-4 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-teal-800">
+                    Estimated Daily Earnings
+                  </span>
+                  <span
+                    id="estEarnings"
+                    className="mt-1 block text-2xl font-extrabold leading-tight tracking-tight text-teal-800"
+                  >
+                    {estimatedEarnings != null
+                      ? `₱${estimatedEarnings.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : record.holidayClassification
+                        ? "Estimate unavailable"
+                        : record.est}
+                  </span>
+                </div>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/80 text-teal-700 shadow-sm">
+                  <i className="fa-solid fa-wallet" aria-hidden="true"></i>
                 </span>
               </div>
               {record.holidayClassification && (
-                <div className="mt-1 text-xs font-medium text-teal-700">
+                <div className="mt-2 text-[10px] font-medium text-teal-700">
                   {`${record.holidayClassification} · ${holidayWorkedHours ?? 0} ${holidayWorkedHours === 1 ? "hour" : "hours"} worked`}
                 </div>
               )}
             </div>
-            <div className="space-y-0.5 text-xs">
-              <div className="flex justify-between py-1.5 font-semibold text-slate-700">
-                <span>Base Daily Wage (8 hrs):</span>
-                <span id="baseWage" className="text-slate-900">
+            <div className="divide-y divide-slate-100 px-4 text-[11px]">
+              <div className="flex justify-between gap-3 py-2.5 font-semibold text-slate-700">
+                <span>Base Daily Wage (8 hrs)</span>
+                <span id="baseWage" className="text-right text-slate-900">
                   {record.holidayClassification || record.type === "Unassigned"
                     ? Number(configuredDailyWage) > 0
                       ? `₱${Number(configuredDailyWage).toFixed(2)}`
@@ -173,11 +187,11 @@ export default function AttendanceDashboard({
                     : record.base}
                 </span>
               </div>
-              <div className="flex justify-between py-1 text-slate-600">
-                <span>Co. Allowance:</span>
+              <div className="flex justify-between gap-3 py-2.5 text-slate-600">
+                <span>Co. Allowance</span>
                 <span
                   id="companyAllowance"
-                  className="font-medium text-slate-800"
+                  className="font-semibold text-slate-800"
                 >
                   {!["Absent", "Rest Day"].includes(record.type) &&
                   !record.holidayUnworked &&
@@ -187,16 +201,16 @@ export default function AttendanceDashboard({
                     : "—"}
                 </span>
               </div>
-              <div className="mt-2 flex justify-between border-t border-teal-100/80 pt-2 text-slate-600">
-                <span className="flex flex-col">
-                  <span>Holiday Pay:</span>
+              <div className="flex justify-between gap-3 py-2.5 text-slate-600">
+                <span className="flex min-w-0 flex-col">
+                  <span>Holiday Pay</span>
                   {displayedHolidayPayRateLabel && (
-                    <span className="text-[10px] text-teal-700">
+                    <span className="mt-0.5 text-[9px] leading-snug text-teal-700">
                       {displayedHolidayPayRateLabel}
                     </span>
                   )}
                 </span>
-                <span id="holidayPay" className="font-medium text-teal-700">
+                <span id="holidayPay" className="shrink-0 text-right font-semibold text-teal-700">
                   {record.holidayClassification
                     ? holidayPayEstimate?.regularPay != null
                       ? `₱${holidayPayEstimate.regularPay.toFixed(2)}`
@@ -204,27 +218,27 @@ export default function AttendanceDashboard({
                     : "—"}
                 </span>
               </div>
-              <div className="flex justify-between py-1 text-slate-600">
-                <span>Night Differential:</span>
+              <div className="flex justify-between gap-3 py-2.5 text-slate-600">
+                <span>Night Differential</span>
                 <span
                   id="nightDifferentialPay"
-                  className="font-medium text-teal-700"
+                  className="font-semibold text-teal-700"
                 >
                   {nightDifferentialPay != null
                     ? `₱${nightDifferentialPay.toFixed(2)}`
                     : "—"}
                 </span>
               </div>
-              <div className="flex justify-between py-1 text-slate-600">
-                <span className="flex flex-col">
-                  <span>Overtime:</span>
+              <div className="flex justify-between gap-3 py-2.5 text-slate-600">
+                <span className="flex min-w-0 flex-col">
+                  <span>Overtime</span>
                   {overtimeCalculation && (
-                    <span className="text-[10px] text-slate-500">
+                    <span className="mt-0.5 text-[9px] leading-snug text-slate-500">
                       {overtimeCalculation}
                     </span>
                   )}
                 </span>
-                <span id="overtimePay" className="font-medium text-teal-700">
+                <span id="overtimePay" className="shrink-0 text-right font-semibold text-teal-700">
                   {overtimePay != null
                     ? `₱${overtimePay.toFixed(2)}`
                     : record.holidayClassification &&
@@ -233,51 +247,55 @@ export default function AttendanceDashboard({
                       : "—"}
                 </span>
               </div>
-              <div className="flex justify-between py-1 text-slate-600">
-                <span>Late / Undertime Penalty:</span>
-                <span id="penaltyPay" className="font-medium text-slate-700">
+              <div className="flex justify-between gap-3 py-2.5 text-slate-600">
+                <span>Late / Undertime Penalty</span>
+                <span id="penaltyPay" className="font-semibold text-slate-700">
                   —
                 </span>
               </div>
             </div>
           </div>
-          <div className="space-y-3 text-xs border-t border-slate-100 pt-5">
-            <div className="flex justify-between py-1">
-              <span className="text-textMuted">Assigned Shift:</span>
-              <span
-                id="assignedShiftTime"
-                className="font-semibold text-textMain"
-              >
-                {record.assigned}
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                <i className="fa-regular fa-clock" aria-hidden="true"></i>
               </span>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                Time &amp; Attendance
+              </h3>
             </div>
-            <div className="flex justify-between py-1">
-              <span className="text-textMuted">First Time In:</span>
-              <span id="firstTimeIn" className="font-semibold text-teal-700">
-                {record.in}
-              </span>
-            </div>
-            <div className="flex justify-between py-1">
-              <span className="text-textMuted">Last Time Out:</span>
-              <span id="lastTimeOut" className="font-semibold text-teal-700">
-                {record.clockedIn ? "Tracking" : record.out}
-              </span>
-            </div>
-            <div className="flex items-center justify-between py-1">
-              <span className="text-textMuted">Status Badges:</span>
-              <div
-                id="statusBadgesContainer"
-                className="flex space-x-1.5 flex-wrap gap-y-1"
-              >
-                {record.badges.map((badge) => (
-                  <span
-                    key={badge.text}
-                    title={badge.title}
-                    className={`px-2 py-0.5 text-[10px] font-bold ${badge.color} rounded`}
-                  >
-                    {badge.text}
-                  </span>
-                ))}
+            <div className="space-y-2.5 text-[11px]">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-textMuted">Assigned Shift</span>
+                <span id="assignedShiftTime" className="text-right font-semibold text-textMain">
+                  {record.assigned}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-textMuted">First Time In</span>
+                <span id="firstTimeIn" className="text-right font-semibold text-teal-700">
+                  {record.in}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-textMuted">Last Time Out</span>
+                <span id="lastTimeOut" className="text-right font-semibold text-teal-700">
+                  {record.clockedIn ? "Tracking" : record.out}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
+                <span className="text-textMuted">Status</span>
+                <div id="statusBadgesContainer" className="flex flex-wrap justify-end gap-1.5">
+                  {record.badges.map((badge) => (
+                    <span
+                      key={badge.text}
+                      title={badge.title}
+                      className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${badge.color}`}
+                    >
+                      {badge.text}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
