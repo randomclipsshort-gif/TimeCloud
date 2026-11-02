@@ -17,9 +17,6 @@ export default function PayslipModal({
   const earningsLabel = payrollPeriodEarningsAvailable
     ? formatCurrency(payrollPeriodSummary.recordedEarnings)
     : "Private — unlock salary vault";
-  const deductionsLabel = payrollPeriodEarningsAvailable
-    ? formatCurrency(cutoffPayrollDeductions.total)
-    : "Private — unlock salary vault";
   const netPayLabel = payrollPeriodEarningsAvailable
     ? formatCurrency(payrollPeriodNetPay)
     : "Private — unlock salary vault";
@@ -124,14 +121,13 @@ export default function PayslipModal({
         </div>
         <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between gap-3 border-b border-teal-100 bg-teal-50/70 px-4 py-3">
+            <div className="flex items-center gap-3 border-b border-teal-100 bg-teal-50/70 px-4 py-3">
               <h4 className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wider text-teal-900">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-teal-700">
                   <i className="fa-solid fa-arrow-trend-up" aria-hidden="true"></i>
                 </span>
                 Gross Earnings Breakdown
               </h4>
-              <span className="text-[10px] font-bold text-teal-800">{earningsLabel}</span>
             </div>
             <div className="divide-y divide-slate-100 px-4">
               {payrollEarningsBreakdown.items.map((item) => (
@@ -154,14 +150,13 @@ export default function PayslipModal({
             </div>
           </section>
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between gap-3 border-b border-rose-100 bg-rose-50/70 px-4 py-3">
+            <div className="flex items-center gap-3 border-b border-rose-100 bg-rose-50/70 px-4 py-3">
               <h4 className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wider text-rose-900">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-rose-600">
                   <i className="fa-solid fa-arrow-trend-down" aria-hidden="true"></i>
                 </span>
                 Deductions &amp; Contributions
               </h4>
-              <span className="text-[10px] font-bold text-rose-800">{deductionsLabel}</span>
             </div>
             <div className="px-4">
               {cutoffPayrollDeductions.items.map((item) => (
@@ -181,10 +176,6 @@ export default function PayslipModal({
                     ? formatCurrency(cutoffPayrollDeductions.employeeContributionTotal)
                     : "Private"}
                 </span>
-              </div>
-              <div className="mb-4 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-3 text-xs">
-                <span className="font-bold text-emerald-900">Net pay</span>
-                <span className="font-extrabold text-emerald-700">{netPayLabel}</span>
               </div>
             </div>
           </section>
