@@ -322,6 +322,12 @@ export default function SettingsModal({
         >
           {[
             {
+              id: "general",
+              label: "General Preferences",
+              tabId: "tabBtnGeneral",
+              panelId: "settingsTabGeneral",
+            },
+            {
               id: "earnings",
               label: "Earnings & Rates",
               tabId: "tabBtnEarnings",
@@ -338,12 +344,6 @@ export default function SettingsModal({
               label: "Attendance & Timekeeping",
               tabId: "tabBtnAttendance",
               panelId: "settingsTabAttendance",
-            },
-            {
-              id: "general",
-              label: "General Preferences",
-              tabId: "tabBtnGeneral",
-              panelId: "settingsTabGeneral",
             },
             {
               id: "holidays",
@@ -373,15 +373,16 @@ export default function SettingsModal({
         <div
           id="settingsTabEarnings"
           className={
-            activeSettingsTab === "earnings"
+            ["earnings", "general"].includes(activeSettingsTab)
               ? "space-y-5 text-xs"
               : "space-y-5 text-xs hidden"
           }
         >
-          <section
-            className="space-y-3 rounded-xl border border-teal-200 bg-teal-50 p-4"
-            aria-labelledby="salaryVaultHeading"
-          >
+          {activeSettingsTab === "general" && (
+            <section
+              className="space-y-3 rounded-xl border border-teal-200 bg-teal-50 p-4"
+              aria-labelledby="salaryVaultHeading"
+            >
             <div>
               <h4 id="salaryVaultHeading" className="font-bold text-teal-900">
                 Encrypted salary sync
@@ -552,7 +553,10 @@ export default function SettingsModal({
                 {vaultActionError || salaryVaultError}
               </p>
             )}
-          </section>
+            </section>
+          )}
+          {activeSettingsTab === "earnings" && (
+            <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
@@ -649,6 +653,8 @@ export default function SettingsModal({
               estimates
             </span>
           </label>
+            </>
+          )}
         </div>
         <div
           id="settingsTabDeductions"
@@ -663,7 +669,7 @@ export default function SettingsModal({
               <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-900">
                 {salaryVaultStatus === "unavailable"
                   ? "Apply the Supabase salary-vault migration to enable private contribution settings."
-                  : "Unlock or create your encrypted salary vault in Earnings & Rates to edit and sync contribution settings."}
+                  : "Unlock or create your encrypted salary vault in General Preferences to edit and sync contribution settings."}
               </p>
             )}
             <label className="block">

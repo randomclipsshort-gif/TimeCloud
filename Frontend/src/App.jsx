@@ -551,7 +551,7 @@ export default function App() {
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [accountDeletionLoading, setAccountDeletionLoading] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
-  const [activeSettingsTab, setActiveSettingsTab] = useState("earnings");
+  const [activeSettingsTab, setActiveSettingsTab] = useState("general");
   const [page, setPage] = useState(0);
   const [initialCalendarDate] = useState(() => getManilaDateTime().date);
   const [monthIndex, setMonthIndex] = useState(() => Number(initialCalendarDate.slice(5, 7)) - 1);
@@ -2503,7 +2503,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => {
-              setActiveSettingsTab("earnings");
+              setActiveSettingsTab("general");
               setActiveModal("settingsModal");
             }}
             className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold hover:bg-amber-100"
