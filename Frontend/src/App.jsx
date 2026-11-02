@@ -20,13 +20,9 @@ import {
 } from "./utils/payrollDeductions.js";
 import { summarizePayrollEarningsBreakdown } from "./utils/payrollEarningsBreakdown.js";
 import {
-  getNextPayrollPeriod,
   getPayrollPeriodForDate,
-  getPayrollPeriodForEndDate,
   getPayrollPeriodForMonth,
-  getPreviousPayrollPeriod,
   isPayrollPeriodEarningsAvailable,
-  isValidPayrollPeriodEndDate,
   summarizePayrollPeriod,
 } from "./utils/payrollPeriods.js";
 import { supabase, supabaseConfigured } from "./lib/supabase.js";
@@ -555,7 +551,6 @@ export default function App() {
   const [initialCalendarDate] = useState(() => getManilaDateTime().date);
   const [monthIndex, setMonthIndex] = useState(() => Number(initialCalendarDate.slice(5, 7)) - 1);
   const [year, setYear] = useState(() => Number(initialCalendarDate.slice(0, 4)));
-  const [selectedPayrollPeriodEndDate, setSelectedPayrollPeriodEndDate] = useState(null);
   const [monthCarouselMotion, setMonthCarouselMotion] = useState(null);
   const [selectedDay, setSelectedDay] = useState(() => Number(initialCalendarDate.slice(8, 10)));
   const [attendance, setAttendance] = useState({});
@@ -610,13 +605,7 @@ export default function App() {
     () => getPayrollPeriodForDate(manilaNow.date),
     [manilaNow.date],
   );
-  const payrollPeriod = useMemo(
-    () => getPayrollPeriodForEndDate(selectedPayrollPeriodEndDate) || currentPayrollPeriod,
-    [selectedPayrollPeriodEndDate, currentPayrollPeriod],
-  );
-  const isCurrentPayrollPeriod =
-    payrollPeriod.startDate === currentPayrollPeriod.startDate &&
-    payrollPeriod.endDate === currentPayrollPeriod.endDate;
+  const payrollPeriod = currentPayrollPeriod;
   const holidaysByDate = useMemo(() => new Map(
     holidays
       .filter((holiday) =>
@@ -962,7 +951,6 @@ export default function App() {
     settingsBalances,
     earlyPunchWindowMinutes,
     lateGracePeriodMinutes,
-    selectedPayrollPeriodEndDate: payrollPeriod.endDate,
   }), [
     attendance,
     activeTimeEntry,
@@ -1340,7 +1328,6 @@ export default function App() {
       pendingExpenseClearRef.current = false;
       setAttendance({});
       setActiveTimeEntry(null);
-      setSelectedPayrollPeriodEndDate(null);
       setHolidays(holidayCalendarByYear[2026].map((holiday) => ({ ...holiday, enabled: true })));
       setSelectedLocality("");
       setHolidayEligibilityConfirmed(false);
@@ -1444,11 +1431,6 @@ export default function App() {
       ));
       setEarlyPunchWindowMinutes(workspace.earlyPunchWindowMinutes);
       setLateGracePeriodMinutes(workspace.lateGracePeriodMinutes);
-      setSelectedPayrollPeriodEndDate(
-        isValidPayrollPeriodEndDate(workspace.selectedPayrollPeriodEndDate)
-          ? workspace.selectedPayrollPeriodEndDate
-          : getPayrollPeriodForDate(getManilaDateTime().date).endDate,
-      );
       workspaceRevisionRef.current = revision;
       setWorkspaceLoadedForUser(user.id);
       workspaceLoadedRef.current = true;
@@ -2583,21 +2565,6 @@ export default function App() {
         percentage={percentage}
         netPay={netPay}
         totalHours={totalHours}
-        payrollPeriod={payrollPeriod}
-        payrollPeriodSummary={payrollPeriodSummary}
-        cutoffPayrollDeductions={cutoffPayrollDeductions}
-        payrollPeriodNetPay={payrollPeriodNetPay}
-        payrollPeriodEarningsAvailable={isPayrollPeriodEarningsAvailable(salaryVaultStatus)}
-        currentDate={manilaNow.date}
-        salaryVaultStatus={salaryVaultStatus}
-        isCurrentPayrollPeriod={isCurrentPayrollPeriod}
-        onPayrollPeriodChange={(nextPeriod) => {
-          if (nextPeriod) setSelectedPayrollPeriodEndDate(nextPeriod.endDate);
-        }}
-        onPayrollPeriodSelect={(monthValue, cutoffDay) => {
-          const nextPeriod = getPayrollPeriodForMonth(monthValue, cutoffDay);
-          if (nextPeriod) setSelectedPayrollPeriodEndDate(nextPeriod.endDate);
-        }}
         formatCurrency={formatCurrency}
         expenseName={expenseName}
         setExpenseName={setExpenseName}

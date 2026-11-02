@@ -203,9 +203,6 @@ export default function PayslipModal({
               <span>Net pay after deductions</span>
               <span>{netPayLabel}</span>
             </div>
-            <p className="text-[11px] leading-relaxed text-slate-500">
-              Employer contributions are not modeled or deducted from employee net pay. No finalized payroll record is created.
-            </p>
           </div>
         </div>
       </div>
