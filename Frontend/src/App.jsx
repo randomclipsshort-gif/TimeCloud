@@ -611,11 +611,6 @@ export default function App() {
   const selectedDate = formatDate(year, monthIndex, selectedDay);
   const monthLabel = `${months[monthIndex]} ${year}`;
   const calendarPayrollMonth = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-  useEffect(() => {
-    if (!expenseDate.startsWith(`${calendarPayrollMonth}-`)) {
-      setExpenseDate(selectedDate);
-    }
-  }, [calendarPayrollMonth, expenseDate, selectedDate]);
   const currentPayrollPeriod = useMemo(
     () => getPayrollPeriodForDate(manilaNow.date),
     [manilaNow.date],
@@ -1701,6 +1696,17 @@ export default function App() {
       amount,
       date: expenseDate,
     }, ...current]);
+    const expensePeriod = getPayrollPeriodForDate(expenseDate);
+    const [periodYear, periodMonth] = expensePeriod.endDate.split("-").map(Number);
+    setYear(periodYear);
+    setMonthIndex(periodMonth - 1);
+    setSelectedDay(Math.min(
+      Number(expenseDate.slice(8, 10)),
+      new Date(Date.UTC(periodYear, periodMonth, 0)).getUTCDate(),
+    ));
+    setFinanceTrackingScope(
+      expensePeriod.endDate.endsWith("-10") ? "cutoff-10" : "cutoff-25",
+    );
     pendingExpenseClearRef.current = true;
     showToast("Expense record added successfully.", "success");
   };
