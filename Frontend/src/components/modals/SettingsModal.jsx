@@ -373,188 +373,11 @@ export default function SettingsModal({
         <div
           id="settingsTabEarnings"
           className={
-            ["earnings", "general"].includes(activeSettingsTab)
+            activeSettingsTab === "earnings"
               ? "space-y-5 text-xs"
               : "space-y-5 text-xs hidden"
           }
         >
-          {activeSettingsTab === "general" && (
-            <section
-              className="space-y-3 rounded-xl border border-teal-200 bg-teal-50 p-4"
-              aria-labelledby="salaryVaultHeading"
-            >
-            <div>
-              <h4 id="salaryVaultHeading" className="font-bold text-teal-900">
-                Encrypted salary sync
-              </h4>
-              <p className="mt-1 text-[11px] leading-relaxed text-teal-800">
-                A separate vault passphrase encrypts salary data in this browser
-                before upload. It is never sent to Supabase or saved on this
-                device. Use the same passphrase on each device. If you lose it
-                and all unlocked devices, the vault cannot be recovered.
-              </p>
-            </div>
-            <p
-              className="text-[11px] font-semibold text-teal-900"
-              role="status"
-            >
-              {salaryVaultStatus === "unlocked" &&
-                (salaryVaultSyncing
-                  ? "Encrypted salary changes are syncing or loading..."
-                  : "Vault unlocked. Salary data is encrypted before cloud sync.")}
-              {salaryVaultStatus === "locked" &&
-                "Encrypted vault found. Unlock it to view or sync salary data."}
-              {salaryVaultStatus === "uninitialized" &&
-                "Create a vault to encrypt and sync existing salary settings and earnings."}
-              {salaryVaultStatus === "unavailable" &&
-                "The encrypted salary-vault table is not installed yet. Apply the pending Supabase migration before creating a vault."}
-              {salaryVaultStatus === "loading" &&
-                "Checking encrypted salary vault..."}
-            </p>
-            {salaryVaultStatus === "unlocked" ? (
-              <div className="space-y-2">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={handleLockVault}
-                    disabled={vaultActionLoading}
-                    className="rounded-lg border border-teal-300 bg-white px-3 py-2 text-xs font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60"
-                  >
-                    Lock salary vault
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRotationOpen((value) => !value)}
-                    disabled={vaultActionLoading}
-                    className="rounded-lg border border-teal-300 bg-white px-3 py-2 text-xs font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60"
-                  >
-                    Change vault passphrase
-                  </button>
-                </div>
-                {rotationOpen && (
-                  <form
-                    onSubmit={handleRotateVault}
-                    className="space-y-2 rounded-lg border border-teal-200 bg-white p-3"
-                  >
-                    <label className="block">
-                      <span className="mb-1 block font-semibold text-slate-700">
-                        New passphrase
-                      </span>
-                      <input
-                        type="password"
-                        autoComplete="new-password"
-                        minLength={12}
-                        required
-                        value={vaultNextPassphrase}
-                        onChange={(event) =>
-                          setVaultNextPassphrase(event.target.value)
-                        }
-                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1 block font-semibold text-slate-700">
-                        Confirm new passphrase
-                      </span>
-                      <input
-                        type="password"
-                        autoComplete="new-password"
-                        minLength={12}
-                        required
-                        value={vaultNextPassphraseConfirmation}
-                        onChange={(event) =>
-                          setVaultNextPassphraseConfirmation(event.target.value)
-                        }
-                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs"
-                      />
-                    </label>
-                    <button
-                      type="submit"
-                      disabled={vaultActionLoading}
-                      className="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
-                    >
-                      {vaultActionLoading
-                        ? "Re-encrypting..."
-                        : "Change and sync passphrase"}
-                    </button>
-                  </form>
-                )}
-              </div>
-            ) : (
-              ["locked", "uninitialized"].includes(salaryVaultStatus) && (
-                <form onSubmit={handleVaultSubmit} className="space-y-2">
-                  <label className="block">
-                    <span className="mb-1 block font-semibold text-slate-700">
-                      Vault passphrase (at least 12 characters)
-                    </span>
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      minLength={12}
-                      required
-                      value={vaultPassphrase}
-                      onChange={(event) =>
-                        setVaultPassphrase(event.target.value)
-                      }
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
-                    />
-                  </label>
-                  {salaryVaultStatus === "uninitialized" && (
-                    <label className="block">
-                      <span className="mb-1 block font-semibold text-slate-700">
-                        Confirm vault passphrase
-                      </span>
-                      <input
-                        type="password"
-                        autoComplete="new-password"
-                        minLength={12}
-                        required
-                        value={vaultPassphraseConfirmation}
-                        onChange={(event) =>
-                          setVaultPassphraseConfirmation(event.target.value)
-                        }
-                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
-                      />
-                    </label>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={vaultActionLoading}
-                    className="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
-                  >
-                    {vaultActionLoading
-                      ? "Encrypting..."
-                      : salaryVaultStatus === "locked"
-                        ? "Unlock vault"
-                        : "Create and sync encrypted vault"}
-                  </button>
-                </form>
-              )
-            )}
-            {salaryVaultConflict && (
-              <div className="space-y-2 rounded-lg border border-rose-200 bg-rose-50 p-3">
-                <p className="text-[11px] text-rose-800">
-                  A newer cloud vault revision exists. This device has not
-                  overwritten it. Reloading discards this browser's unsaved
-                  salary changes.
-                </p>
-                <button
-                  type="button"
-                  onClick={onReloadSalaryVault}
-                  disabled={salaryVaultSyncing}
-                  className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60"
-                >
-                  Reload latest encrypted vault
-                </button>
-              </div>
-            )}
-            {(vaultActionError || salaryVaultError) && (
-              <p className="text-[11px] text-rose-700" role="alert">
-                {vaultActionError || salaryVaultError}
-              </p>
-            )}
-            </section>
-          )}
           {activeSettingsTab === "earnings" && (
             <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1018,6 +841,181 @@ export default function SettingsModal({
               aria-label="Session timeout managed by Supabase"
             />
           </div>
+          <section
+            className="space-y-3 rounded-xl border border-teal-200 bg-teal-50 p-4"
+            aria-labelledby="salaryVaultHeading"
+          >
+            <div>
+              <h4 id="salaryVaultHeading" className="font-bold text-teal-900">
+                Encrypted salary sync
+              </h4>
+              <p className="mt-1 text-[11px] leading-relaxed text-teal-800">
+                A separate vault passphrase encrypts salary data in this browser
+                before upload. It is never sent to Supabase or saved on this
+                device. Use the same passphrase on each device. If you lose it
+                and all unlocked devices, the vault cannot be recovered.
+              </p>
+            </div>
+            <p
+              className="text-[11px] font-semibold text-teal-900"
+              role="status"
+            >
+              {salaryVaultStatus === "unlocked" &&
+                (salaryVaultSyncing
+                  ? "Encrypted salary changes are syncing or loading..."
+                  : "Vault unlocked. Salary data is encrypted before cloud sync.")}
+              {salaryVaultStatus === "locked" &&
+                "Encrypted vault found. Unlock it to view or sync salary data."}
+              {salaryVaultStatus === "uninitialized" &&
+                "Create a vault to encrypt and sync existing salary settings and earnings."}
+              {salaryVaultStatus === "unavailable" &&
+                "The encrypted salary-vault table is not installed yet. Apply the pending Supabase migration before creating a vault."}
+              {salaryVaultStatus === "loading" &&
+                "Checking encrypted salary vault..."}
+            </p>
+            {salaryVaultStatus === "unlocked" ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleLockVault}
+                    disabled={vaultActionLoading}
+                    className="rounded-lg border border-teal-300 bg-white px-3 py-2 text-xs font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60"
+                  >
+                    Lock salary vault
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRotationOpen((value) => !value)}
+                    disabled={vaultActionLoading}
+                    className="rounded-lg border border-teal-300 bg-white px-3 py-2 text-xs font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60"
+                  >
+                    Change vault passphrase
+                  </button>
+                </div>
+                {rotationOpen && (
+                  <form
+                    onSubmit={handleRotateVault}
+                    className="space-y-2 rounded-lg border border-teal-200 bg-white p-3"
+                  >
+                    <label className="block">
+                      <span className="mb-1 block font-semibold text-slate-700">
+                        New passphrase
+                      </span>
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        minLength={12}
+                        required
+                        value={vaultNextPassphrase}
+                        onChange={(event) =>
+                          setVaultNextPassphrase(event.target.value)
+                        }
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block font-semibold text-slate-700">
+                        Confirm new passphrase
+                      </span>
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        minLength={12}
+                        required
+                        value={vaultNextPassphraseConfirmation}
+                        onChange={(event) =>
+                          setVaultNextPassphraseConfirmation(event.target.value)
+                        }
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs"
+                      />
+                    </label>
+                    <button
+                      type="submit"
+                      disabled={vaultActionLoading}
+                      className="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
+                    >
+                      {vaultActionLoading
+                        ? "Re-encrypting..."
+                        : "Change and sync passphrase"}
+                    </button>
+                  </form>
+                )}
+              </div>
+            ) : (
+              ["locked", "uninitialized"].includes(salaryVaultStatus) && (
+                <form onSubmit={handleVaultSubmit} className="space-y-2">
+                  <label className="block">
+                    <span className="mb-1 block font-semibold text-slate-700">
+                      Vault passphrase (at least 12 characters)
+                    </span>
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      minLength={12}
+                      required
+                      value={vaultPassphrase}
+                      onChange={(event) =>
+                        setVaultPassphrase(event.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
+                    />
+                  </label>
+                  {salaryVaultStatus === "uninitialized" && (
+                    <label className="block">
+                      <span className="mb-1 block font-semibold text-slate-700">
+                        Confirm vault passphrase
+                      </span>
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        minLength={12}
+                        required
+                        value={vaultPassphraseConfirmation}
+                        onChange={(event) =>
+                          setVaultPassphraseConfirmation(event.target.value)
+                        }
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
+                      />
+                    </label>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={vaultActionLoading}
+                    className="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
+                  >
+                    {vaultActionLoading
+                      ? "Encrypting..."
+                      : salaryVaultStatus === "locked"
+                        ? "Unlock vault"
+                        : "Create and sync encrypted vault"}
+                  </button>
+                </form>
+              )
+            )}
+            {salaryVaultConflict && (
+              <div className="space-y-2 rounded-lg border border-rose-200 bg-rose-50 p-3">
+                <p className="text-[11px] text-rose-800">
+                  A newer cloud vault revision exists. This device has not
+                  overwritten it. Reloading discards this browser's unsaved
+                  salary changes.
+                </p>
+                <button
+                  type="button"
+                  onClick={onReloadSalaryVault}
+                  disabled={salaryVaultSyncing}
+                  className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60"
+                >
+                  Reload latest encrypted vault
+                </button>
+              </div>
+            )}
+            {(vaultActionError || salaryVaultError) && (
+              <p className="text-[11px] text-rose-700" role="alert">
+                {vaultActionError || salaryVaultError}
+              </p>
+            )}
+          </section>
           <section className="rounded-xl border border-rose-200 bg-rose-50 p-4">
             <h4 className="text-sm font-bold text-rose-800">
               Privacy and account
