@@ -1703,7 +1703,6 @@ export default function App() {
       expenseDay,
       new Date(Date.UTC(expenseYear, expenseMonth, 0)).getUTCDate(),
     ));
-    setFinanceTrackingScope("month");
     pendingExpenseClearRef.current = true;
     showToast("Expense record added successfully.", "success");
   };
