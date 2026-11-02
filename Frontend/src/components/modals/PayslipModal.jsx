@@ -13,7 +13,7 @@ export default function PayslipModal({
   dailyWage,
   formatCurrency,
 }) {
-  const periodLabel = formatPayrollPeriod(payrollPeriod);
+  const periodLabel = formatPayrollPeriod(payrollPeriod).replace(/\s*[–—-]\s*/, " - ");
   const earningsLabel = payrollPeriodEarningsAvailable
     ? formatCurrency(payrollPeriodSummary.recordedEarnings)
     : "Private — unlock salary vault";
@@ -72,7 +72,7 @@ export default function PayslipModal({
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             ["Employee", userName, "fa-user"],
-            ["Pay period", periodLabel, "fa-calendar"],
+            ["Pay Period", periodLabel, "fa-calendar"],
             [
               "Daily wage",
               !payrollPeriodEarningsAvailable
@@ -85,7 +85,7 @@ export default function PayslipModal({
             ["Recorded hours", `${recordedHours.toFixed(2)} hrs`, "fa-clock"],
           ].map(([label, value, icon]) => (
             <div key={label} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3">
-              <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+              <span className="flex items-center gap-1.5 text-[9px] font-bold tracking-wider text-slate-400">
                 <i className={`fa-solid ${icon} text-teal-600`} aria-hidden="true"></i>
                 {label}
               </span>
