@@ -388,21 +388,17 @@ export default function SettingsModal({
                     </p>
                   </div>
                 </div>
-                <span className={`w-fit rounded-full border px-3 py-1 text-[10px] font-semibold ${
-                  salaryVaultStatus === "unlocked"
-                    ? "border-emerald-100 bg-white text-emerald-700"
-                    : "border-amber-200 bg-white text-amber-800"
-                }`}>
-                  {salaryVaultStatus === "unlocked"
-                    ? "Vault unlocked"
-                    : salaryVaultStatus === "loading"
+                {salaryVaultStatus !== "unlocked" && (
+                  <span className="w-fit rounded-full border border-amber-200 bg-white px-3 py-1 text-[10px] font-semibold text-amber-800">
+                    {salaryVaultStatus === "loading"
                       ? "Checking vault"
                       : salaryVaultStatus === "unavailable"
                         ? "Vault unavailable"
                         : salaryVaultStatus === "uninitialized"
                           ? "Vault setup needed"
                           : "Vault locked"}
-                </span>
+                  </span>
+                )}
               </div>
               {salaryVaultStatus !== "unlocked" && (
                 <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-relaxed text-amber-900">
