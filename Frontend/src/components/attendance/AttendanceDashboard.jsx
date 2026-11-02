@@ -297,7 +297,7 @@ export default function AttendanceDashboard({
                 </div>
               )}
 
-              <div className="flex items-center justify-between gap-3 border-t border-slate-200 py-3">
+              <div className="flex items-center justify-between gap-3 py-3">
                 <span className="flex items-center gap-2 font-bold text-slate-900">
                   <i className="fa-solid fa-circle-check text-teal-600" aria-hidden="true"></i>
                   Total Daily Earnings
