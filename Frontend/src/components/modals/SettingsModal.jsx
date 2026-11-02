@@ -459,23 +459,9 @@ export default function SettingsModal({
           <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-600">
             Holiday-pay estimates use the configured daily wage and recorded
             hours. Calculations run locally after unlocking the encrypted salary
-            vault. Confirm eligibility below; company-specific pay rules must be
-            verified separately.
+            vault. Confirm eligibility in Manage Holidays; company-specific pay
+            rules must be verified separately.
           </p>
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <input
-              type="checkbox"
-              checked={settingsDraft.holidayEligibilityConfirmed}
-              onChange={(event) =>
-                updateDraft("holidayEligibilityConfirmed", event.target.checked)
-              }
-              className="h-4 w-4 accent-teal-600"
-            />
-            <span className="text-[11px] text-slate-700">
-              Confirm employee eligibility for unworked regular-holiday pay
-              estimates
-            </span>
-          </label>
             </>
           )}
         </div>
@@ -1095,6 +1081,23 @@ export default function SettingsModal({
                 {`${settingsDraft.holidays.filter((holiday) => holiday.enabled).length} of ${settingsDraft.holidays.length} active`}
               </span>
             </div>
+            <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <input
+                type="checkbox"
+                checked={settingsDraft.holidayEligibilityConfirmed}
+                onChange={(event) =>
+                  updateDraft(
+                    "holidayEligibilityConfirmed",
+                    event.target.checked,
+                  )
+                }
+                className="mt-0.5 h-4 w-4 shrink-0 accent-teal-600"
+              />
+              <span className="text-[11px] leading-relaxed text-amber-900">
+                Confirm employee eligibility for unworked regular-holiday pay
+                estimates
+              </span>
+            </label>
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-3">
                 <div>
