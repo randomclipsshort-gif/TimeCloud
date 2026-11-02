@@ -119,6 +119,16 @@ export default function AttendanceDashboard({
         (Number(record.overtimeAmount) || 0) -
         (displayedNightDifferentialPay || 0),
     );
+  const hasAllowance = allowanceIncluded && allowanceAmount > 0;
+  const hasNightDifferential = displayedNightDifferentialPay > 0;
+  const hasOvertime = displayedOvertimePay > 0;
+  const lateMinutes = Number(record.lateMinutes);
+  const undertimeMinutes = Number(record.undertimeMinutes);
+  const hasLateOrUndertime = Boolean(
+    record.late || record.undertime ||
+    (Number.isFinite(lateMinutes) && lateMinutes > 0) ||
+    (Number.isFinite(undertimeMinutes) && undertimeMinutes > 0),
+  );
 
   return (
     <div className="w-full shrink-0 grid grid-cols-1 items-start md:grid-cols-12 gap-6">
@@ -251,11 +261,13 @@ export default function AttendanceDashboard({
                 </div>
               </div>
 
+              {(hasAllowance || hasNightDifferential || hasOvertime) && (
               <div>
                 <h4 className="mb-1 text-[9px] font-bold uppercase tracking-wider text-slate-500">
                   Added to starting pay
                 </h4>
                 <div className="divide-y divide-slate-100">
+                  {hasAllowance && (
                   <div className="flex justify-between gap-3 py-2.5">
                     <span className="flex min-w-0 flex-col">
                       <span className="text-slate-700">+ Company allowance</span>
@@ -265,6 +277,8 @@ export default function AttendanceDashboard({
                       {allowanceIncluded ? `+₱${allowanceAmount.toFixed(2)}` : "—"}
                     </span>
                   </div>
+                  )}
+                  {hasNightDifferential && (
                   <div className="flex justify-between gap-3 py-2.5">
                     <span className="flex min-w-0 flex-col">
                       <span className="text-slate-700">+ Night differential</span>
@@ -278,6 +292,8 @@ export default function AttendanceDashboard({
                         : "—"}
                     </span>
                   </div>
+                  )}
+                  {hasOvertime && (
                   <div className="flex justify-between gap-3 py-2.5">
                     <span className="flex min-w-0 flex-col">
                       <span className="text-slate-700">+ Overtime</span>
@@ -297,9 +313,12 @@ export default function AttendanceDashboard({
                           : "—"}
                     </span>
                   </div>
+                  )}
                 </div>
               </div>
+              )}
 
+              {hasLateOrUndertime && (
               <div className="border-t border-slate-200 pt-3">
                 <h4 className="mb-2 text-[9px] font-bold uppercase tracking-wider text-slate-500">
                   Deductions
@@ -316,6 +335,7 @@ export default function AttendanceDashboard({
                   </span>
                 </div>
               </div>
+              )}
             </div>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
