@@ -3,17 +3,18 @@ import { useState } from "react";
 export default function AttendanceDashboard({
   record,
   selectedDate,
+  canClearShift,
   isTimedIn,
   canRecordAttendance,
   canTimeIn,
   canTimeOut,
   earlyPunchWindowMinutes,
+  salaryVaultStatus,
   holidayPayEstimate,
   estimatedEarnings,
   dailyAllowance,
   holidayWorkedHours,
   nightDifferentialPay,
-  nightDifferentialCalculation,
   overtimePay,
   overtimeCalculation,
   configuredDailyWage,
@@ -28,6 +29,7 @@ export default function AttendanceDashboard({
   year,
 }) {
   const [isYearPickerOpen, setIsYearPickerOpen] = useState(false);
+  const salaryDataPrivate = salaryVaultStatus !== "unlocked";
   const holidayTextColors = {
     "Regular Holiday": "text-rose-700",
     "Special Non-Working Day": "text-indigo-700",
@@ -78,7 +80,9 @@ export default function AttendanceDashboard({
           : "200% total including base wage"
       : holidayPayEstimate?.regularPayRateLabel;
   const displayedHolidayPayRateLabel =
-    record.holidayClassification === "Special Non-Working Day"
+    salaryDataPrivate
+      ? "Private — unlock salary vault"
+      : record.holidayClassification === "Special Non-Working Day"
       ? record.holidayUnworked || record.type === "Absent"
         ? "0% total including base wage"
         : holidayPayEstimate?.regularPayRateLabel ||
@@ -91,56 +95,64 @@ export default function AttendanceDashboard({
   const shiftTitleColor = record.holidayName
     ? holidayTextColors[record.holidayClassification]
     : "text-textMain";
-  const timeClockDisabled = isTimedIn ? !canTimeOut : !canTimeIn;
-  const entryButtonDisabled = !canRecordAttendance;
-  const getNumericAmount = (value) => {
-    const amount = Number(String(value).replace(/[^\d.-]/g, ""));
-    return Number.isFinite(amount) ? amount : 0;
-  };
-  const displayedOvertimePay = overtimePay != null && Number.isFinite(Number(overtimePay))
-    ? Number(overtimePay)
-    : null;
-  const displayedNightDifferentialPay =
-    nightDifferentialPay != null && Number.isFinite(Number(nightDifferentialPay))
-    ? Number(nightDifferentialPay)
-    : null;
+  const shiftTitle = record.shift === "Manual Entry Adjustment"
+    ? record.assignedShiftName || "Assigned Shift"
+    : record.shift;
+  const breakdownTitle = record.holidayName ||
+    (record.type === "Regular" ? "Regular Work Day" : shiftTitle);
+  const shiftSubtitle = record.holidayName
+    ? `${record.holidayDutyLabel === "Holiday Duty" ? record.assignedShiftName || record.shift : record.holidayDutyLabel} · ${record.shift}${record.holidayDescription ? ` · ${record.holidayDescription}` : ""}`
+    : record.type === "Regular"
+      ? [record.assignedShiftName || shiftTitle, record.shift !== (record.assignedShiftName || shiftTitle) ? record.shift : null]
+          .filter(Boolean)
+          .join(" · ")
+      : null;
+  const wageRateIndicator = (
+    <span
+      id="wageRateText"
+      className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-teal-700"
+    >
+      <i
+        className="fa-solid fa-percent text-[9px]"
+        aria-hidden="true"
+      ></i>
+      {`Wage Rate: ${holidayRateLabel}`}
+    </span>
+  );
   const allowanceAmount = Number(dailyAllowance);
-  const allowanceIncluded = record.holidayClassification
-    ? record.type !== "Absent" && Number.isFinite(allowanceAmount) && allowanceAmount >= 0
-    : !["Absent", "Rest Day"].includes(record.type) &&
-      !record.holidayUnworked &&
-      Number.isFinite(allowanceAmount) &&
-      allowanceAmount >= 0;
-  const startingPay = record.holidayClassification
-    ? holidayPayEstimate?.regularPay
-    : Math.max(
-      0,
-      getNumericAmount(record.est) -
-        (Number(record.overtimeAmount) || 0) -
-        (displayedNightDifferentialPay || 0),
-    );
-  const hasAllowance = allowanceIncluded && allowanceAmount > 0;
-  const hasNightDifferential = displayedNightDifferentialPay > 0;
-  const hasOvertime = displayedOvertimePay > 0;
+  const hasAllowance =
+    !["Absent", "Rest Day"].includes(record.type) &&
+    !record.holidayUnworked &&
+    Number.isFinite(allowanceAmount) &&
+    allowanceAmount > 0;
+  const nightDifferentialAmount = Number(nightDifferentialPay);
+  const hasNightDifferential =
+    Number.isFinite(nightDifferentialAmount) && nightDifferentialAmount > 0;
+  const overtimeAmount = Number(overtimePay);
+  const hasOvertime = Number.isFinite(overtimeAmount) && overtimeAmount > 0;
   const lateMinutes = Number(record.lateMinutes);
   const undertimeMinutes = Number(record.undertimeMinutes);
-  const hasLateOrUndertime = Boolean(
-    record.late || record.undertime ||
+  const hasLateOrUndertime =
+    record.late ||
+    record.undertime ||
     (Number.isFinite(lateMinutes) && lateMinutes > 0) ||
-    (Number.isFinite(undertimeMinutes) && undertimeMinutes > 0),
-  );
+    (Number.isFinite(undertimeMinutes) && undertimeMinutes > 0);
   const attendanceExceptions = [
     Number.isFinite(lateMinutes) && lateMinutes > 0
       ? `Late ${lateMinutes} min`
-      : record.late ? "Late" : null,
+      : record.late
+        ? "Late"
+        : null,
     Number.isFinite(undertimeMinutes) && undertimeMinutes > 0
       ? `Undertime ${undertimeMinutes} min`
-      : record.undertime ? "Undertime" : null,
-  ].filter(Boolean).join(" ? ");
-  const hasBasePay = !record.holidayClassification &&
-    estimatedEarnings != null &&
-    Number.isFinite(startingPay) &&
-    startingPay > 0;
+      : record.undertime
+        ? "Undertime"
+        : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const timeClockDisabled = isTimedIn ? !canTimeOut : !canTimeIn;
+  const entryButtonDisabled = !canRecordAttendance;
 
   return (
     <div className="w-full shrink-0 grid grid-cols-1 items-start md:grid-cols-12 gap-6">
@@ -149,7 +161,10 @@ export default function AttendanceDashboard({
           <div className="mb-5 flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
-                <i className="fa-solid fa-clipboard-list text-lg" aria-hidden="true"></i>
+                <i
+                  className="fa-solid fa-clipboard-list text-lg"
+                  aria-hidden="true"
+                ></i>
               </span>
               <div className="min-w-0">
                 <h2 className="text-base font-bold text-textMain">
@@ -167,149 +182,234 @@ export default function AttendanceDashboard({
               {selectedDate}
             </span>
           </div>
+
           <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <span
-                id="workdayTypeBadge"
-                className={`rounded-full bg-white px-2.5 py-1 text-[10px] font-bold tracking-wide ring-1 ring-slate-200 ${workdayBadgeTextColor}`}
-              >
-                {workdayBadgeLabel}
-              </span>
-              <span
-                id="wageRateText"
-                className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-700"
-              >
-                <i className="fa-solid fa-percent text-[9px]" aria-hidden="true"></i>
-                {`Wage Rate: ${holidayRateLabel}`}
-              </span>
-            </div>
-            <div
-              id="shiftTitle"
-              className={`text-sm font-bold ${shiftTitleColor}`}
-            >
-              {record.holidayName || record.shift}
-            </div>
-            <div id="shiftSubTitle" className="mt-1 text-[11px] leading-relaxed text-textMuted">
-              {record.holidayName
-                ? `${record.holidayDutyLabel} · ${record.shift}${record.holidayDescription ? ` · ${record.holidayDescription}` : ""}`
-                : record.wageRate}
-            </div>
-          </div>
-          <div className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-[10px]">
-              <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
-                <i className="fa-solid fa-circle-info text-slate-400" aria-hidden="true"></i>
-                Base Daily Wage (8 hrs):
-                <span id="baseWage" className="font-bold text-slate-900">
-                  {record.holidayClassification || record.type === "Unassigned"
-                    ? Number(configuredDailyWage) > 0
-                      ? `?${Number(configuredDailyWage).toFixed(2)}`
-                      : "Required for estimate"
-                    : record.base}
-                </span>
-              </span>
-              <span className="shrink-0 italic text-slate-400">
-                Reference rate ? not added separately
-              </span>
-            </div>
-
-            <div className="px-4">
-              <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-3">
-                <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Pay Components Breakdown
-                </h3>
+              {!record.holidayName && record.type !== "Regular" && (
                 <span
-                  className="inline-flex items-center gap-1 text-[9px] font-semibold text-teal-700"
-                  title="Total daily earnings equals starting pay plus applicable additions."
+                  id="workdayTypeBadge"
+                  className={`rounded-full bg-white px-2.5 py-1 text-[10px] font-bold tracking-wide ring-1 ring-slate-200 ${workdayBadgeTextColor}`}
                 >
-                  <i className="fa-regular fa-circle-question" aria-hidden="true"></i>
-                  Calculation Info
+                  {workdayBadgeLabel}
+                </span>
+              )}
+            </div>
+            <div className="flex items-start justify-between gap-2">
+              <div
+                id="shiftTitle"
+                className={`min-w-0 text-sm font-bold ${shiftTitleColor}`}
+              >
+                {breakdownTitle}
+              </div>
+              {wageRateIndicator}
+            </div>
+            {shiftSubtitle && (
+              <div
+                id="shiftSubTitle"
+                className="mt-1 text-[11px] leading-relaxed text-textMuted"
+              >
+                {shiftSubtitle}
+              </div>
+            )}
+          </div>
+
+          {/* New Redesigned Earnings & Pay Components Card Layout */}
+          <div className="mb-4 rounded-2xl border border-teal-100 bg-white p-4 shadow-xs">
+            {/* Estimated Daily Earnings Hero Banner */}
+            <div className="rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50/80 to-emerald-50/80 p-4 mb-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-teal-800">
+                    Estimated Daily Earnings
+                  </span>
+                  <span
+                    id="estEarnings"
+                    className="mt-1 block text-2xl font-extrabold leading-tight tracking-tight text-teal-800"
+                  >
+                    {salaryDataPrivate
+                      ? "Private — unlock salary vault"
+                      : estimatedEarnings != null
+                      ? `₱${estimatedEarnings.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : "Estimate unavailable"}
+                  </span>
+                </div>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-teal-700 shadow-xs border border-teal-100">
+                  <i
+                    className="fa-solid fa-arrow-trend-up text-sm"
+                    aria-hidden="true"
+                  ></i>
                 </span>
               </div>
+              {record.holidayClassification && (
+                <div className="mt-2 text-[10px] font-medium text-teal-700 flex items-center gap-1">
+                  <i className="fa-regular fa-circle-check text-xs"></i>
+                  {`${record.holidayClassification} · ${holidayWorkedHours ?? 0} ${holidayWorkedHours === 1 ? "hour" : "hours"} worked`}
+                </div>
+              )}
+            </div>
 
-              <div className="divide-y divide-slate-100">
-                {record.holidayClassification ? (
-                  <div className="flex justify-between gap-3 py-3">
-                    <span className="flex min-w-0 flex-col">
-                      <span className="font-semibold text-slate-800">Holiday Pay Total</span>
-                      <span className="mt-0.5 text-[10px] text-slate-500">
-                        {displayedHolidayPayRateLabel || "Includes base wage"}
-                      </span>
-                    </span>
-                    <span id="holidayPay" className="shrink-0 text-right font-semibold text-teal-700">
-                      {holidayPayEstimate?.regularPay != null
-                        ? `?${holidayPayEstimate.regularPay.toFixed(2)}`
-                        : "See estimate details"}
-                    </span>
-                  </div>
-                ) : hasBasePay && (
-                  <div className="flex justify-between gap-3 py-3">
-                    <span className="flex min-w-0 flex-col">
-                      <span className="font-semibold text-slate-800">Base Pay</span>
-                      <span className="mt-0.5 text-[10px] text-slate-500">For the recorded shift</span>
-                    </span>
-                    <span id="basePay" className="shrink-0 text-right font-semibold text-slate-800">
-                      {`?${startingPay.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                    </span>
-                  </div>
-                )}
-                {hasAllowance && (
-                  <div className="flex items-center justify-between gap-3 py-3">
-                    <span className="flex items-center gap-2 font-semibold text-slate-800">
-                      Company Allowance
-                    </span>
-                    <span id="companyAllowance" className="font-semibold text-slate-800">
-                      {`+?${allowanceAmount.toFixed(2)}`}
-                    </span>
-                  </div>
-                )}
-                {hasNightDifferential && (
-                  <div className="flex items-center justify-between gap-3 py-3">
-                    <span className="font-medium text-slate-600">Night Differential</span>
-                    <span id="nightDifferentialPay" className="font-semibold text-slate-800">
-                      {`+?${displayedNightDifferentialPay.toFixed(2)}`}
-                    </span>
-                  </div>
-                )}
-                {hasOvertime && (
-                  <div className="flex justify-between gap-3 py-3">
-                    <span className="flex min-w-0 flex-col">
-                      <span className="font-medium text-slate-600">Overtime</span>
-                      {overtimeCalculation && (
-                        <span className="mt-0.5 text-[10px] text-slate-500">
-                          {overtimeCalculation}
-                        </span>
-                      )}
-                    </span>
-                    <span id="overtimePay" className="shrink-0 font-semibold text-slate-800">
-                      {`+?${displayedOvertimePay.toFixed(2)}`}
-                    </span>
-                  </div>
-                )}
-              </div>
+            {/* Reference Rate Line */}
+            <div className="mb-4 flex items-center justify-between text-[10px]">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <i
+                  className="fa-solid fa-circle-info text-slate-400 text-[10px]"
+                  aria-hidden="true"
+                ></i>
+                Base Daily Wage (8 hrs):{" "}
+                <strong className="text-slate-700 font-semibold" id="baseWage">
+                  {salaryDataPrivate
+                    ? "Private"
+                    : record.holidayClassification || record.type === "Unassigned"
+                    ? Number(configuredDailyWage) > 0
+                      ? `₱${Number(configuredDailyWage).toFixed(2)}`
+                      : record.holidayClassification
+                        ? "Required"
+                        : record.base
+                    : record.base}
+                </strong>
+              </span>
+              <span className="text-[9px] italic text-slate-400">
+                Reference rate · Not added separately
+              </span>
+            </div>
 
-              {hasLateOrUndertime && (
-                <div className="flex justify-between gap-3 border-t border-slate-100 py-2.5 text-[10px]">
-                  <span className="text-slate-500">Late / Undertime</span>
-                  <span id="penaltyPay" className="font-medium text-slate-500">
-                    No deduction configured
+            {/* Pay Components Section Header */}
+            <div className="mb-2 flex items-center justify-between border-b border-slate-100 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <span>Pay Components Breakdown</span>
+              <button
+                type="button"
+                className="text-teal-700 hover:underline flex items-center gap-1 lowercase font-normal normal-case"
+              >
+                <i
+                  className="fa-regular fa-circle-question text-[10px]"
+                  aria-hidden="true"
+                ></i>
+                Calculation Info
+              </button>
+            </div>
+
+            {/* Pay Components Borderless List */}
+            <div className="divide-y divide-slate-100 text-[11px]">
+              {record.holidayClassification && (
+                <div className="py-2.5 flex items-center justify-between gap-3">
+                  <span className="flex flex-col min-w-0">
+                    <span className="font-semibold text-slate-800">
+                      Holiday Pay Total
+                    </span>
+                    <span className="text-[10px] text-slate-500 mt-0.5">
+                      {displayedHolidayPayRateLabel ||
+                        "130% total including base wage"}
+                    </span>
+                  </span>
+                  <span
+                    id="holidayPay"
+                    className="font-bold text-slate-800 shrink-0 tabular-nums"
+                  >
+                    {salaryDataPrivate
+                      ? "Private"
+                      : holidayPayEstimate?.regularPay != null
+                      ? `₱${holidayPayEstimate.regularPay.toFixed(2)}`
+                      : "Estimate unavailable"}
                   </span>
                 </div>
               )}
 
-              <div className="flex items-center justify-between gap-3 py-3">
-                <span className="flex items-center gap-2 font-bold text-slate-900">
-                  <i className="fa-solid fa-circle-check text-teal-600" aria-hidden="true"></i>
+              {hasAllowance && (
+                <div className="py-2.5 flex items-center justify-between gap-3">
+                  <span className="flex flex-col min-w-0">
+                    <span className="font-semibold text-slate-800">
+                      Co. Allowance
+                    </span>
+                    <span className="text-[10px] text-slate-500 mt-0.5">
+                      Standard daily stipend
+                    </span>
+                  </span>
+                  <span
+                    id="companyAllowance"
+                    className="font-semibold text-slate-800 shrink-0 tabular-nums"
+                  >
+                    {salaryDataPrivate ? "Private" : `+₱${allowanceAmount.toFixed(2)}`}
+                  </span>
+                </div>
+              )}
+
+              {hasNightDifferential && (
+                <div className="py-2.5 flex items-center justify-between gap-3">
+                  <span className="flex flex-col min-w-0">
+                    <span className="font-semibold text-slate-800">
+                      Night Differential
+                    </span>
+                  </span>
+                  <span
+                    id="nightDifferentialPay"
+                    className="font-semibold text-slate-800 shrink-0 tabular-nums"
+                  >
+                    {salaryDataPrivate ? "Private" : `+₱${nightDifferentialAmount.toFixed(2)}`}
+                  </span>
+                </div>
+              )}
+
+              {hasOvertime && (
+                <div className="py-2.5 flex items-center justify-between gap-3">
+                  <span className="flex flex-col min-w-0">
+                    <span className="font-semibold text-slate-800">
+                      Overtime
+                    </span>
+                    {!salaryDataPrivate && overtimeCalculation && (
+                      <span className="text-[10px] text-slate-500 mt-0.5">
+                        {overtimeCalculation}
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    id="overtimePay"
+                    className="font-semibold text-slate-800 shrink-0 tabular-nums"
+                  >
+                    {salaryDataPrivate ? "Private" : `+₱${overtimeAmount.toFixed(2)}`}
+                  </span>
+                </div>
+              )}
+
+              {/* Total Daily Earnings Summary Row */}
+              <div className="pt-3 pb-1 flex items-center justify-between gap-3 mt-1">
+                <span className="flex items-center gap-1.5 font-bold text-slate-900">
+                  <i
+                    className="fa-regular fa-circle-check text-teal-600 text-xs"
+                    aria-hidden="true"
+                  ></i>
                   Total Daily Earnings
                 </span>
-                <span id="estEarnings" className="text-base font-extrabold text-emerald-700">
-                  {estimatedEarnings != null
-                    ? `?${estimatedEarnings.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : "Estimate unavailable"}
+                <span className="font-extrabold text-teal-800 text-sm tabular-nums">
+                  {salaryDataPrivate
+                    ? "Private — unlock salary vault"
+                    : estimatedEarnings != null
+                    ? `₱${estimatedEarnings.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : record.holidayClassification
+                      ? "Estimate unavailable"
+                      : record.est}
                 </span>
               </div>
             </div>
+
+            {/* Attendance Exceptions */}
+            {hasLateOrUndertime && (
+              <div className="mt-3 border-t border-slate-100 pt-2.5 text-[11px]">
+                <h4 className="mb-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                  Attendance Exceptions
+                </h4>
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-slate-600">{attendanceExceptions}</span>
+                  <span
+                    id="penaltyPay"
+                    className="shrink-0 font-medium text-slate-400 text-[10px]"
+                  >
+                    No deduction
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
+
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="mb-3 flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
@@ -322,25 +422,37 @@ export default function AttendanceDashboard({
             <div className="space-y-2.5 text-[11px]">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-textMuted">Assigned Shift</span>
-                <span id="assignedShiftTime" className="text-right font-semibold text-textMain">
+                <span
+                  id="assignedShiftTime"
+                  className="text-right font-semibold text-textMain"
+                >
                   {record.assigned}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-textMuted">First Time In</span>
-                <span id="firstTimeIn" className="text-right font-semibold text-teal-700">
+                <span
+                  id="firstTimeIn"
+                  className="text-right font-semibold text-teal-700"
+                >
                   {record.in}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-textMuted">Last Time Out</span>
-                <span id="lastTimeOut" className="text-right font-semibold text-teal-700">
+                <span
+                  id="lastTimeOut"
+                  className="text-right font-semibold text-teal-700"
+                >
                   {record.clockedIn ? "Tracking" : record.out}
                 </span>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
                 <span className="text-textMuted">Status</span>
-                <div id="statusBadgesContainer" className="flex flex-wrap justify-end gap-1.5">
+                <div
+                  id="statusBadgesContainer"
+                  className="flex flex-wrap justify-end gap-1.5"
+                >
                   {record.badges.map((badge) => (
                     <span
                       key={badge.text}
@@ -355,6 +467,7 @@ export default function AttendanceDashboard({
             </div>
           </div>
         </div>
+
         <div className="space-y-3 pt-6 border-t border-slate-100 mt-6">
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -392,6 +505,7 @@ export default function AttendanceDashboard({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <button
+              type="button"
               data-action="openAssignShiftModal()"
               className="bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium py-2 px-3 rounded-xl text-xs transition border border-slate-200 flex items-center justify-center space-x-1.5 cursor-pointer"
             >
@@ -399,8 +513,23 @@ export default function AttendanceDashboard({
               <span>Assign Shift</span>
             </button>
             <button
-              data-action="openModal(&#x27;grantLeaveModal&#x27;)"
-              className="bg-amber-50 hover:bg-amber-100 text-amber-800 font-medium py-2 px-3 rounded-xl text-xs transition border border-amber-200/60 flex items-center justify-center space-x-1.5 cursor-pointer"
+              type="button"
+              data-action="clearSelectedShift()"
+              disabled={!canClearShift}
+              title={
+                canClearShift
+                  ? `Clear the shift assigned to ${selectedDate}`
+                  : "Clear is available only when no attendance has been recorded"
+              }
+              className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-medium py-2 px-3 rounded-xl text-xs transition border border-rose-200 flex items-center justify-center space-x-1.5 cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 disabled:border-slate-200 disabled:hover:bg-slate-50"
+            >
+              <i className="fa-regular fa-circle-xmark"></i>
+              <span>Clear Shift</span>
+            </button>
+            <button
+              type="button"
+              data-action="openModal('grantLeaveModal')"
+              className="col-span-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-medium py-2 px-3 rounded-xl text-xs transition border border-amber-200/60 flex items-center justify-center space-x-1.5 cursor-pointer"
             >
               <i className="fa-solid fa-umbrella-beach text-amber-600"></i>
               <span>Grant Leave</span>
@@ -408,6 +537,7 @@ export default function AttendanceDashboard({
           </div>
         </div>
       </section>
+
       <section className="md:col-span-8 lg:sticky md:top-20 md:self-start bg-cardBg rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-6 border-b border-slate-100 gap-4">
           <div>

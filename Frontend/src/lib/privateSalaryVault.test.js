@@ -24,6 +24,22 @@ const samplePayload = {
   attendance: {
     "2026-10-28": { base: "P2500.00", est: "P2500.00 PHP" },
   },
+  payslips: [{
+    id: "employee-1:2026-10-26:2026-11-10",
+    employeeId: "employee-1",
+    employeeName: "Example Employee",
+    period: { startDate: "2026-10-26", endDate: "2026-11-10" },
+    generatedAt: "2026-11-03T00:00:00.000Z",
+    summary: { recordedEarnings: 2500, regularHours: 8, overtimeHours: 0 },
+    earningsBreakdown: { items: [{ id: "basicPay", total: 2500 }] },
+    deductions: {
+      items: [{ id: "sss", amount: 125 }],
+      total: 125,
+      employeeContributionTotal: 125,
+    },
+    netPay: 2375,
+    settings: { dailyWage: "2500", dailyAllowance: "100" },
+  }],
 };
 
 test("salary vault encrypts locally and unlocks with the recovery passphrase", async () => {
@@ -32,6 +48,7 @@ test("salary vault encrypts locally and unlocks with the recovery passphrase", a
   assert.equal(record.key_version, 1);
   assert.equal(JSON.stringify(record).includes("2500"), false);
   assert.equal(JSON.stringify(record).includes("P2500"), false);
+  assert.equal(JSON.stringify(record).includes("Example Employee"), false);
 
   const { payload } = await unlockSalaryVault(record, "a-long-vault-passphrase");
   assert.deepEqual(payload, samplePayload);

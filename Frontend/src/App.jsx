@@ -13,12 +13,24 @@ import { getHolidayClassification, getHolidayForDate } from "./utils/holidayUtil
 import { calculateHolidayPay, getAttendanceHours } from "./utils/holidayPay.js";
 import { getAttendancePunchAvailability } from "./utils/attendancePunchRules.js";
 import {
+  AUTH_ACTIVITY_WRITE_INTERVAL_MS,
+  AUTH_IDLE_TIMEOUT_MS,
+  getAuthActivityStorageKey,
+  isAuthSessionExpired,
+  parseAuthActivityTimestamp,
+} from "./lib/authSessionTimeout.js";
+import {
   calculateCutoffPayrollDeductions,
   getPayrollDeductionSettingsDefaults,
   payrollDeductionSettingKeys,
   sumCutoffPayrollDeductions,
 } from "./utils/payrollDeductions.js";
 import { summarizePayrollEarningsBreakdown } from "./utils/payrollEarningsBreakdown.js";
+import {
+  appendPayslipSnapshot,
+  createPayslipSnapshot,
+  findPayslipSnapshot,
+} from "./utils/payrollHistory.js";
 import {
   getBudgetUtilization,
   getExpenseDate,
@@ -85,10 +97,7 @@ const defaultAttendance = {
   dots: [],
   badges: [{ text: "No Shift Assigned", color: "bg-slate-100 text-slate-600" }],
 };
-const originalShiftTemplates = [
-  { id: "morning", name: "Standard Shift", label: "Morning", range: "06:00 AM - 02:00 PM", assigned: "6:00 AM - 2:00 PM", startTime: "06:00", endTime: "14:00", icon: "fa-sun", iconColor: "text-amber-500" },
-  { id: "evening", name: "Evening Shift", label: "Evening", range: "02:00 PM - 10:00 PM", assigned: "2:00 PM - 10:00 PM", startTime: "14:00", endTime: "22:00", icon: "fa-cloud-sun", iconColor: "text-orange-500" },
-  { id: "night", name: "Night Shift", label: "Night", range: "10:00 PM - 06:00 AM", assigned: "10:00 PM - 6:00 AM", startTime: "22:00", endTime: "06:00", icon: "fa-moon", iconColor: "text-indigo-600" },
+const defaultShiftTemplates = [
   { id: "rest-day", name: "Rest Day", label: "Rest Day", range: "No working hours", assigned: "Rest Day", icon: "fa-calendar-xmark", iconColor: "text-slate-600", protected: true },
 ];
 const leaveTypes = {
@@ -126,6 +135,22 @@ function formatDuration(minutes) {
 function getRecord(records, monthIndex, day, year) {
   const key = getAttendanceKey(monthIndex, day, year);
   return (key && records[key]) || defaultAttendance;
+}
+
+function isShiftClearable(record) {
+  const hasAssignedShift = record.type === "Rest Day" ||
+    record.hasAssignedShift === true ||
+    Boolean(record.shiftStartTime && record.shiftEndTime);
+  const hasAttendance = record.clockedIn ||
+    record.punchSource ||
+    record.workStartTime ||
+    record.workEndTime ||
+    (record.in && record.in !== "—") ||
+    (record.out && record.out !== "—");
+
+  return hasAssignedShift &&
+    !hasAttendance &&
+    !["Absent", "Leave", "Company Break"].includes(record.type);
 }
 
 function getAmount(value) {
@@ -413,7 +438,38 @@ function actionArgument(action) {
   return action.match(/\(\s*(['"])(.*?)\1/)?.[2] || "";
 }
 
-function CalendarDay({ day, year, monthIndex, record, selected, onSelect }) {
+function getMatchingShiftTemplate(record, shiftTemplates) {
+  const assignedTemplate = record.assignedShiftTemplateId
+    ? shiftTemplates.find((template) => template.id === record.assignedShiftTemplateId)
+    : null;
+  if (assignedTemplate) return assignedTemplate;
+  if (!record.shiftStartTime || !record.shiftEndTime) return null;
+  return shiftTemplates.find((template) =>
+    template.startTime === record.shiftStartTime &&
+    template.endTime === record.shiftEndTime,
+  );
+}
+
+function getAssignedShiftName(record, shiftTemplates) {
+  const matchingTemplate = getMatchingShiftTemplate(record, shiftTemplates);
+  if (matchingTemplate?.label) return matchingTemplate.label;
+  if (record.assignedShiftName && record.assignedShiftName !== "Manual Entry Adjustment") {
+    return record.assignedShiftName;
+  }
+  return record.shift === "Manual Entry Adjustment"
+    ? "Assigned Shift"
+    : record.shift;
+}
+
+function CalendarDay({
+  day,
+  year,
+  monthIndex,
+  record,
+  shiftTemplates,
+  selected,
+  onSelect,
+}) {
   let cardStyle =
     "bg-slate-50/80 border border-slate-200/70 hover:bg-white hover:border-teal-300";
   if (selected) {
@@ -458,6 +514,11 @@ function CalendarDay({ day, year, monthIndex, record, selected, onSelect }) {
     "Ordinary Working Day": "text-slate-700",
     "Company Break": "text-emerald-700",
   };
+  const matchingShift = getMatchingShiftTemplate(record, shiftTemplates);
+  const calendarShiftName = matchingShift?.label ||
+    (record.punchSource === "manual"
+      ? getAssignedShiftName(record, shiftTemplates)
+      : record.shift);
   let label = null;
   if (record.holidayName) {
     label = (
@@ -492,7 +553,7 @@ function CalendarDay({ day, year, monthIndex, record, selected, onSelect }) {
     label = (
       <div className="flex items-center space-x-1.5">
         <i className={`fa-solid ${record.customIcon} ${record.customIconColor || "text-teal-600"} text-xs`} />
-        <span className="text-[10px] font-bold text-slate-700 truncate">{record.shift}</span>
+        <span className="text-[10px] font-bold text-slate-700 truncate">{calendarShiftName}</span>
       </div>
     );
   }
@@ -500,7 +561,7 @@ function CalendarDay({ day, year, monthIndex, record, selected, onSelect }) {
   return (
     <button
       type="button"
-      aria-label={`${formatDate(year, monthIndex, day)}: ${record.holidayName ? `${record.holidayName}, ${record.holidayClassification}, ` : ""}${record.type === "Absent" && record.holidayName ? "Unworked Holiday" : record.shift}`}
+      aria-label={`${formatDate(year, monthIndex, day)}: ${record.holidayName ? `${record.holidayName}, ${record.holidayClassification}, ` : ""}${record.type === "Absent" && record.holidayName ? "Unworked Holiday" : calendarShiftName}`}
       aria-pressed={selected}
       onClick={onSelect}
       className={`rounded-xl min-h-[90px] flex flex-col transition cursor-pointer relative box-border text-left ${cardStyle}`}
@@ -528,9 +589,11 @@ function CalendarDay({ day, year, monthIndex, record, selected, onSelect }) {
           </span>
         </span>
         <span className="my-auto py-1 flex flex-col justify-center">{label}</span>
-        <span className="text-[10px] text-slate-500 font-medium">
-          {record.type === "Unassigned" && record.holidayName ? "Not Scheduled" : record.assigned}
-        </span>
+        {record.type !== "Rest Day" && record.assigned !== "Rest Day" && (
+          <span className="text-[10px] text-slate-500 font-medium">
+            {record.type === "Unassigned" && record.holidayName ? "Not Scheduled" : record.assigned}
+          </span>
+        )}
       </span>
     </button>
   );
@@ -548,6 +611,9 @@ export default function App() {
   const [salaryVaultConflict, setSalaryVaultConflict] = useState(false);
   const [salaryVaultRecord, setSalaryVaultRecord] = useState(null);
   const [salaryVaultSyncing, setSalaryVaultSyncing] = useState(false);
+  const [historicalPayslips, setHistoricalPayslips] = useState([]);
+  const [activeHistoricalPayslip, setActiveHistoricalPayslip] = useState(null);
+  const [payslipHistorySaving, setPayslipHistorySaving] = useState(false);
   const [workspaceLoadAttempt, setWorkspaceLoadAttempt] = useState(0);
   const [saveRequest, setSaveRequest] = useState(0);
   const [recoveryMode, setRecoveryMode] = useState(false);
@@ -584,8 +650,8 @@ export default function App() {
     timeZone: "Asia/Manila", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true,
   }).format(new Date()));
   const [manilaNow, setManilaNow] = useState(() => getManilaDateTime());
-  const [shiftTemplates, setShiftTemplates] = useState(originalShiftTemplates);
-  const [selectedShiftTemplate, setSelectedShiftTemplate] = useState("morning");
+  const [shiftTemplates, setShiftTemplates] = useState(defaultShiftTemplates);
+  const [selectedShiftTemplate, setSelectedShiftTemplate] = useState("rest-day");
   const [customShiftName, setCustomShiftName] = useState("");
   const [customShiftStart, setCustomShiftStart] = useState("22:00");
   const [customShiftEnd, setCustomShiftEnd] = useState("06:00");
@@ -593,8 +659,8 @@ export default function App() {
   const [leaveBalances, setLeaveBalances] = useState(emptyWorkspace.leaveBalances);
   const [settingsBalances, setSettingsBalances] = useState(emptyWorkspace.settingsBalances);
   const [nightDifferential, setNightDifferential] = useState(localPrivateFinancialDefaults.nightDifferential);
-  const [earlyPunchWindowMinutes, setEarlyPunchWindowMinutes] = useState(defaultEarlyPunchWindowMinutes);
-  const [lateGracePeriodMinutes, setLateGracePeriodMinutes] = useState(defaultLateGracePeriodMinutes);
+  const earlyPunchWindowMinutes = defaultEarlyPunchWindowMinutes;
+  const lateGracePeriodMinutes = defaultLateGracePeriodMinutes;
   const workspaceLoadedRef = useRef(false);
   const userRef = useRef(null);
   const pendingSuccessToasts = useRef([]);
@@ -602,6 +668,7 @@ export default function App() {
   const saveQueueRef = useRef(Promise.resolve());
   const workspaceRevisionRef = useRef(0);
   const salaryVaultKeyRef = useRef(null);
+  const salaryVaultPayslipsRef = useRef([]);
   const salaryVaultRevisionRef = useRef(0);
   const salaryVaultQueueRef = useRef(Promise.resolve());
   const salaryVaultSkipNextSyncRef = useRef(false);
@@ -628,10 +695,14 @@ export default function App() {
       .map((holiday) => [holiday.date, holiday]),
   ), [holidays, selectedLocality]);
   const selectedHoliday = getHolidayForDate(holidays, selectedDate, selectedLocality);
+  const selectedAttendanceRecord = getRecord(attendance, monthIndex, selectedDay, year);
   const selectedRecord = applyHoliday(
     applyConfiguredAttendanceTiming(
       getAutomaticAttendanceStatus(
-        getRecord(attendance, monthIndex, selectedDay, year),
+        {
+          ...selectedAttendanceRecord,
+          assignedShiftName: getAssignedShiftName(selectedAttendanceRecord, shiftTemplates),
+        },
         selectedDate,
         manilaNow,
       ),
@@ -639,7 +710,9 @@ export default function App() {
     ),
     selectedHoliday,
   );
-  const selectedAttendanceRecord = getRecord(attendance, monthIndex, selectedDay, year);
+  const canClearSelectedShift =
+    isShiftClearable(selectedAttendanceRecord) &&
+    activeTimeEntry?.date !== selectedDate;
   const getPayrollRecordBreakdown = useCallback((record, date) => {
     const recordedOvertimeAmount = Number(record.overtimeAmount);
     const overtimeAmount = Number.isFinite(recordedOvertimeAmount)
@@ -817,7 +890,7 @@ export default function App() {
         overtimeMultiplier: Number(overtimeMultiplier),
       })
     : null;
-  const selectedNightDifferential = (() => {
+  const selectedNightDifferentialPay = (() => {
     const applicableDailyWage = selectedHoliday ? Number(dailyWage) : getAmount(selectedAttendanceRecord.base);
     const rate = Number(nightDifferential);
     const nightHours = getNightShiftMinutes(
@@ -832,14 +905,9 @@ export default function App() {
       !Number.isFinite(rate) ||
       rate <= 0 ||
       nightHours <= 0
-    ) return { amount: null, calculation: null };
-    return {
-      amount: (applicableDailyWage / 8) * nightHours * (rate / 100),
-      calculation: `₱${(applicableDailyWage / 8).toFixed(2)}/hr × ${nightHours.toFixed(2)} eligible hrs × ${rate}%`,
-    };
+    ) return null;
+    return (applicableDailyWage / 8) * nightHours * (rate / 100);
   })();
-  const selectedNightDifferentialPay = selectedNightDifferential.amount;
-  const selectedNightDifferentialCalculation = selectedNightDifferential.calculation;
   const selectedOvertimePay = selectedHoliday
     ? selectedHolidayPay?.overtimePay != null
       ? selectedHolidayPay.overtimePay + (selectedAttendanceRecord.overtimeAmount || 0)
@@ -864,7 +932,7 @@ export default function App() {
       const hourlyRate = Number(dailyWage) / 8 * holidayMultiplier;
       return `${selectedHolidayPay.overtimeHours}h × ₱${hourlyRate.toFixed(2)}/hr × ${multiplier}x`;
     }
-    return null;
+    return `Hourly rate × OT hours × ${multiplier}x`;
   })();
   const allowanceAmount = Number(dailyAllowance);
   const hasDailyAllowance = Number.isFinite(allowanceAmount) && allowanceAmount >= 0;
@@ -1015,8 +1083,6 @@ export default function App() {
     shiftTemplates,
     leaveBalances,
     settingsBalances,
-    earlyPunchWindowMinutes,
-    lateGracePeriodMinutes,
   }), [
     attendance,
     activeTimeEntry,
@@ -1027,8 +1093,6 @@ export default function App() {
     shiftTemplates,
     leaveBalances,
     settingsBalances,
-    earlyPunchWindowMinutes,
-    lateGracePeriodMinutes,
     payrollPeriod.endDate,
   ]);
 
@@ -1077,7 +1141,10 @@ export default function App() {
       if (userRef.current !== user.id) {
         throw new Error("The signed-in account changed before the encrypted salary vault could be saved.");
       }
-      const encryptedRecord = await encryptSalaryVault(payload, vaultKey.key, vaultKey.salt);
+      const encryptedRecord = await encryptSalaryVault({
+        ...payload,
+        payslips: payload.payslips ?? salaryVaultPayslipsRef.current,
+      }, vaultKey.key, vaultKey.salt);
       if (userRef.current !== user.id) {
         throw new Error("The signed-in account changed before the encrypted salary vault could be saved.");
       }
@@ -1129,6 +1196,7 @@ export default function App() {
           nightDifferential,
         },
         attendance: extractPrivateFinancialAttendance(attendance),
+        payslips: [],
       };
       const { record, key } = await createSalaryVault(payload, passphrase);
       const revision = await savePrivateSalaryVault(record, 0, user.id);
@@ -1138,6 +1206,8 @@ export default function App() {
         salt: Uint8Array.from(atob(record.salt), (character) => character.charCodeAt(0)),
       };
       salaryVaultRevisionRef.current = revision;
+      salaryVaultPayslipsRef.current = [];
+      setHistoricalPayslips([]);
       setSalaryVaultRecord({
         ...record,
         revision,
@@ -1167,7 +1237,10 @@ export default function App() {
       if (conflicts.length > 0) {
         setSalaryVaultError("This browser has older local salary values that differ from the cloud vault. The cloud copy was not overwritten and the local copy was preserved; export or reconcile it before removing browser data.");
       } else {
-        payload = mergePrivateFinancialData(legacyLocalData, payload);
+        payload = {
+          ...mergePrivateFinancialData(legacyLocalData, payload),
+          payslips: payload.payslips || [],
+        };
         const encryptedRecord = await encryptSalaryVault(
           payload,
           unlocked.key,
@@ -1191,6 +1264,9 @@ export default function App() {
 
     salaryVaultKeyRef.current = { key: unlocked.key, salt: unlocked.salt };
     salaryVaultRevisionRef.current = revision;
+    salaryVaultPayslipsRef.current = payload.payslips || [];
+    setHistoricalPayslips(payload.payslips || []);
+    setActiveHistoricalPayslip(null);
     setDailyWage(payload.settings.dailyWage);
     setDailyAllowance(payload.settings.dailyAllowance);
     setOvertimeMultiplier(payload.settings.overtimeMultiplier);
@@ -1232,6 +1308,7 @@ export default function App() {
         nightDifferential,
       },
       attendance: extractPrivateFinancialAttendance(attendance),
+      payslips: salaryVaultPayslipsRef.current,
     };
     await persistPrivateSalaryVault(payload);
     const nextVersion = salaryVaultRecord.key_version + 1;
@@ -1278,6 +1355,9 @@ export default function App() {
         throw new Error("No encrypted salary vault was found for this account.");
       }
       salaryVaultKeyRef.current = null;
+      salaryVaultPayslipsRef.current = [];
+      setHistoricalPayslips([]);
+      setActiveHistoricalPayslip(null);
       salaryVaultRevisionRef.current = latestVault.revision;
       setSalaryVaultRecord(latestVault);
       setSalaryVaultStatus("locked");
@@ -1322,6 +1402,9 @@ export default function App() {
       return false;
     }
     salaryVaultKeyRef.current = null;
+    salaryVaultPayslipsRef.current = [];
+    setHistoricalPayslips([]);
+    setActiveHistoricalPayslip(null);
     setSalaryVaultStatus(salaryVaultRecord ? "locked" : "uninitialized");
     setDailyWage("");
     setDailyAllowance(localPrivateFinancialDefaults.dailyAllowance);
@@ -1375,11 +1458,158 @@ export default function App() {
   }, [addToast]);
 
   useEffect(() => {
+    if (!user?.id || !supabase) return undefined;
+
+    const activityKey = getAuthActivityStorageKey(user.id);
+    let lastActivityAt;
+    let lastPersistedActivityAt;
+    let signOutStarted = false;
+    let storageWarningShown = false;
+    let expirationTimer = null;
+
+    const warnStorageFailure = (error) => {
+      if (storageWarningShown) return;
+      storageWarningShown = true;
+      console.warn("Could not persist the authentication activity timestamp:", error);
+      addToast(
+        "This browser cannot save the session activity timer. Sign out manually when finished.",
+        "warning",
+      );
+    };
+
+    const readStoredActivity = () => {
+      try {
+        return parseAuthActivityTimestamp(window.localStorage.getItem(activityKey));
+      } catch (error) {
+        warnStorageFailure(error);
+        return null;
+      }
+    };
+
+    const writeStoredActivity = (timestamp) => {
+      try {
+        window.localStorage.setItem(activityKey, String(timestamp));
+        lastPersistedActivityAt = timestamp;
+      } catch (error) {
+        warnStorageFailure(error);
+      }
+    };
+
+    const storedActivityAt = readStoredActivity();
+    const lastSignInAt = Date.parse(authSession?.user?.last_sign_in_at || "");
+    lastActivityAt = storedActivityAt ||
+      (Number.isFinite(lastSignInAt) ? lastSignInAt : Date.now());
+    lastPersistedActivityAt = storedActivityAt || 0;
+
+    const expireSession = () => {
+      if (signOutStarted) return;
+      signOutStarted = true;
+      if (expirationTimer !== null) window.clearInterval(expirationTimer);
+      supabase.auth.signOut({ scope: "local" }).then(({ error }) => {
+        if (error) {
+          console.error("Automatic inactivity sign-out failed:", error);
+          addToast(
+            "Automatic sign-out failed. Please sign out manually to secure this account.",
+            "error",
+          );
+          return;
+        }
+        try {
+          window.localStorage.removeItem(activityKey);
+        } catch (error) {
+          warnStorageFailure(error);
+        }
+        addToast("You were signed out after one hour of inactivity.", "info");
+      }).catch((error) => {
+        console.error("Automatic inactivity sign-out failed:", error);
+        addToast(
+          "Automatic sign-out failed. Please sign out manually to secure this account.",
+          "error",
+        );
+      });
+    };
+
+    const checkExpiration = () => {
+      const currentStoredActivity = readStoredActivity();
+      if (currentStoredActivity && currentStoredActivity > lastActivityAt) {
+        lastActivityAt = currentStoredActivity;
+      }
+      if (isAuthSessionExpired(lastActivityAt, Date.now())) {
+        expireSession();
+        return true;
+      }
+      return false;
+    };
+
+    if (!storedActivityAt) writeStoredActivity(lastActivityAt);
+    if (checkExpiration()) return undefined;
+
+    const handleActivity = () => {
+      if (signOutStarted || checkExpiration()) return;
+      const now = Date.now();
+      lastActivityAt = now;
+      if (now - lastPersistedActivityAt >= AUTH_ACTIVITY_WRITE_INTERVAL_MS) {
+        writeStoredActivity(now);
+      }
+    };
+
+    const handleStorage = (event) => {
+      if (event.key !== activityKey) return;
+      const newActivityAt = parseAuthActivityTimestamp(event.newValue);
+      if (newActivityAt && newActivityAt > lastActivityAt) {
+        lastActivityAt = newActivityAt;
+      }
+      checkExpiration();
+    };
+
+    const handlePageHide = (event) => {
+      if (event.persisted) return;
+      supabase.auth.signOut({ scope: "local" }).then(({ error }) => {
+        if (error) console.warn("Could not clear the local session while closing the page:", error);
+      }).catch((error) => {
+        console.warn("Could not clear the local session while closing the page:", error);
+      });
+    };
+
+    expirationTimer = window.setInterval(
+      checkExpiration,
+      AUTH_ACTIVITY_WRITE_INTERVAL_MS,
+    );
+    const activityEvents = ["pointerdown", "keydown", "touchstart", "scroll", "mousemove"];
+    activityEvents.forEach((eventName) =>
+      window.addEventListener(eventName, handleActivity, { passive: true }),
+    );
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("visibilitychange", checkExpiration);
+
+    return () => {
+      window.clearInterval(expirationTimer);
+      activityEvents.forEach((eventName) =>
+        window.removeEventListener(eventName, handleActivity),
+      );
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("visibilitychange", checkExpiration);
+      if (!signOutStarted) {
+        try {
+          window.localStorage.removeItem(activityKey);
+        } catch (error) {
+          warnStorageFailure(error);
+        }
+      }
+    };
+  }, [user?.id, authSession?.user?.last_sign_in_at, addToast]);
+
+  useEffect(() => {
     if (!user?.id) {
       userRef.current = null;
       workspaceLoadedRef.current = false;
       workspaceRevisionRef.current = 0;
       salaryVaultKeyRef.current = null;
+      salaryVaultPayslipsRef.current = [];
+      setHistoricalPayslips([]);
+      setActiveHistoricalPayslip(null);
       salaryVaultRevisionRef.current = 0;
       salaryVaultSkipNextSyncRef.current = false;
       preserveLegacyLocalRef.current = false;
@@ -1401,12 +1631,11 @@ export default function App() {
       setDailyAllowance(localPrivateFinancialDefaults.dailyAllowance);
       setOvertimeMultiplier(localPrivateFinancialDefaults.overtimeMultiplier);
       setExpenses([]);
-      setShiftTemplates(originalShiftTemplates);
+      setShiftTemplates(defaultShiftTemplates);
+      setSelectedShiftTemplate("rest-day");
       setLeaveBalances(emptyWorkspace.leaveBalances);
       setSettingsBalances(emptyWorkspace.settingsBalances);
       setNightDifferential(localPrivateFinancialDefaults.nightDifferential);
-      setEarlyPunchWindowMinutes(emptyWorkspace.earlyPunchWindowMinutes);
-      setLateGracePeriodMinutes(emptyWorkspace.lateGracePeriodMinutes);
       setExpenseName("");
       setExpenseAmount("");
       setActiveModal(null);
@@ -1463,7 +1692,7 @@ export default function App() {
               record,
               record.workStartTime,
               record.workEndTime,
-              workspace.lateGracePeriodMinutes,
+              lateGracePeriodMinutes,
             )
             : record,
         ]),
@@ -1486,7 +1715,7 @@ export default function App() {
         ? localPrivateFinancialDefaults.overtimeMultiplier
         : localPrivateData.settings.overtimeMultiplier);
       setExpenses(workspace.expenses);
-      setShiftTemplates(workspace.shiftTemplates || originalShiftTemplates);
+      setShiftTemplates(workspace.shiftTemplates || defaultShiftTemplates);
       setLeaveBalances(workspace.leaveBalances);
       setSettingsBalances(workspace.settingsBalances);
       setNightDifferential(salaryVault
@@ -1495,8 +1724,6 @@ export default function App() {
       setSalaryVaultExtraSettings(extractPrivateFinancialSettings(
         salaryVault ? {} : localPrivateData.settings,
       ));
-      setEarlyPunchWindowMinutes(workspace.earlyPunchWindowMinutes);
-      setLateGracePeriodMinutes(workspace.lateGracePeriodMinutes);
       workspaceRevisionRef.current = revision;
       setWorkspaceLoadedForUser(user.id);
       workspaceLoadedRef.current = true;
@@ -1690,7 +1917,8 @@ export default function App() {
       return showToast("Please enter a valid expense amount greater than 0.", "warning");
     }
     setExpenses((current) => [{
-      id: Date.now(),
+      id: globalThis.crypto?.randomUUID?.() ||
+        `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       name,
       category: expenseCategory,
       amount,
@@ -1710,6 +1938,77 @@ export default function App() {
   const deleteExpense = (id) => {
     setExpenses((current) => current.filter((item) => item.id !== id));
     showToast("Expense item removed.", "success");
+  };
+
+  const savePayslipToHistory = async () => {
+    if (salaryVaultStatus !== "unlocked" || !salaryVaultKeyRef.current || !user?.id) {
+      showToast("Unlock the salary vault before saving a payslip snapshot.", "warning");
+      return false;
+    }
+
+    let nextHistory;
+    try {
+      const snapshot = createPayslipSnapshot({
+        employeeId: user.id,
+        employeeName: typeof user.name === "string" && user.name.trim()
+          ? user.name
+          : "Employee",
+        period: payrollPeriod,
+        summary: payrollPeriodSummary,
+        earningsBreakdown: payrollEarningsBreakdown,
+        deductions: cutoffPayrollDeductions,
+        netPay: payrollPeriodNetPay,
+        settings: {
+          dailyWage,
+          dailyAllowance,
+          overtimeMultiplier,
+          nightDifferential,
+          payrollDeductions: payrollDeductionSettings,
+        },
+      });
+      nextHistory = appendPayslipSnapshot(salaryVaultPayslipsRef.current, snapshot);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Payslip history could not be updated.", "warning");
+      return false;
+    }
+
+    window.clearTimeout(salaryVaultSyncTimerRef.current);
+    salaryVaultSyncTimerRef.current = null;
+    setPayslipHistorySaving(true);
+    setSalaryVaultSyncing(true);
+    try {
+      await persistPrivateSalaryVault({
+        settings: {
+          ...salaryVaultExtraSettings,
+          dailyWage,
+          dailyAllowance,
+          overtimeMultiplier,
+          nightDifferential,
+        },
+        attendance: extractPrivateFinancialAttendance(attendance),
+        payslips: nextHistory,
+      });
+      salaryVaultPayslipsRef.current = nextHistory;
+      setHistoricalPayslips(nextHistory);
+      addToast("Payslip estimate saved to encrypted history.", "success");
+      return true;
+    } catch (error) {
+      const detail = error instanceof Error ? ` ${error.message}` : "";
+      const message = error?.code === "40001"
+        ? "Encrypted salary data changed on another device. Reload and unlock the vault before saving this payslip."
+        : `Payslip history could not be saved. No success was recorded.${detail}`;
+      setSalaryVaultError(message);
+      addToast(message, "error");
+      return false;
+    } finally {
+      setSalaryVaultSyncing(false);
+      setPayslipHistorySaving(false);
+    }
+  };
+
+  const viewHistoricalPayslip = (snapshot) => {
+    setActiveHistoricalPayslip(snapshot);
+    setActiveModal("payslipModal");
   };
 
   const flushWorkspace = async () => {
@@ -1860,9 +2159,21 @@ export default function App() {
     else if (action.startsWith("changeMonth(")) changeMonth(Number(action.match(/-?\d+/)?.[0] || 0));
     else if (action === "resetCalendar()") resetCalendar();
     else if (action === "openManualEntryModal()") setActiveModal("manualEntryModal");
+    else if (action === "clearSelectedShift()") {
+      const currentRecord = attendance[selectedDate] || defaultAttendance;
+      if (!isShiftClearable(currentRecord) || activeTimeEntry?.date === selectedDate) {
+        showToast("A shift can only be cleared when no attendance has been recorded.", "warning");
+        return;
+      }
+      setAttendance((state) => ({
+        ...state,
+        [selectedDate]: { ...defaultAttendance },
+      }));
+      showToast(`Shift cleared for ${selectedDate}.`, "success");
+    }
     else if (action === "openAssignShiftModal()") {
       setCustomShiftName("");
-      setSelectedShiftTemplate("morning");
+      setSelectedShiftTemplate("rest-day");
       setActiveModal("assignShiftModal");
     } else if (action === "addExpense()") addExpense();
     else if (action.startsWith("switchSettingsTab(")) setActiveSettingsTab(actionArgument(action));
@@ -2208,7 +2519,8 @@ export default function App() {
         [key]: applyAttendanceTiming({
             ...assignedRecord,
             type: isAbsentEntry ? "Absent" : "Regular",
-        punchSource: "manual",
+            punchSource: "manual",
+            assignedShiftName: getAssignedShiftName(assignedRecord, shiftTemplates),
             shift,
             wageRate: isAbsentEntry ? "0%" : "100%",
             base,
@@ -2276,14 +2588,15 @@ export default function App() {
                 badges: [{ text: "Rest Day", color: "bg-slate-200 text-slate-700" }],
               }
             : {
-                type: "Regular", shift: template.name, wageRate: "100%", base: shiftPay,
+                type: "Regular", shift: template.label || template.name, wageRate: "100%", base: shiftPay,
                 ot: "P0.00", penalty: "P0.00", est: `${shiftPay} PHP`, assigned: template.assigned,
                 workStartTime: "", workEndTime: "",
                 shiftStartTime: template.startTime || "", shiftEndTime: template.endTime || "",
+                assignedShiftTemplateId: template.id,
                 hasAssignedShift: true,
                 in: "—", out: "—", customIcon: template.icon,
                 customIconColor: template.iconColor, dots: [],
-                badges: [{ text: template.name, color: "bg-teal-100 text-teal-800" }],
+                badges: [{ text: template.label || template.name, color: "bg-teal-100 text-teal-800" }],
               };
         assigned += 1;
         day.setDate(day.getDate() + 1);
@@ -2417,6 +2730,7 @@ export default function App() {
           day={day}
           year={year}
           monthIndex={monthIndex}
+          shiftTemplates={shiftTemplates}
           record={applyNightDifferential(
             applyHoliday(
               applyConfiguredAttendanceTiming(
@@ -2437,7 +2751,7 @@ export default function App() {
       );
     }
     return cells;
-  }, [attendance, holidays, lateGracePeriodMinutes, manilaNow, monthIndex, nightDifferential, selectedDay, selectedLocality, year]);
+  }, [attendance, holidays, lateGracePeriodMinutes, manilaNow, monthIndex, nightDifferential, selectedDay, selectedLocality, shiftTemplates, year]);
 
   const shiftTemplateCards = shiftTemplates.map((template) => (
     <div
@@ -2476,30 +2790,6 @@ export default function App() {
       )}
     </div>
   ));
-
-  const expenseRows = financeExpenses.length === 0 ? (
-    <tr><td colSpan="5" className="p-6 text-center text-slate-400 italic">No expenses recorded for {financePeriodLabel}.</td></tr>
-  ) : financeExpenses.map((item) => {
-    const badgeColor = {
-      Utilities: "bg-indigo-50 text-indigo-700",
-      "Food & Groceries": "bg-emerald-50 text-emerald-700",
-      Transport: "bg-amber-50 text-amber-700",
-      Miscellaneous: "bg-purple-50 text-purple-700",
-    }[item.category] || "bg-slate-100 text-slate-700";
-    return (
-      <tr key={item.id} className="hover:bg-slate-50 transition">
-        <td className="p-3 font-medium text-slate-800">{item.name}</td>
-        <td className="p-3 text-slate-500">{getExpenseDate(item) || "—"}</td>
-        <td className="p-3"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${badgeColor}`}>{item.category}</span></td>
-        <td className="p-3 font-semibold text-right text-rose-600">{formatCurrency(item.amount)}</td>
-        <td className="p-3 text-center">
-          <button type="button" onClick={() => deleteExpense(item.id)} className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer" title="Delete Entry" aria-label={`Delete ${item.name}`}>
-            <i className="fa-solid fa-trash-can" />
-          </button>
-        </td>
-      </tr>
-    );
-  });
 
   return (
     <div
@@ -2615,8 +2905,10 @@ export default function App() {
         onYearChange={changeYear}
         calendarCells={calendarCells}
         monthLabel={monthLabel}
+        monthValue={calendarPayrollMonth}
         year={year}
         selectedDate={selectedDate}
+        canClearShift={canClearSelectedShift}
         isTimedIn={Boolean(
           activeTimeEntry &&
           (activeTimeEntry.date === selectedDate || canTimeOut),
@@ -2630,7 +2922,6 @@ export default function App() {
         dailyAllowance={dailyAllowance}
         holidayWorkedHours={selectedWorkedHours}
         nightDifferentialPay={selectedNightDifferentialPay}
-        nightDifferentialCalculation={selectedNightDifferentialCalculation}
         overtimePay={selectedOvertimePay}
         overtimeCalculation={selectedOvertimeCalculation}
         configuredDailyWage={dailyWage}
@@ -2639,9 +2930,9 @@ export default function App() {
           setActiveModal("settingsModal");
         }}
         onTimeClockClick={handleTimeClockClick}
-        expenseRows={expenseRows}
         record={selectedRecordWithNightDifferential}
         monthExpenses={financeExpenses}
+        expenses={expenses}
         totalExpenses={financeTotalExpenses}
         grossPay={financeGrossPay}
         payrollDeductions={financePayrollDeductions}
@@ -2661,6 +2952,20 @@ export default function App() {
         setExpenseDate={setExpenseDate}
         expenseCategory={expenseCategory}
         setExpenseCategory={setExpenseCategory}
+        onDeleteExpense={deleteExpense}
+        workspaceLoading={workspaceLoading}
+        workspaceError={workspaceError}
+        workspaceSaveError={workspaceSaveError}
+        historicalPayslips={
+          salaryVaultStatus === "unlocked" ? historicalPayslips : []
+        }
+        salaryVaultStatus={salaryVaultStatus}
+        currentPayrollPeriod={payrollPeriod}
+        onViewCurrentPayslip={() => {
+          setActiveHistoricalPayslip(null);
+          setActiveModal("payslipModal");
+        }}
+        onViewHistoricalPayslip={viewHistoricalPayslip}
       />
       <ManualEntryModal
         key={`manual-${selectedDate}`}
@@ -2687,6 +2992,9 @@ export default function App() {
       <PayslipModal
         open={activeModal === "payslipModal"}
         userName={user?.name}
+        historicalPayslip={
+          salaryVaultStatus === "unlocked" ? activeHistoricalPayslip : null
+        }
         payrollPeriod={payrollPeriod}
         payrollPeriodSummary={payrollPeriodSummary}
         payrollEarningsBreakdown={payrollEarningsBreakdown}
@@ -2695,6 +3003,12 @@ export default function App() {
         payrollPeriodEarningsAvailable={isPayrollPeriodEarningsAvailable(salaryVaultStatus)}
         dailyWage={dailyWage}
         formatCurrency={formatCurrency}
+        canSavePayslip={salaryVaultStatus === "unlocked"}
+        payslipAlreadySaved={Boolean(
+          findPayslipSnapshot(historicalPayslips, user?.id, payrollPeriod),
+        )}
+        payslipHistorySaving={payslipHistorySaving}
+        onSavePayslipToHistory={savePayslipToHistory}
       />
       <SettingsModal
         open={activeModal === "settingsModal"}
@@ -2708,8 +3022,6 @@ export default function App() {
         overtimeMultiplier={overtimeMultiplier}
         payrollSettings={salaryVaultExtraSettings}
         payrollDeductions={payrollDeductions}
-        earlyPunchWindowMinutes={earlyPunchWindowMinutes}
-        lateGracePeriodMinutes={lateGracePeriodMinutes}
         nightDifferential={nightDifferential}
         onDeleteAccount={deleteAccount}
         accountDeletionLoading={accountDeletionLoading}
@@ -2767,8 +3079,6 @@ export default function App() {
           setDailyWage(draft.dailyWage);
           setDailyAllowance(draft.dailyAllowance);
           setOvertimeMultiplier(draft.overtimeMultiplier);
-          setEarlyPunchWindowMinutes(draft.earlyPunchWindowMinutes);
-          setLateGracePeriodMinutes(draft.lateGracePeriodMinutes);
           setNightDifferential(draft.nightDifferential);
           setSalaryVaultExtraSettings((current) => ({
             ...current,

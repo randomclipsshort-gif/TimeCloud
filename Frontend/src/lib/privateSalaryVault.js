@@ -1,9 +1,11 @@
+import { isValidPayslipSnapshot } from "../utils/payrollHistory.js";
+
 const FORMAT_VERSION = 1;
 const KEY_VERSION = 1;
 const KDF_ITERATIONS = 310_000;
 const SALT_LENGTH = 16;
 const NONCE_LENGTH = 12;
-const MAX_CIPHERTEXT_LENGTH = 100_000;
+const MAX_CIPHERTEXT_LENGTH = 1_000_000;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -74,7 +76,10 @@ function validatePayload(payload) {
     typeof payload.settings !== "object" ||
     payload.attendance === null ||
     typeof payload.attendance !== "object" ||
-    Array.isArray(payload.attendance)
+    Array.isArray(payload.attendance) ||
+    (payload.payslips !== undefined &&
+      (!Array.isArray(payload.payslips) ||
+        !payload.payslips.every(isValidPayslipSnapshot)))
   ) {
     throw new Error("Salary vault data is invalid.");
   }

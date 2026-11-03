@@ -11,27 +11,29 @@ export default function DashboardContent(props) {
     onYearChange,
     calendarCells,
     selectedDate,
+    canClearShift,
     isTimedIn,
     canRecordAttendance,
     canTimeIn,
     canTimeOut,
     earlyPunchWindowMinutes,
+    salaryVaultStatus,
     holidayPayEstimate,
     estimatedEarnings,
     dailyAllowance,
     holidayWorkedHours,
     nightDifferentialPay,
-    nightDifferentialCalculation,
     overtimePay,
     overtimeCalculation,
     configuredDailyWage,
     onOpenHolidayPaySettings,
     onTimeClockClick,
     monthLabel,
+    monthValue,
     year,
     record,
-    expenseRows,
     monthExpenses,
+    expenses,
     financeTrackingScope,
     setFinanceTrackingScope,
     financePeriodLabel,
@@ -51,6 +53,14 @@ export default function DashboardContent(props) {
     setExpenseDate,
     expenseCategory,
     setExpenseCategory,
+    onDeleteExpense,
+    workspaceLoading,
+    workspaceError,
+    workspaceSaveError,
+    historicalPayslips,
+    currentPayrollPeriod,
+    onViewCurrentPayslip,
+    onViewHistoricalPayslip,
   } = props;
   return (
     <main className="flex-1 max-w-[1600px] w-full mx-auto p-6 flex flex-col gap-6">
@@ -63,17 +73,18 @@ export default function DashboardContent(props) {
           <AttendanceDashboard
             record={record}
             selectedDate={selectedDate}
+            canClearShift={canClearShift}
             isTimedIn={isTimedIn}
             canRecordAttendance={canRecordAttendance}
             canTimeIn={canTimeIn}
             canTimeOut={canTimeOut}
             earlyPunchWindowMinutes={earlyPunchWindowMinutes}
+            salaryVaultStatus={salaryVaultStatus}
             holidayPayEstimate={holidayPayEstimate}
             estimatedEarnings={estimatedEarnings}
             dailyAllowance={dailyAllowance}
             holidayWorkedHours={holidayWorkedHours}
             nightDifferentialPay={nightDifferentialPay}
-            nightDifferentialCalculation={nightDifferentialCalculation}
             overtimePay={overtimePay}
             overtimeCalculation={overtimeCalculation}
             configuredDailyWage={configuredDailyWage}
@@ -89,8 +100,8 @@ export default function DashboardContent(props) {
             year={year}
           />
           <FinancialDashboard
-            expenseRows={expenseRows}
             monthExpenses={monthExpenses}
+            expenses={expenses}
             financeTrackingScope={financeTrackingScope}
             setFinanceTrackingScope={setFinanceTrackingScope}
             financePeriodLabel={financePeriodLabel}
@@ -101,6 +112,7 @@ export default function DashboardContent(props) {
             grossPay={grossPay}
             payrollDeductions={payrollDeductions}
             totalHours={totalHours}
+            monthValue={monthValue}
             formatCurrency={formatCurrency}
             expenseName={expenseName}
             setExpenseName={setExpenseName}
@@ -110,6 +122,15 @@ export default function DashboardContent(props) {
             setExpenseDate={setExpenseDate}
             expenseCategory={expenseCategory}
             setExpenseCategory={setExpenseCategory}
+            onDeleteExpense={onDeleteExpense}
+            workspaceLoading={workspaceLoading}
+            workspaceError={workspaceError}
+            workspaceSaveError={workspaceSaveError}
+            historicalPayslips={historicalPayslips}
+            salaryVaultStatus={salaryVaultStatus}
+            currentPayrollPeriod={currentPayrollPeriod}
+            onViewCurrentPayslip={onViewCurrentPayslip}
+            onViewHistoricalPayslip={onViewHistoricalPayslip}
           />
         </div>
       </div>

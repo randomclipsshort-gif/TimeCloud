@@ -4,6 +4,7 @@ import {
   mergeAttendancePunches,
   serializeWorkspaceForCloud,
 } from "./privateFinancialData.js";
+import { normalizeExpenseRecords } from "../utils/expenseTracker.js";
 
 export const emptyWorkspace = {
   attendance: {},
@@ -15,8 +16,6 @@ export const emptyWorkspace = {
   shiftTemplates: null,
   leaveBalances: { VL: 0, SL: 0, EL: 0 },
   settingsBalances: { VL: "0", SL: "0", EL: "0" },
-  earlyPunchWindowMinutes: 15,
-  lateGracePeriodMinutes: 15,
 };
 
 function isObject(value) {
@@ -30,7 +29,7 @@ export function normalizeWorkspace(data) {
     ...source,
     attendance: isObject(source.attendance) ? source.attendance : {},
     activeTimeEntry: isObject(source.activeTimeEntry) ? source.activeTimeEntry : null,
-    expenses: Array.isArray(source.expenses) ? source.expenses : [],
+    expenses: normalizeExpenseRecords(source.expenses),
     shiftTemplates: Array.isArray(source.shiftTemplates) ? source.shiftTemplates : null,
     holidays: Array.isArray(source.holidays) ? source.holidays : null,
     leaveBalances: isObject(source.leaveBalances)

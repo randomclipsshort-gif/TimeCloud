@@ -52,6 +52,14 @@ each authenticated account to its own workspace document.
    separate approval should a future reviewed migration remove legacy plaintext
    fields. Never apply a cleanup migration before that approval.
 
+   Migration `202611030001_expand_private_salary_vault_history.sql` is a
+   separate additive update for encrypted payslip history. It raises the
+   existing ciphertext size limit from 100 KB to 1 MB by replacing the
+   constraint and save-RPC validation; it does not drop the vault table, alter
+   RLS, or change existing ciphertext. Review this SQL and obtain approval
+   before applying it to production. If earlier migrations are still pending,
+   `db push` will apply those as well, so review the complete dry-run first.
+
    After reviewing the additive migration and confirming the correct linked
    project, apply it and verify migration history:
 

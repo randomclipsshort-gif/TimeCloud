@@ -32,6 +32,33 @@ export function getExpenseDate(expense) {
   return getLegacyExpenseDate(expense?.id);
 }
 
+export function normalizeExpenseRecords(expenses) {
+  if (!Array.isArray(expenses)) return [];
+  const usedIds = new Set();
+  const originalIds = new Set(expenses
+    .map((expense) => expense?.id)
+    .filter((id) => typeof id === "string" || typeof id === "number")
+    .map(String));
+  return expenses.map((expense, index) => {
+    if (!expense || typeof expense !== "object" || Array.isArray(expense)) return expense;
+    const originalId = expense.id;
+    const normalizedId = typeof originalId === "string" || typeof originalId === "number"
+      ? String(originalId)
+      : "";
+    let id = originalId;
+    if (!normalizedId || usedIds.has(normalizedId)) {
+      id = `legacy-expense-${index}`;
+      let suffix = 1;
+      while (usedIds.has(id) || originalIds.has(id)) {
+        id = `legacy-expense-${index}-${suffix}`;
+        suffix += 1;
+      }
+    }
+    usedIds.add(String(id));
+    return id === originalId ? expense : { ...expense, id };
+  });
+}
+
 export function getExpensesForMonth(expenses, month) {
   if (!Array.isArray(expenses) || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month || "")) {
     return [];
