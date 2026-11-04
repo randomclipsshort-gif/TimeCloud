@@ -185,7 +185,8 @@ export default function AttendanceDashboard({
 
           <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              {!record.holidayName && record.type !== "Regular" && (
+              {!record.holidayName &&
+                !["Regular", "Unassigned"].includes(record.type) && (
                 <span
                   id="workdayTypeBadge"
                   className={`rounded-full bg-white px-2.5 py-1 text-[10px] font-bold tracking-wide ring-1 ring-slate-200 ${workdayBadgeTextColor}`}
