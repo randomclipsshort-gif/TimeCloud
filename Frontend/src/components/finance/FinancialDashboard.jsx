@@ -30,10 +30,12 @@ export default function FinancialDashboard({
   workspaceError,
   workspaceSaveError,
   historicalPayslips,
+  payslipHistorySaving,
   salaryVaultStatus,
   currentPayrollPeriod,
   onViewCurrentPayslip,
   onViewHistoricalPayslip,
+  onDeleteHistoricalPayslip,
 }) {
   const [activeTab, setActiveTab] = useState("expenses");
   const [expenseFilterMode, setExpenseFilterMode] = useState("month");
@@ -328,6 +330,7 @@ export default function FinancialDashboard({
                 <option value="Utilities">Utilities</option>
                 <option value="Food & Groceries">Food &amp; Groceries</option>
                 <option value="Transport">Transport</option>
+                <option value="Travel &amp; Accommodation">Travel &amp; Accommodation</option>
                 <option value="Miscellaneous">Miscellaneous</option>
               </select>
             </label>
@@ -479,6 +482,9 @@ export default function FinancialDashboard({
                     Food &amp; Groceries
                   </option>
                   <option value="Transport">Transport</option>
+                  <option value="Travel &amp; Accommodation">
+                    Travel &amp; Accommodation
+                  </option>
                   <option value="Miscellaneous">Miscellaneous</option>
                 </select>
               </div>
@@ -533,6 +539,7 @@ export default function FinancialDashboard({
                       Utilities: "bg-indigo-50 text-indigo-700",
                       "Food & Groceries": "bg-emerald-50 text-emerald-700",
                       Transport: "bg-amber-50 text-amber-700",
+                      "Travel & Accommodation": "bg-sky-50 text-sky-700",
                       Miscellaneous: "bg-purple-50 text-purple-700",
                     }[expense.category] || "bg-slate-100 text-slate-700";
                     return (
@@ -686,6 +693,25 @@ export default function FinancialDashboard({
                                 className="rounded-lg bg-teal-50 px-3 py-1.5 font-semibold text-teal-700 hover:bg-teal-100"
                               >
                                 View
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Delete saved payslip for ${formatPayrollPeriod(snapshot.period)}`}
+                                title="Delete saved payslip"
+                                disabled={payslipHistorySaving}
+                                onClick={() => {
+                                  if (window.confirm(
+                                    `Delete the saved payslip for ${formatPayrollPeriod(snapshot.period)}? This cannot be undone.`,
+                                  )) {
+                                    onDeleteHistoricalPayslip(snapshot);
+                                  }
+                                }}
+                                className="ml-1 rounded-lg bg-rose-50 px-3 py-1.5 text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <i
+                                  className={`fa-solid ${payslipHistorySaving ? "fa-spinner fa-spin" : "fa-trash"}`}
+                                  aria-hidden="true"
+                                ></i>
                               </button>
                             </td>
                           </tr>

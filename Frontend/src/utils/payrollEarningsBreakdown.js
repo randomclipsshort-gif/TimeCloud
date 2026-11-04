@@ -81,8 +81,6 @@ export function summarizePayrollEarningsBreakdown(
     startOrdinal > endOrdinal
   ) return emptyBreakdown();
 
-  const rangeStart = startOrdinal * DAY_MINUTES;
-  const rangeEnd = (endOrdinal + 1) * DAY_MINUTES;
   const categories = new Map(categoryDefinitions.map(({ id }) => [id, {
     total: 0,
     units: 0,
@@ -111,35 +109,30 @@ export function summarizePayrollEarningsBreakdown(
     }
 
     const interval = getAttendanceInterval(dateKey, record);
-    if (!interval) continue;
-    const totalMinutes = interval.end - interval.start;
-    const overlap = Math.max(
-      0,
-      Math.min(interval.end, rangeEnd) - Math.max(interval.start, rangeStart),
-    );
-    if (overlap <= 0) continue;
-    const ratio = overlap / totalMinutes;
-    if (interval.dateOrdinal >= startOrdinal && interval.dateOrdinal <= endOrdinal) {
-      lateMinutes += Number.isFinite(Number(values.lateMinutes))
-        ? Math.max(0, Number(values.lateMinutes))
-        : 0;
-      undertimeMinutes += Number.isFinite(Number(values.undertimeMinutes))
-        ? Math.max(0, Number(values.undertimeMinutes))
-        : 0;
-    }
+    if (
+      !interval ||
+      interval.dateOrdinal < startOrdinal ||
+      interval.dateOrdinal > endOrdinal
+    ) continue;
+    lateMinutes += Number.isFinite(Number(values.lateMinutes))
+      ? Math.max(0, Number(values.lateMinutes))
+      : 0;
+    undertimeMinutes += Number.isFinite(Number(values.undertimeMinutes))
+      ? Math.max(0, Number(values.undertimeMinutes))
+      : 0;
     for (const { id, unit } of categoryDefinitions) {
       const amount = Number(values[id]);
       if (!Number.isFinite(amount) || amount <= 0) continue;
       const aggregate = categories.get(id);
-      aggregate.total += amount * ratio;
+      aggregate.total += amount;
       if (unit === "hours") {
         const minutes = Number(values.overtimeMinutes);
         const hours = Number.isFinite(minutes) && minutes > 0
           ? minutes / 60
           : Number(values.overtimeHours) || 0;
-        aggregate.units += hours * ratio;
+        aggregate.units += hours;
       } else {
-        aggregate.units += ratio;
+        aggregate.units += 1;
       }
     }
   }

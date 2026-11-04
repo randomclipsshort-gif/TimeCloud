@@ -4,6 +4,7 @@ import {
   appendPayslipSnapshot,
   createPayslipSnapshot,
   findPayslipSnapshot,
+  removePayslipSnapshot,
 } from "./payrollHistory.js";
 
 const period = { startDate: "2026-10-26", endDate: "2026-11-10" };
@@ -62,5 +63,18 @@ test("payslip snapshots require a valid semi-monthly period", () => {
       period: { startDate: "2026-11-01", endDate: "2026-11-30" },
     }),
     /invalid payroll data/,
+  );
+});
+
+test("removes a saved payslip without changing the existing history", () => {
+  const first = createSnapshot("2026-11-25");
+  const second = createSnapshot();
+  const history = [first, second];
+
+  assert.deepEqual(removePayslipSnapshot(history, first.id), [second]);
+  assert.deepEqual(history, [first, second]);
+  assert.throws(
+    () => removePayslipSnapshot(history, "missing"),
+    /could not be found/,
   );
 });

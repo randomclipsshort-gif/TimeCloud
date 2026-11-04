@@ -520,7 +520,7 @@ export default function AttendanceDashboard({
               title={
                 canClearShift
                   ? `Clear the shift assigned to ${selectedDate}`
-                  : "Clear is available only when no attendance has been recorded"
+                  : "Clear is available only for dates with an assigned shift and no active Time In"
               }
               className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-medium py-2 px-3 rounded-xl text-xs transition border border-rose-200 flex items-center justify-center space-x-1.5 cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 disabled:border-slate-200 disabled:hover:bg-slate-50"
             >

@@ -72,6 +72,17 @@ export function appendPayslipSnapshot(history, snapshot) {
   );
 }
 
+export function removePayslipSnapshot(history, snapshotId) {
+  if (!Array.isArray(history) || typeof snapshotId !== "string" || !snapshotId) {
+    throw new Error("The payslip history is invalid.");
+  }
+  const nextHistory = history.filter((snapshot) => snapshot.id !== snapshotId);
+  if (nextHistory.length === history.length) {
+    throw new Error("The saved payslip could not be found.");
+  }
+  return nextHistory;
+}
+
 export function findPayslipSnapshot(history, employeeId, period) {
   if (!Array.isArray(history) || !period) return null;
   return history.find((snapshot) =>

@@ -150,8 +150,6 @@ export function summarizePayrollPeriod(
     };
   }
 
-  const rangeStart = parsedStart.ordinal * DAY_MINUTES;
-  const rangeEnd = (parsedEnd.ordinal + 1) * DAY_MINUTES;
   let eligibleWorkdays = 0;
   let regularMinutes = 0;
   let overtimeMinutes = 0;
@@ -179,31 +177,17 @@ export function summarizePayrollPeriod(
     const interval = getAttendanceInterval(dateKey, record);
     if (!interval) continue;
     const workedMinutes = interval.end - interval.start;
-    const overlapMinutes = Math.max(
-      0,
-      Math.min(interval.end, rangeEnd) - Math.max(interval.start, rangeStart),
-    );
-    if (overlapMinutes <= 0) continue;
+    if (!dateIsInPeriod) continue;
 
     const claimedOvertimeMinutes = Number(record.overtimeMinutes);
     const recordOvertimeMinutes = Number.isFinite(claimedOvertimeMinutes)
       ? Math.min(Math.max(claimedOvertimeMinutes, 0), workedMinutes)
       : 0;
     const regularEnd = interval.end - recordOvertimeMinutes;
-    const regularOverlap = Math.max(
-      0,
-      Math.min(regularEnd, rangeEnd) - Math.max(interval.start, rangeStart),
-    );
-    const overtimeOverlap = Math.max(
-      0,
-      Math.min(interval.end, rangeEnd) - Math.max(regularEnd, rangeStart),
-    );
-    regularMinutes += regularOverlap;
-    overtimeMinutes += overtimeOverlap;
-
-    if (dateIsInPeriod) eligibleWorkdays += 1;
-    recordedEarnings += getAmount(getEarningsForRecord(record, dateKey)) *
-      (overlapMinutes / workedMinutes);
+    regularMinutes += regularEnd - interval.start;
+    overtimeMinutes += interval.end - regularEnd;
+    eligibleWorkdays += 1;
+    recordedEarnings += getAmount(getEarningsForRecord(record, dateKey));
   }
 
   return {

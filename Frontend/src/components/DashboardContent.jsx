@@ -58,9 +58,11 @@ export default function DashboardContent(props) {
     workspaceError,
     workspaceSaveError,
     historicalPayslips,
+    payslipHistorySaving,
     currentPayrollPeriod,
     onViewCurrentPayslip,
     onViewHistoricalPayslip,
+    onDeleteHistoricalPayslip,
   } = props;
   return (
     <main className="flex-1 max-w-[1600px] w-full mx-auto p-6 flex flex-col gap-6">
@@ -127,10 +129,12 @@ export default function DashboardContent(props) {
             workspaceError={workspaceError}
             workspaceSaveError={workspaceSaveError}
             historicalPayslips={historicalPayslips}
+            payslipHistorySaving={payslipHistorySaving}
             salaryVaultStatus={salaryVaultStatus}
             currentPayrollPeriod={currentPayrollPeriod}
             onViewCurrentPayslip={onViewCurrentPayslip}
             onViewHistoricalPayslip={onViewHistoricalPayslip}
+            onDeleteHistoricalPayslip={onDeleteHistoricalPayslip}
           />
         </div>
       </div>

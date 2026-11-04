@@ -30,6 +30,7 @@ import {
   appendPayslipSnapshot,
   createPayslipSnapshot,
   findPayslipSnapshot,
+  removePayslipSnapshot,
 } from "./utils/payrollHistory.js";
 import {
   getBudgetUtilization,
@@ -141,16 +142,7 @@ function isShiftClearable(record) {
   const hasAssignedShift = record.type === "Rest Day" ||
     record.hasAssignedShift === true ||
     Boolean(record.shiftStartTime && record.shiftEndTime);
-  const hasAttendance = record.clockedIn ||
-    record.punchSource ||
-    record.workStartTime ||
-    record.workEndTime ||
-    (record.in && record.in !== "—") ||
-    (record.out && record.out !== "—");
-
-  return hasAssignedShift &&
-    !hasAttendance &&
-    !["Absent", "Leave", "Company Break"].includes(record.type);
+  return hasAssignedShift;
 }
 
 function getAmount(value) {
@@ -951,8 +943,10 @@ export default function App() {
         selectedRecord.type !== "Absent" &&
         ["Regular", "Official Business"].includes(selectedAttendanceRecord.type) &&
         hasDailyAllowance
-      ? getAmount(selectedAttendanceRecord.est) + allowanceAmount
-      : null;
+    ? getAmount(selectedAttendanceRecord.est) +
+      allowanceAmount +
+      (selectedNightDifferentialPay || 0)
+    : null;
   const canRecordAttendance = selectedAttendanceRecord.hasAssignedShift === true ||
     Boolean(selectedAttendanceRecord.shiftStartTime && selectedAttendanceRecord.shiftEndTime);
   const punchRecord = activeTimeEntry
@@ -2011,6 +2005,61 @@ export default function App() {
     setActiveModal("payslipModal");
   };
 
+  const deleteHistoricalPayslip = async (snapshot) => {
+    if (payslipHistorySaving) return false;
+    if (salaryVaultStatus !== "unlocked" || !salaryVaultKeyRef.current || !user?.id) {
+      showToast("Unlock the salary vault before deleting a saved payslip.", "warning");
+      return false;
+    }
+
+    let nextHistory;
+    try {
+      nextHistory = removePayslipSnapshot(
+        salaryVaultPayslipsRef.current,
+        snapshot.id,
+      );
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "The saved payslip could not be deleted.", "error");
+      return false;
+    }
+
+    window.clearTimeout(salaryVaultSyncTimerRef.current);
+    salaryVaultSyncTimerRef.current = null;
+    setPayslipHistorySaving(true);
+    setSalaryVaultSyncing(true);
+    try {
+      await persistPrivateSalaryVault({
+        settings: {
+          ...salaryVaultExtraSettings,
+          dailyWage,
+          dailyAllowance,
+          overtimeMultiplier,
+          nightDifferential,
+        },
+        attendance: extractPrivateFinancialAttendance(attendance),
+        payslips: nextHistory,
+      });
+      salaryVaultPayslipsRef.current = nextHistory;
+      setHistoricalPayslips(nextHistory);
+      if (activeHistoricalPayslip?.id === snapshot.id) {
+        setActiveHistoricalPayslip(null);
+      }
+      addToast("Saved payslip deleted.", "success");
+      return true;
+    } catch (error) {
+      const detail = error instanceof Error ? ` ${error.message}` : "";
+      const message = error?.code === "40001"
+        ? "Encrypted salary data changed on another device. Reload and unlock the vault before deleting this payslip."
+        : `Saved payslip could not be deleted. No deletion was recorded.${detail}`;
+      setSalaryVaultError(message);
+      addToast(message, "error");
+      return false;
+    } finally {
+      setSalaryVaultSyncing(false);
+      setPayslipHistorySaving(false);
+    }
+  };
+
   const flushWorkspace = async () => {
     if (!user?.id || !workspaceLoadedRef.current) return true;
     const operation = queueWorkspaceSave(user.id, workspaceData);
@@ -2162,7 +2211,7 @@ export default function App() {
     else if (action === "clearSelectedShift()") {
       const currentRecord = attendance[selectedDate] || defaultAttendance;
       if (!isShiftClearable(currentRecord) || activeTimeEntry?.date === selectedDate) {
-        showToast("A shift can only be cleared when no attendance has been recorded.", "warning");
+        showToast("A shift can only be cleared when assigned and no Time In is currently active.", "warning");
         return;
       }
       setAttendance((state) => ({
@@ -2389,10 +2438,6 @@ export default function App() {
       const manualOutMinutes = parseTimeMinutes(manualTimeOut);
       if (!isValidTargetDate) {
         showToast("Choose a valid target date.", "warning");
-        return;
-      }
-      if (targetDate > manilaNow.date) {
-        showToast("Manual attendance can only be entered for today or a past date.", "warning");
         return;
       }
       if (!isAbsentEntry && (
@@ -2959,6 +3004,7 @@ export default function App() {
         historicalPayslips={
           salaryVaultStatus === "unlocked" ? historicalPayslips : []
         }
+        payslipHistorySaving={payslipHistorySaving}
         salaryVaultStatus={salaryVaultStatus}
         currentPayrollPeriod={payrollPeriod}
         onViewCurrentPayslip={() => {
@@ -2966,6 +3012,7 @@ export default function App() {
           setActiveModal("payslipModal");
         }}
         onViewHistoricalPayslip={viewHistoricalPayslip}
+        onDeleteHistoricalPayslip={deleteHistoricalPayslip}
       />
       <ManualEntryModal
         key={`manual-${selectedDate}`}

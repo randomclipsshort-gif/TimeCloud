@@ -104,7 +104,7 @@ test("separates regular and non-special holiday pay", () => {
   assert.equal(items.specialHoliday.total, 780);
 });
 
-test("excludes incomplete attendance and clips overnight earnings at the cutoff", () => {
+test("assigns overnight earnings to the cutoff containing the shift start date", () => {
   const attendance = {
     "2026-10-10": {
       type: "Regular", workStartTime: "22:00", workEndTime: "06:00",
@@ -113,13 +113,20 @@ test("excludes incomplete attendance and clips overnight earnings at the cutoff"
       type: "Regular", workStartTime: "09:00", workEndTime: "", clockedIn: true,
     },
   };
-  const breakdown = summarizePayrollEarningsBreakdown(
+  const nextCutoffBreakdown = summarizePayrollEarningsBreakdown(
     attendance,
     { startDate: "2026-10-11", endDate: "2026-10-25" },
     () => ({ basicPay: 800 }),
   );
+  assert.equal(nextCutoffBreakdown.items.length, 0);
 
-  assert.equal(breakdown.items.length, 1);
-  assert.equal(breakdown.items[0].total, 600);
-  assert.equal(breakdown.items[0].units, 0.75);
+  const startDateCutoffBreakdown = summarizePayrollEarningsBreakdown(
+    attendance,
+    { startDate: "2026-10-01", endDate: "2026-10-10" },
+    () => ({ basicPay: 800 }),
+  );
+  assert.deepEqual(
+    [startDateCutoffBreakdown.items[0].total, startDateCutoffBreakdown.items[0].units],
+    [800, 1],
+  );
 });

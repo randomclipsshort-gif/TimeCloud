@@ -93,7 +93,7 @@ test("period navigation is contiguous with no gaps or overlaps", () => {
   assert.equal(formatPayrollPeriod(getPayrollPeriodForDate("2026-10-10")), "Sep 26, 2026–Oct 10, 2026");
 });
 
-test("summarizes inclusive days and clips an overnight shift across cutoffs", () => {
+test("assigns the full overnight shift to the cutoff containing its start date", () => {
   const attendance = {
     "2026-10-10": {
       type: "Regular", workStartTime: "08:00", workEndTime: "16:00", est: "₱800.00 PHP",
@@ -123,9 +123,9 @@ test("summarizes inclusive days and clips an overnight shift across cutoffs", ()
     summarizePayrollPeriod(attendance, getPayrollPeriodForDate("2026-10-25")),
     {
       eligibleWorkdays: 2,
-      regularHours: 10,
-      overtimeHours: 0,
-      recordedEarnings: 1000,
+      regularHours: 11,
+      overtimeHours: 1,
+      recordedEarnings: 1200,
       incompleteClockOuts: 0,
     },
   );
@@ -133,10 +133,39 @@ test("summarizes inclusive days and clips an overnight shift across cutoffs", ()
     summarizePayrollPeriod(attendance, getPayrollPeriodForDate("2026-10-26")),
     {
       eligibleWorkdays: 0,
-      regularHours: 1,
-      overtimeHours: 1,
-      recordedEarnings: 200,
+      regularHours: 0,
+      overtimeHours: 0,
+      recordedEarnings: 0,
       incompleteClockOuts: 1,
+    },
+  );
+});
+
+test("includes a cutoff-date night shift in full even when it ends the next day", () => {
+  const attendance = {
+    "2026-11-10": {
+      type: "Regular", workStartTime: "22:00", workEndTime: "06:00", est: "₱645.00 PHP",
+    },
+  };
+
+  assert.deepEqual(
+    summarizePayrollPeriod(attendance, getPayrollPeriodForDate("2026-11-10")),
+    {
+      eligibleWorkdays: 1,
+      regularHours: 8,
+      overtimeHours: 0,
+      recordedEarnings: 645,
+      incompleteClockOuts: 0,
+    },
+  );
+  assert.deepEqual(
+    summarizePayrollPeriod(attendance, getPayrollPeriodForDate("2026-11-11")),
+    {
+      eligibleWorkdays: 0,
+      regularHours: 0,
+      overtimeHours: 0,
+      recordedEarnings: 0,
+      incompleteClockOuts: 0,
     },
   );
 });
