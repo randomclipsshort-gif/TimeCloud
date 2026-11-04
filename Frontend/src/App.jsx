@@ -9,7 +9,10 @@ import PayslipModal from "./components/modals/PayslipModal.jsx";
 import SettingsModal from "./components/modals/SettingsModal.jsx";
 import ToastContainer from "./components/ui/ToastContainer.jsx";
 import { holidayCalendarByYear } from "./data/holidayCalendar.js";
-import { getHolidayClassification, getHolidayForDate } from "./utils/holidayUtils.js";
+import {
+  getHolidayClassification,
+  getHolidayForDate,
+} from "./utils/holidayUtils.js";
 import { calculateHolidayPay, getAttendanceHours } from "./utils/holidayPay.js";
 import { getAttendancePunchAvailability } from "./utils/attendancePunchRules.js";
 import {
@@ -39,6 +42,7 @@ import {
   getExpensesForPeriod,
 } from "./utils/expenseTracker.js";
 import {
+  getCalendarPayrollPeriod,
   formatPayrollPeriod,
   getPayrollPeriodForDate,
   getPayrollPeriodForMonth,
@@ -75,12 +79,32 @@ import {
 } from "./lib/privateSalaryVault.js";
 
 const months = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 const monthAbbreviations = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 const defaultEarlyPunchWindowMinutes = 15;
 const defaultLateGracePeriodMinutes = 15;
@@ -99,7 +123,16 @@ const defaultAttendance = {
   badges: [{ text: "No Shift Assigned", color: "bg-slate-100 text-slate-600" }],
 };
 const defaultShiftTemplates = [
-  { id: "rest-day", name: "Rest Day", label: "Rest Day", range: "No working hours", assigned: "Rest Day", icon: "fa-calendar-xmark", iconColor: "text-slate-600", protected: true },
+  {
+    id: "rest-day",
+    name: "Rest Day",
+    label: "Rest Day",
+    range: "No working hours",
+    assigned: "Rest Day",
+    icon: "fa-calendar-xmark",
+    iconColor: "text-slate-600",
+    protected: true,
+  },
 ];
 const leaveTypes = {
   VL: {
@@ -139,7 +172,8 @@ function getRecord(records, monthIndex, day, year) {
 }
 
 function isShiftClearable(record) {
-  const hasAssignedShift = record.type === "Rest Day" ||
+  const hasAssignedShift =
+    record.type === "Rest Day" ||
     record.hasAssignedShift === true ||
     Boolean(record.shiftStartTime && record.shiftEndTime);
   return hasAssignedShift;
@@ -152,16 +186,18 @@ function getAmount(value) {
 
 function getManilaTimestamp(date, minuteOffset) {
   const [yearValue, monthValue, dayValue] = date.split("-").map(Number);
-  const utcMilliseconds = Date.UTC(yearValue, monthValue - 1, dayValue) +
+  const utcMilliseconds =
+    Date.UTC(yearValue, monthValue - 1, dayValue) +
     minuteOffset * 60_000 -
     8 * 60 * 60_000;
   return new Date(utcMilliseconds).toISOString();
 }
 
 function getWorkspaceLoadErrorMessage(error) {
-  const detail = typeof error?.message === "string"
-    ? error.message
-    : "The Supabase request failed without an error message.";
+  const detail =
+    typeof error?.message === "string"
+      ? error.message
+      : "The Supabase request failed without an error message.";
   const code = typeof error?.code === "string" ? error.code : "";
 
   if (code === "PGRST205" || code === "42P01") {
@@ -184,7 +220,8 @@ function parseTimeMinutes(time) {
   let hour = Number(match[1]);
   const minute = Number(match[2]);
   const meridiem = match[3]?.toUpperCase();
-  if (minute > 59 || hour > (meridiem ? 12 : 23) || (meridiem && hour < 1)) return null;
+  if (minute > 59 || hour > (meridiem ? 12 : 23) || (meridiem && hour < 1))
+    return null;
   if (meridiem) hour = (hour % 12) + (meridiem === "PM" ? 12 : 0);
   return hour * 60 + minute;
 }
@@ -195,10 +232,17 @@ function getNightShiftMinutes(startTime, endTime) {
   if (start === null || endOfDay === null) return 0;
   const end = endOfDay <= start ? endOfDay + 1440 : endOfDay;
   let nightMinutes = 0;
-  for (let day = Math.floor(start / 1440) - 1; day <= Math.floor(end / 1440); day += 1) {
+  for (
+    let day = Math.floor(start / 1440) - 1;
+    day <= Math.floor(end / 1440);
+    day += 1
+  ) {
     const nightStart = day * 1440 + 22 * 60;
     const nightEnd = day * 1440 + 30 * 60;
-    nightMinutes += Math.max(0, Math.min(end, nightEnd) - Math.max(start, nightStart));
+    nightMinutes += Math.max(
+      0,
+      Math.min(end, nightEnd) - Math.max(start, nightStart),
+    );
   }
   return nightMinutes;
 }
@@ -210,13 +254,17 @@ function applyNightDifferential(record, percentage) {
     record.type === "Leave" ||
     record.type === "Rest Day" ||
     record.type === "Company Break"
-  ) return record;
+  )
+    return record;
   const baseAmount = getAmount(record.base);
-  const nightHours = getNightShiftMinutes(record.workStartTime, record.workEndTime) / 60;
+  const nightHours =
+    getNightShiftMinutes(record.workStartTime, record.workEndTime) / 60;
   const rate = Number(percentage);
-  if (baseAmount <= 0 || nightHours <= 0 || !Number.isFinite(rate) || rate <= 0) return record;
+  if (baseAmount <= 0 || nightHours <= 0 || !Number.isFinite(rate) || rate <= 0)
+    return record;
   const premium = (baseAmount / 8) * nightHours * (rate / 100);
-  const total = baseAmount + getAmount(record.ot) + premium + getAmount(record.penalty);
+  const total =
+    baseAmount + getAmount(record.ot) + premium + getAmount(record.penalty);
   return {
     ...record,
     ot: formatPayAmount(getAmount(record.ot) + premium),
@@ -228,17 +276,18 @@ function applyHoliday(record, holiday) {
   if (!holiday) return record;
   const classification = getHolidayClassification(holiday);
   const hasAttendance = hasValidAttendanceRecord(record);
-  const holidayDutyLabel = record.type === "Absent"
-    ? "Unworked Holiday"
-    : record.type === "Rest Day"
-      ? "Rest Day"
-      : record.type === "Leave"
-        ? "On Leave"
-        : record.type === "Unassigned"
-          ? "Not Scheduled"
-          : hasAttendance
-            ? "Holiday Duty"
-            : "No attendance recorded";
+  const holidayDutyLabel =
+    record.type === "Absent"
+      ? "Unworked Holiday"
+      : record.type === "Rest Day"
+        ? "Rest Day"
+        : record.type === "Leave"
+          ? "On Leave"
+          : record.type === "Unassigned"
+            ? "Not Scheduled"
+            : hasAttendance
+              ? "Holiday Duty"
+              : "No attendance recorded";
   return {
     ...record,
     holidayName: holiday.name,
@@ -246,7 +295,8 @@ function applyHoliday(record, holiday) {
     holidayDescription: holiday.description || "",
     holidayLocality: holiday.locality || "",
     holidayUnworked: record.type === "Absent",
-    holidayDutyLabel: classification === "Company Break" ? "Company Break" : holidayDutyLabel,
+    holidayDutyLabel:
+      classification === "Company Break" ? "Company Break" : holidayDutyLabel,
   };
 }
 
@@ -271,7 +321,12 @@ function getAttendanceTimingFlags(
   lateGracePeriodMinutes = defaultLateGracePeriodMinutes,
 ) {
   if (["Absent", "Leave", "Rest Day"].includes(record.type)) {
-    return { late: false, lateMinutes: 0, undertime: false, undertimeMinutes: 0 };
+    return {
+      late: false,
+      lateMinutes: 0,
+      undertime: false,
+      undertimeMinutes: 0,
+    };
   }
   const scheduledStart = parseTimeMinutes(record.shiftStartTime);
   const scheduledEndOfDay = parseTimeMinutes(record.shiftEndTime);
@@ -281,26 +336,37 @@ function getAttendanceTimingFlags(
     scheduledStart === null ||
     scheduledEndOfDay === null ||
     actualStartOfDay === null
-  ) return { late: false, lateMinutes: 0, undertime: false, undertimeMinutes: 0 };
+  )
+    return {
+      late: false,
+      lateMinutes: 0,
+      undertime: false,
+      undertimeMinutes: 0,
+    };
 
   const isOvernightShift = scheduledEndOfDay <= scheduledStart;
-  const scheduledEnd = isOvernightShift ? scheduledEndOfDay + 1440 : scheduledEndOfDay;
-  const actualStart = isOvernightShift && actualStartOfDay < scheduledEndOfDay
-    ? actualStartOfDay + 1440
-    : actualStartOfDay;
-  const actualEnd = actualEndOfDay === null
-    ? null
-    : actualEndOfDay <= actualStartOfDay || (isOvernightShift && actualStart >= 1440)
-      ? actualEndOfDay + 1440
-      : actualEndOfDay;
+  const scheduledEnd = isOvernightShift
+    ? scheduledEndOfDay + 1440
+    : scheduledEndOfDay;
+  const actualStart =
+    isOvernightShift && actualStartOfDay < scheduledEndOfDay
+      ? actualStartOfDay + 1440
+      : actualStartOfDay;
+  const actualEnd =
+    actualEndOfDay === null
+      ? null
+      : actualEndOfDay <= actualStartOfDay ||
+          (isOvernightShift && actualStart >= 1440)
+        ? actualEndOfDay + 1440
+        : actualEndOfDay;
   const isLate = actualStart > scheduledStart + lateGracePeriodMinutes;
   const lateMinutes = isLate
     ? actualStart - scheduledStart - lateGracePeriodMinutes
     : 0;
-  const undertimeMinutes = actualEnd === null
-    || record.isHalfDay
-    ? 0
-    : Math.max(0, scheduledEnd - actualEnd);
+  const undertimeMinutes =
+    actualEnd === null || record.isHalfDay
+      ? 0
+      : Math.max(0, scheduledEnd - actualEnd);
 
   return {
     late: isLate,
@@ -310,15 +376,38 @@ function getAttendanceTimingFlags(
   };
 }
 
-function getTimingIndicators({ late, lateMinutes, undertime, undertimeMinutes }) {
+function getTimingIndicators({
+  late,
+  lateMinutes,
+  undertime,
+  undertimeMinutes,
+}) {
   return {
     dots: [
-      ...(late ? [{ title: `Late ${lateMinutes} min`, color: "bg-orange-500" }] : []),
-      ...(undertime ? [{ title: `Undertime ${undertimeMinutes} min`, color: "bg-rose-500" }] : []),
+      ...(late
+        ? [{ title: `Late ${lateMinutes} min`, color: "bg-orange-500" }]
+        : []),
+      ...(undertime
+        ? [{ title: `Undertime ${undertimeMinutes} min`, color: "bg-rose-500" }]
+        : []),
     ],
     badges: [
-      ...(late ? [{ text: `Late (${formatDuration(lateMinutes)})`, color: "bg-orange-100 text-orange-800" }] : []),
-      ...(undertime ? [{ text: `Undertime (${formatDuration(undertimeMinutes)})`, color: "bg-rose-100 text-rose-800" }] : []),
+      ...(late
+        ? [
+            {
+              text: `Late (${formatDuration(lateMinutes)})`,
+              color: "bg-orange-100 text-orange-800",
+            },
+          ]
+        : []),
+      ...(undertime
+        ? [
+            {
+              text: `Undertime (${formatDuration(undertimeMinutes)})`,
+              color: "bg-rose-100 text-rose-800",
+            },
+          ]
+        : []),
     ],
   };
 }
@@ -329,17 +418,26 @@ function applyAttendanceTiming(
   timeOut = record.workEndTime,
   lateGracePeriodMinutes = defaultLateGracePeriodMinutes,
 ) {
-  const timingFlags = getAttendanceTimingFlags(record, timeIn, timeOut, lateGracePeriodMinutes);
+  const timingFlags = getAttendanceTimingFlags(
+    record,
+    timeIn,
+    timeOut,
+    lateGracePeriodMinutes,
+  );
   const indicators = getTimingIndicators(timingFlags);
   return {
     ...record,
     ...timingFlags,
     dots: [
-      ...(record.dots || []).filter((dot) => !/^(Late|Undertime)\b/.test(dot.title)),
+      ...(record.dots || []).filter(
+        (dot) => !/^(Late|Undertime)\b/.test(dot.title),
+      ),
       ...indicators.dots,
     ],
     badges: [
-      ...(record.badges || []).filter((badge) => !/^(Late|Undertime)\b/.test(badge.text)),
+      ...(record.badges || []).filter(
+        (badge) => !/^(Late|Undertime)\b/.test(badge.text),
+      ),
       ...indicators.badges,
     ],
   };
@@ -364,7 +462,9 @@ function getManilaDateTime(date = new Date()) {
     minute: "2-digit",
     hourCycle: "h23",
   }).formatToParts(date);
-  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  const values = Object.fromEntries(
+    parts.map(({ type, value }) => [type, value]),
+  );
   return {
     date: `${values.year}-${values.month}-${values.day}`,
     time: `${values.hour}:${values.minute}`,
@@ -381,14 +481,17 @@ function getShiftWindow(record, date) {
   if (start === null || endOfDay === null) return null;
   const dayNumber = Date.parse(`${date}T00:00:00Z`) / 86400000;
   const startAt = dayNumber * 1440 + start;
-  const endAt = dayNumber * 1440 + (endOfDay <= start ? endOfDay + 1440 : endOfDay);
+  const endAt =
+    dayNumber * 1440 + (endOfDay <= start ? endOfDay + 1440 : endOfDay);
   return { startAt, endAt };
 }
 
 function getCurrentManilaMinutes(manilaNow) {
   const minutes = parseTimeMinutes(manilaNow.time);
   if (minutes === null) return null;
-  return (Date.parse(`${manilaNow.date}T00:00:00Z`) / 86400000) * 1440 + minutes;
+  return (
+    (Date.parse(`${manilaNow.date}T00:00:00Z`) / 86400000) * 1440 + minutes
+  );
 }
 
 function hasValidAttendanceRecord(record) {
@@ -403,9 +506,11 @@ function hasValidAttendanceRecord(record) {
 function getAutomaticAttendanceStatus(record, date, manilaNow) {
   if (
     record.type !== "Regular" ||
-    (record.hasAssignedShift !== true && !(record.shiftStartTime && record.shiftEndTime)) ||
+    (record.hasAssignedShift !== true &&
+      !(record.shiftStartTime && record.shiftEndTime)) ||
     hasValidAttendanceRecord(record)
-  ) return record;
+  )
+    return record;
 
   const shiftWindow = getShiftWindow(record, date);
   const nowAt = getCurrentManilaMinutes(manilaNow);
@@ -432,20 +537,26 @@ function actionArgument(action) {
 
 function getMatchingShiftTemplate(record, shiftTemplates) {
   const assignedTemplate = record.assignedShiftTemplateId
-    ? shiftTemplates.find((template) => template.id === record.assignedShiftTemplateId)
+    ? shiftTemplates.find(
+        (template) => template.id === record.assignedShiftTemplateId,
+      )
     : null;
   if (assignedTemplate) return assignedTemplate;
   if (!record.shiftStartTime || !record.shiftEndTime) return null;
-  return shiftTemplates.find((template) =>
-    template.startTime === record.shiftStartTime &&
-    template.endTime === record.shiftEndTime,
+  return shiftTemplates.find(
+    (template) =>
+      template.startTime === record.shiftStartTime &&
+      template.endTime === record.shiftEndTime,
   );
 }
 
 function getAssignedShiftName(record, shiftTemplates) {
   const matchingTemplate = getMatchingShiftTemplate(record, shiftTemplates);
   if (matchingTemplate?.label) return matchingTemplate.label;
-  if (record.assignedShiftName && record.assignedShiftName !== "Manual Entry Adjustment") {
+  if (
+    record.assignedShiftName &&
+    record.assignedShiftName !== "Manual Entry Adjustment"
+  ) {
     return record.assignedShiftName;
   }
   return record.shift === "Manual Entry Adjustment"
@@ -475,7 +586,8 @@ function CalendarDay({
       SL: "bg-sky-50/70 border border-sky-200 hover:border-sky-300",
       EL: "bg-rose-50/70 border border-rose-200 hover:border-rose-300",
     };
-    cardStyle = leaveCardStyles[record.leaveCode] || "bg-sky-50/70 border border-sky-200";
+    cardStyle =
+      leaveCardStyles[record.leaveCode] || "bg-sky-50/70 border border-sky-200";
   } else if (["Regular Holiday", "Unworked Holiday"].includes(record.type)) {
     cardStyle =
       "bg-white border border-rose-200 border-l-4 border-l-rose-500 hover:border-rose-300 shadow-xs";
@@ -487,12 +599,18 @@ function CalendarDay({
       "bg-white border border-indigo-200 border-l-4 border-l-indigo-500 hover:border-indigo-300 shadow-xs";
   }
   const holidayCellStyles = {
-    "Regular Holiday": "bg-white border border-rose-200 border-l-4 border-l-rose-500 hover:border-rose-300 shadow-xs",
-    "Special Non-Working Day": "bg-white border border-indigo-200 border-l-4 border-l-indigo-500 hover:border-indigo-300 shadow-xs",
-    "Special Working Day": "bg-white border border-teal-200 border-l-4 border-l-teal-500 hover:border-teal-300 shadow-xs",
-    "Local Holiday": "bg-white border border-violet-200 border-l-4 border-l-violet-500 hover:border-violet-300 shadow-xs",
-    "Ordinary Working Day": "bg-white border border-slate-200 border-l-4 border-l-slate-400 hover:border-slate-300 shadow-xs",
-    "Company Break": "bg-emerald-50/70 border border-emerald-200 border-l-4 border-l-emerald-500 hover:border-emerald-300",
+    "Regular Holiday":
+      "bg-white border border-rose-200 border-l-4 border-l-rose-500 hover:border-rose-300 shadow-xs",
+    "Special Non-Working Day":
+      "bg-white border border-indigo-200 border-l-4 border-l-indigo-500 hover:border-indigo-300 shadow-xs",
+    "Special Working Day":
+      "bg-white border border-teal-200 border-l-4 border-l-teal-500 hover:border-teal-300 shadow-xs",
+    "Local Holiday":
+      "bg-white border border-violet-200 border-l-4 border-l-violet-500 hover:border-violet-300 shadow-xs",
+    "Ordinary Working Day":
+      "bg-white border border-slate-200 border-l-4 border-l-slate-400 hover:border-slate-300 shadow-xs",
+    "Company Break":
+      "bg-emerald-50/70 border border-emerald-200 border-l-4 border-l-emerald-500 hover:border-emerald-300",
   };
   if (!selected && record.holidayClassification) {
     cardStyle = holidayCellStyles[record.holidayClassification] || cardStyle;
@@ -507,7 +625,8 @@ function CalendarDay({
     "Company Break": "text-emerald-700",
   };
   const matchingShift = getMatchingShiftTemplate(record, shiftTemplates);
-  const calendarShiftName = matchingShift?.label ||
+  const calendarShiftName =
+    matchingShift?.label ||
     (record.punchSource === "manual"
       ? getAssignedShiftName(record, shiftTemplates)
       : record.shift);
@@ -515,18 +634,26 @@ function CalendarDay({
   if (record.holidayName) {
     label = (
       <div className="flex flex-col">
-        <span className={`text-[10px] font-bold leading-tight ${holidayLabelColors[record.holidayClassification] || "text-indigo-700"}`}>
+        <span
+          className={`text-[10px] font-bold leading-tight ${holidayLabelColors[record.holidayClassification] || "text-indigo-700"}`}
+        >
           {record.holidayName}
         </span>
         {record.holidayDutyLabel !== "Not Scheduled" && (
-          <span className={`text-[9px] font-semibold mt-0.5 ${record.holidayUnworked ? "text-slate-600" : "text-slate-500"}`}>
+          <span
+            className={`text-[9px] font-semibold mt-0.5 ${record.holidayUnworked ? "text-slate-600" : "text-slate-500"}`}
+          >
             {record.holidayDutyLabel}
           </span>
         )}
       </div>
     );
   } else if (record.type === "Absent") {
-    label = <span className="px-2 py-0.5 text-[10px] font-bold bg-red-100 text-red-800 rounded inline-block w-fit">Absent</span>;
+    label = (
+      <span className="px-2 py-0.5 text-[10px] font-bold bg-red-100 text-red-800 rounded inline-block w-fit">
+        Absent
+      </span>
+    );
   } else if (record.type === "Leave") {
     const leaveLabelStyles = {
       VL: "bg-amber-100 text-amber-800",
@@ -534,18 +661,31 @@ function CalendarDay({
       EL: "bg-rose-100 text-rose-800",
     };
     label = (
-      <span className={`inline-flex w-fit max-w-full items-center gap-1.5 truncate rounded px-2 py-0.5 text-[10px] font-bold ${leaveLabelStyles[record.leaveCode] || "bg-sky-100 text-sky-800"}`}>
-        <i className={`fa-solid ${record.leaveIcon || "fa-umbrella-beach"} shrink-0`} aria-hidden="true" />
+      <span
+        className={`inline-flex w-fit max-w-full items-center gap-1.5 truncate rounded px-2 py-0.5 text-[10px] font-bold ${leaveLabelStyles[record.leaveCode] || "bg-sky-100 text-sky-800"}`}
+      >
+        <i
+          className={`fa-solid ${record.leaveIcon || "fa-umbrella-beach"} shrink-0`}
+          aria-hidden="true"
+        />
         <span className="truncate">{record.shift}</span>
       </span>
     );
   } else if (record.type === "Rest Day") {
-    label = <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-200 text-slate-700 rounded inline-block w-fit">Rest Day</span>;
+    label = (
+      <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-200 text-slate-700 rounded inline-block w-fit">
+        Rest Day
+      </span>
+    );
   } else if (record.customIcon) {
     label = (
       <div className="flex items-center space-x-1.5">
-        <i className={`fa-solid ${record.customIcon} ${record.customIconColor || "text-teal-600"} text-xs`} />
-        <span className="text-[10px] font-bold text-slate-700 truncate">{calendarShiftName}</span>
+        <i
+          className={`fa-solid ${record.customIcon} ${record.customIconColor || "text-teal-600"} text-xs`}
+        />
+        <span className="text-[10px] font-bold text-slate-700 truncate">
+          {calendarShiftName}
+        </span>
       </div>
     );
   }
@@ -560,30 +700,52 @@ function CalendarDay({
     >
       <span className="p-2.5 flex flex-col justify-between h-full w-full">
         <span className="flex justify-between items-center">
-          <span className={`text-xs font-bold ${selected ? "text-teal-900" : "text-slate-700"}`}>{day}</span>
+          <span
+            className={`text-xs font-bold ${selected ? "text-teal-900" : "text-slate-700"}`}
+          >
+            {day}
+          </span>
           <span className="flex items-center gap-1">
             {record.clockedIn && (
-              <span className="text-[9px] font-bold text-amber-700">Tracking</span>
+              <span className="text-[9px] font-bold text-amber-700">
+                Tracking
+              </span>
             )}
             {record.late && (
-              <span className="text-[8px] font-bold text-orange-700" title={`Late Arrival (${formatDuration(record.lateMinutes)})`}>
+              <span
+                className="text-[8px] font-bold text-orange-700"
+                title={`Late Arrival (${formatDuration(record.lateMinutes)})`}
+              >
                 Late
               </span>
             )}
             {record.undertime && (
-              <span className="text-[8px] font-bold text-rose-700" title={`Undertime (${formatDuration(record.undertimeMinutes)})`}>
+              <span
+                className="text-[8px] font-bold text-rose-700"
+                title={`Undertime (${formatDuration(record.undertimeMinutes)})`}
+              >
                 UT
               </span>
             )}
-            {record.dots?.filter((dot) => !/^(Late|Undertime)\b/.test(dot.title)).map((dot, index) => (
-              <span key={`${dot.title}-${index}`} className={`w-2.5 h-2.5 rounded-full ${dot.color} inline-block`} title={dot.title} />
-            ))}
+            {record.dots
+              ?.filter((dot) => !/^(Late|Undertime)\b/.test(dot.title))
+              .map((dot, index) => (
+                <span
+                  key={`${dot.title}-${index}`}
+                  className={`w-2.5 h-2.5 rounded-full ${dot.color} inline-block`}
+                  title={dot.title}
+                />
+              ))}
           </span>
         </span>
-        <span className="my-auto py-1 flex flex-col justify-center">{label}</span>
+        <span className="my-auto py-1 flex flex-col justify-center">
+          {label}
+        </span>
         {record.type !== "Rest Day" && record.assigned !== "Rest Day" && (
           <span className="text-[10px] text-slate-500 font-medium">
-            {record.type === "Unassigned" && record.holidayName ? "Not Scheduled" : record.assigned}
+            {record.type === "Unassigned" && record.holidayName
+              ? "Not Scheduled"
+              : record.assigned}
           </span>
         )}
       </span>
@@ -614,43 +776,78 @@ export default function App() {
   const [activeSettingsTab, setActiveSettingsTab] = useState("general");
   const [page, setPage] = useState(0);
   const [initialCalendarDate] = useState(() => getManilaDateTime().date);
-  const [monthIndex, setMonthIndex] = useState(() => Number(initialCalendarDate.slice(5, 7)) - 1);
-  const [year, setYear] = useState(() => Number(initialCalendarDate.slice(0, 4)));
+  const [payslipPeriodMode, setPayslipPeriodMode] = useState(() =>
+    Number(initialCalendarDate.slice(8, 10)) <= 10 ||
+    Number(initialCalendarDate.slice(8, 10)) >= 26
+      ? "first"
+      : "second",
+  );
+  const [monthIndex, setMonthIndex] = useState(
+    () => Number(initialCalendarDate.slice(5, 7)) - 1,
+  );
+  const [year, setYear] = useState(() =>
+    Number(initialCalendarDate.slice(0, 4)),
+  );
   const [monthCarouselMotion, setMonthCarouselMotion] = useState(null);
-  const [selectedDay, setSelectedDay] = useState(() => Number(initialCalendarDate.slice(8, 10)));
+  const [selectedDay, setSelectedDay] = useState(() =>
+    Number(initialCalendarDate.slice(8, 10)),
+  );
   const [financeTrackingScope, setFinanceTrackingScope] = useState("cutoff-10");
   const [attendance, setAttendance] = useState({});
   const [activeTimeEntry, setActiveTimeEntry] = useState(null);
   const [holidays, setHolidays] = useState(() =>
-    holidayCalendarByYear[2026].map((holiday) => ({ ...holiday, enabled: true })),
+    holidayCalendarByYear[2026].map((holiday) => ({
+      ...holiday,
+      enabled: true,
+    })),
   );
   const [selectedLocality, setSelectedLocality] = useState("");
-  const [holidayEligibilityConfirmed, setHolidayEligibilityConfirmed] = useState(false);
+  const [holidayEligibilityConfirmed, setHolidayEligibilityConfirmed] =
+    useState(false);
   const [dailyWage, setDailyWage] = useState("");
-  const [dailyAllowance, setDailyAllowance] = useState(localPrivateFinancialDefaults.dailyAllowance);
-  const [overtimeMultiplier, setOvertimeMultiplier] = useState(localPrivateFinancialDefaults.overtimeMultiplier);
+  const [dailyAllowance, setDailyAllowance] = useState(
+    localPrivateFinancialDefaults.dailyAllowance,
+  );
+  const [overtimeMultiplier, setOvertimeMultiplier] = useState(
+    localPrivateFinancialDefaults.overtimeMultiplier,
+  );
   const [salaryVaultExtraSettings, setSalaryVaultExtraSettings] = useState({});
   const [expenses, setExpenses] = useState([]);
   const [expenseName, setExpenseName] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
-  const [expenseDate, setExpenseDate] = useState(() => getManilaDateTime().date);
+  const [expenseDate, setExpenseDate] = useState(
+    () => getManilaDateTime().date,
+  );
   const [expenseCategory, setExpenseCategory] = useState("Utilities");
   const [toasts, setToasts] = useState([]);
   const timers = useRef(new Map());
   const monthCarouselTimer = useRef(null);
-  const [clock, setClock] = useState(() => new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Manila", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true,
-  }).format(new Date()));
+  const [clock, setClock] = useState(() =>
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Manila",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    }).format(new Date()),
+  );
   const [manilaNow, setManilaNow] = useState(() => getManilaDateTime());
   const [shiftTemplates, setShiftTemplates] = useState(defaultShiftTemplates);
-  const [selectedShiftTemplate, setSelectedShiftTemplate] = useState("rest-day");
+  const [selectedShiftTemplate, setSelectedShiftTemplate] =
+    useState("rest-day");
   const [customShiftName, setCustomShiftName] = useState("");
   const [customShiftStart, setCustomShiftStart] = useState("22:00");
   const [customShiftEnd, setCustomShiftEnd] = useState("06:00");
   const [selectedIcon, setSelectedIcon] = useState("fa-moon");
-  const [leaveBalances, setLeaveBalances] = useState(emptyWorkspace.leaveBalances);
-  const [settingsBalances, setSettingsBalances] = useState(emptyWorkspace.settingsBalances);
-  const [nightDifferential, setNightDifferential] = useState(localPrivateFinancialDefaults.nightDifferential);
+  const [leaveBalances, setLeaveBalances] = useState(
+    emptyWorkspace.leaveBalances,
+  );
+  const [settingsBalances, setSettingsBalances] = useState(
+    emptyWorkspace.settingsBalances,
+  );
+  const [nightDifferential, setNightDifferential] = useState(
+    localPrivateFinancialDefaults.nightDifferential,
+  );
   const earlyPunchWindowMinutes = defaultEarlyPunchWindowMinutes;
   const lateGracePeriodMinutes = defaultLateGracePeriodMinutes;
   const workspaceLoadedRef = useRef(false);
@@ -675,25 +872,42 @@ export default function App() {
     [manilaNow.date],
   );
   const payrollPeriod = currentPayrollPeriod;
-  const holidaysByDate = useMemo(() => new Map(
-    holidays
-      .filter((holiday) =>
-        holiday.enabled &&
-        (!holiday.locality || (
-          selectedLocality.trim() &&
-          holiday.locality.trim().toLocaleLowerCase() === selectedLocality.trim().toLocaleLowerCase()
-        )),
-      )
-      .map((holiday) => [holiday.date, holiday]),
-  ), [holidays, selectedLocality]);
-  const selectedHoliday = getHolidayForDate(holidays, selectedDate, selectedLocality);
-  const selectedAttendanceRecord = getRecord(attendance, monthIndex, selectedDay, year);
+  const holidaysByDate = useMemo(
+    () =>
+      new Map(
+        holidays
+          .filter(
+            (holiday) =>
+              holiday.enabled &&
+              (!holiday.locality ||
+                (selectedLocality.trim() &&
+                  holiday.locality.trim().toLocaleLowerCase() ===
+                    selectedLocality.trim().toLocaleLowerCase())),
+          )
+          .map((holiday) => [holiday.date, holiday]),
+      ),
+    [holidays, selectedLocality],
+  );
+  const selectedHoliday = getHolidayForDate(
+    holidays,
+    selectedDate,
+    selectedLocality,
+  );
+  const selectedAttendanceRecord = getRecord(
+    attendance,
+    monthIndex,
+    selectedDay,
+    year,
+  );
   const selectedRecord = applyHoliday(
     applyConfiguredAttendanceTiming(
       getAutomaticAttendanceStatus(
         {
           ...selectedAttendanceRecord,
-          assignedShiftName: getAssignedShiftName(selectedAttendanceRecord, shiftTemplates),
+          assignedShiftName: getAssignedShiftName(
+            selectedAttendanceRecord,
+            shiftTemplates,
+          ),
         },
         selectedDate,
         manilaNow,
@@ -705,129 +919,157 @@ export default function App() {
   const canClearSelectedShift =
     isShiftClearable(selectedAttendanceRecord) &&
     activeTimeEntry?.date !== selectedDate;
-  const getPayrollRecordBreakdown = useCallback((record, date) => {
-    const recordedOvertimeAmount = Number(record.overtimeAmount);
-    const overtimeAmount = Number.isFinite(recordedOvertimeAmount)
-      ? recordedOvertimeAmount
-      : 0;
-    const lateMinutes = Number(record.lateMinutes);
-    const undertimeMinutes = Number(record.undertimeMinutes);
-    const timingValues = {
-      lateMinutes: Number.isFinite(lateMinutes) ? lateMinutes : 0,
-      undertimeMinutes: Number.isFinite(undertimeMinutes) ? undertimeMinutes : 0,
-    };
-    if (record.type === "Leave") {
-      const leaveEarnings = getAmount(record.est);
-      return {
-        ...timingValues,
-        [record.leaveCode === "SL" ? "paidSickLeave" : "otherPaidLeave"]: leaveEarnings,
-      };
-    }
-
-    const holiday = getHolidayForDate(holidays, date, selectedLocality);
-    const hoursWorked = getAttendanceHours(record) || 0;
-    const hasAssignedShift = record.type === "Rest Day" ||
-      record.hasAssignedShift === true ||
-      Boolean(record.shiftStartTime && record.shiftEndTime);
-    const nightHours = getNightShiftMinutes(
-      record.workStartTime,
-      record.workEndTime,
-    ) / 60;
-    const applicableDailyWage = holiday ? Number(dailyWage) : getAmount(record.base);
-    const rate = Number(nightDifferential);
-    const nightDifferentialPay =
-      Number.isFinite(applicableDailyWage) &&
-      applicableDailyWage > 0 &&
-      Number.isFinite(rate) &&
-      rate > 0 &&
-      nightHours > 0
-        ? (applicableDailyWage / 8) * nightHours * (rate / 100)
+  const getPayrollRecordBreakdown = useCallback(
+    (record, date) => {
+      const recordedOvertimeAmount = Number(record.overtimeAmount);
+      const overtimeAmount = Number.isFinite(recordedOvertimeAmount)
+        ? recordedOvertimeAmount
         : 0;
-    const allowanceAmount = Number(dailyAllowance);
-    const hasDailyAllowance = Number.isFinite(allowanceAmount) && allowanceAmount >= 0;
+      const lateMinutes = Number(record.lateMinutes);
+      const undertimeMinutes = Number(record.undertimeMinutes);
+      const timingValues = {
+        lateMinutes: Number.isFinite(lateMinutes) ? lateMinutes : 0,
+        undertimeMinutes: Number.isFinite(undertimeMinutes)
+          ? undertimeMinutes
+          : 0,
+      };
+      if (record.type === "Leave") {
+        const leaveEarnings = getAmount(record.est);
+        return {
+          ...timingValues,
+          [record.leaveCode === "SL" ? "paidSickLeave" : "otherPaidLeave"]:
+            leaveEarnings,
+        };
+      }
 
-    if (holiday) {
-      const holidayPay = calculateHolidayPay({
-        holiday: { ...holiday, classification: getHolidayClassification(holiday) },
-        dailyWage: Number(dailyWage),
-        hoursWorked,
-        hasSchedule: hasAssignedShift,
-        isRestDay: record.type === "Rest Day",
-        eligibilityKnown: holidayEligibilityConfirmed,
-        worked: hasValidAttendanceRecord(record) && !record.clockedIn,
-        unworked: record.holidayUnworked || record.type === "Absent",
-        overtimeMultiplier: Number(overtimeMultiplier),
-      });
-      if (!hasAssignedShift || holidayPay.amount == null || !hasDailyAllowance) return null;
-      const classification = getHolidayClassification(holiday);
-      const holidayRegularPay = Number.isFinite(holidayPay.regularPay)
-        ? holidayPay.regularPay
-        : Math.max(0, holidayPay.amount - (holidayPay.overtimePay || 0));
-      const holidayOvertimePay = (Number(holidayPay.overtimePay) || 0) + overtimeAmount;
-      const holidayEarningsKey = classification === "Regular Holiday"
-        ? "regularHoliday"
-        : classification === "Special Non-Working Day"
-          ? "specialHoliday"
-          : "basicPay";
+      const holiday = getHolidayForDate(holidays, date, selectedLocality);
+      const hoursWorked = getAttendanceHours(record) || 0;
+      const hasAssignedShift =
+        record.type === "Rest Day" ||
+        record.hasAssignedShift === true ||
+        Boolean(record.shiftStartTime && record.shiftEndTime);
+      const nightHours =
+        getNightShiftMinutes(record.workStartTime, record.workEndTime) / 60;
+      const applicableDailyWage = holiday
+        ? Number(dailyWage)
+        : getAmount(record.base);
+      const rate = Number(nightDifferential);
+      const nightDifferentialPay =
+        Number.isFinite(applicableDailyWage) &&
+        applicableDailyWage > 0 &&
+        Number.isFinite(rate) &&
+        rate > 0 &&
+        nightHours > 0
+          ? (applicableDailyWage / 8) * nightHours * (rate / 100)
+          : 0;
+      const allowanceAmount = Number(dailyAllowance);
+      const hasDailyAllowance =
+        Number.isFinite(allowanceAmount) && allowanceAmount >= 0;
+
+      if (holiday) {
+        const holidayPay = calculateHolidayPay({
+          holiday: {
+            ...holiday,
+            classification: getHolidayClassification(holiday),
+          },
+          dailyWage: Number(dailyWage),
+          hoursWorked,
+          hasSchedule: hasAssignedShift,
+          isRestDay: record.type === "Rest Day",
+          eligibilityKnown: holidayEligibilityConfirmed,
+          worked: hasValidAttendanceRecord(record) && !record.clockedIn,
+          unworked: record.holidayUnworked || record.type === "Absent",
+          overtimeMultiplier: Number(overtimeMultiplier),
+        });
+        if (
+          !hasAssignedShift ||
+          holidayPay.amount == null ||
+          !hasDailyAllowance
+        )
+          return null;
+        const classification = getHolidayClassification(holiday);
+        const holidayRegularPay = Number.isFinite(holidayPay.regularPay)
+          ? holidayPay.regularPay
+          : Math.max(0, holidayPay.amount - (holidayPay.overtimePay || 0));
+        const holidayOvertimePay =
+          (Number(holidayPay.overtimePay) || 0) + overtimeAmount;
+        const holidayEarningsKey =
+          classification === "Regular Holiday"
+            ? "regularHoliday"
+            : classification === "Special Non-Working Day"
+              ? "specialHoliday"
+              : "basicPay";
+        return {
+          ...timingValues,
+          [holidayEarningsKey]: holidayRegularPay,
+          allowance: allowanceAmount,
+          shiftDifferentials: nightDifferentialPay,
+          overtime: holidayOvertimePay,
+          overtimeMinutes: Math.max(
+            Number(record.overtimeMinutes) || 0,
+            (Number(holidayPay.overtimeHours) || 0) * 60,
+          ),
+          overtimeHours: Number(holidayPay.overtimeHours) || 0,
+        };
+      }
+
+      if (
+        !hasAssignedShift ||
+        !["Regular", "Official Business"].includes(record.type) ||
+        !hasDailyAllowance
+      )
+        return null;
+
       return {
         ...timingValues,
-        [holidayEarningsKey]: holidayRegularPay,
+        basicPay: Math.max(0, getAmount(record.est) - overtimeAmount),
         allowance: allowanceAmount,
         shiftDifferentials: nightDifferentialPay,
-        overtime: holidayOvertimePay,
-        overtimeMinutes: Math.max(
-          Number(record.overtimeMinutes) || 0,
-          (Number(holidayPay.overtimeHours) || 0) * 60,
-        ),
-        overtimeHours: Number(holidayPay.overtimeHours) || 0,
+        overtime: overtimeAmount,
+        overtimeMinutes: Number(record.overtimeMinutes) || 0,
       };
-    }
-
-    if (
-      !hasAssignedShift ||
-      !["Regular", "Official Business"].includes(record.type) ||
-      !hasDailyAllowance
-    ) return null;
-
-    return {
-      ...timingValues,
-      basicPay: Math.max(0, getAmount(record.est) - overtimeAmount),
-      allowance: allowanceAmount,
-      shiftDifferentials: nightDifferentialPay,
-      overtime: overtimeAmount,
-      overtimeMinutes: Number(record.overtimeMinutes) || 0,
-    };
-  }, [
-    dailyAllowance,
-    dailyWage,
-    holidayEligibilityConfirmed,
-    holidays,
-    nightDifferential,
-    overtimeMultiplier,
-    selectedLocality,
-  ]);
-  const getPayrollRecordEarnings = useCallback((record, date) => {
-    const breakdown = getPayrollRecordBreakdown(record, date);
-    if (!breakdown) return null;
-    return [
-      "basicPay",
-      "allowance",
-      "shiftDifferentials",
-      "regularHoliday",
-      "specialHoliday",
-      "overtime",
-    ].reduce((total, key) => total + (Number(breakdown[key]) || 0), 0);
-  }, [getPayrollRecordBreakdown]);
+    },
+    [
+      dailyAllowance,
+      dailyWage,
+      holidayEligibilityConfirmed,
+      holidays,
+      nightDifferential,
+      overtimeMultiplier,
+      selectedLocality,
+    ],
+  );
+  const getPayrollRecordEarnings = useCallback(
+    (record, date) => {
+      const breakdown = getPayrollRecordBreakdown(record, date);
+      if (!breakdown) return null;
+      return [
+        "basicPay",
+        "allowance",
+        "shiftDifferentials",
+        "regularHoliday",
+        "specialHoliday",
+        "overtime",
+      ].reduce((total, key) => total + (Number(breakdown[key]) || 0), 0);
+    },
+    [getPayrollRecordBreakdown],
+  );
   const payrollPeriodSummary = useMemo(
-    () => summarizePayrollPeriod(attendance, payrollPeriod, getPayrollRecordEarnings),
+    () =>
+      summarizePayrollPeriod(
+        attendance,
+        payrollPeriod,
+        getPayrollRecordEarnings,
+      ),
     [attendance, getPayrollRecordEarnings, payrollPeriod],
   );
   const payrollEarningsBreakdown = useMemo(
-    () => summarizePayrollEarningsBreakdown(
-      attendance,
-      payrollPeriod,
-      getPayrollRecordBreakdown,
-    ),
+    () =>
+      summarizePayrollEarningsBreakdown(
+        attendance,
+        payrollPeriod,
+        getPayrollRecordBreakdown,
+      ),
     [attendance, getPayrollRecordBreakdown, payrollPeriod],
   );
   const payrollDeductionSettings = useMemo(
@@ -838,57 +1080,139 @@ export default function App() {
     const payrollMonth = payrollPeriod.endDate.slice(0, 7);
     return [10, 25].reduce((sum, cutoffDay) => {
       const period = getPayrollPeriodForMonth(payrollMonth, cutoffDay);
-      return sum + summarizePayrollPeriod(
-        attendance,
-        period,
-        getPayrollRecordEarnings,
-      ).recordedEarnings;
+      return (
+        sum +
+        summarizePayrollPeriod(attendance, period, getPayrollRecordEarnings)
+          .recordedEarnings
+      );
     }, 0);
   }, [attendance, getPayrollRecordEarnings, payrollPeriod]);
   const cutoffPayrollDeductions = useMemo(
-    () => calculateCutoffPayrollDeductions({
-      period: payrollPeriod,
-      mode: payrollDeductionSettings.payrollDeductionMode,
-      monthlyGrossPay: payrollPeriodMonthGross,
-      manualPerPaycheck: {
-        sss: payrollDeductionSettings.manualSssPerPaycheck,
-        philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
-        pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
-      },
-      settings: payrollDeductionSettings,
-    }),
+    () =>
+      calculateCutoffPayrollDeductions({
+        period: payrollPeriod,
+        mode: payrollDeductionSettings.payrollDeductionMode,
+        monthlyGrossPay: payrollPeriodMonthGross,
+        manualPerPaycheck: {
+          sss: payrollDeductionSettings.manualSssPerPaycheck,
+          philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
+          pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
+        },
+        settings: payrollDeductionSettings,
+      }),
     [payrollDeductionSettings, payrollPeriod, payrollPeriodMonthGross],
   );
   const payrollPeriodNetPay =
     payrollPeriodSummary.recordedEarnings - cutoffPayrollDeductions.total;
+  const payslipMonth = payrollPeriod.endDate.slice(0, 7);
+  const selectedPayslipPeriod = useMemo(() => {
+    if (payslipPeriodMode === "month") {
+      return getCalendarPayrollPeriod(payslipMonth);
+    }
+    return getPayrollPeriodForMonth(
+      payslipMonth,
+      payslipPeriodMode === "first" ? 10 : 25,
+    );
+  }, [payslipMonth, payslipPeriodMode]);
+  const selectedPayslipSummary = useMemo(
+    () => summarizePayrollPeriod(
+      attendance,
+      selectedPayslipPeriod,
+      getPayrollRecordEarnings,
+    ),
+    [attendance, getPayrollRecordEarnings, selectedPayslipPeriod],
+  );
+  const selectedPayslipBreakdown = useMemo(
+    () => summarizePayrollEarningsBreakdown(
+      attendance,
+      selectedPayslipPeriod,
+      getPayrollRecordBreakdown,
+    ),
+    [attendance, getPayrollRecordBreakdown, selectedPayslipPeriod],
+  );
+  const calendarMonthGross = useMemo(
+    () => summarizePayrollPeriod(
+      attendance,
+      getCalendarPayrollPeriod(payslipMonth),
+      getPayrollRecordEarnings,
+    ).recordedEarnings,
+    [attendance, getPayrollRecordEarnings, payslipMonth],
+  );
+  const selectedPayslipDeductions = useMemo(() => {
+    const calculateDeductions = (period, monthlyGrossPay) =>
+      calculateCutoffPayrollDeductions({
+        period,
+        mode: payrollDeductionSettings.payrollDeductionMode,
+        monthlyGrossPay,
+        manualPerPaycheck: {
+          sss: payrollDeductionSettings.manualSssPerPaycheck,
+          philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
+          pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
+        },
+        settings: payrollDeductionSettings,
+      });
+    if (payslipPeriodMode === "month") {
+      return sumCutoffPayrollDeductions(
+        calculateDeductions(getPayrollPeriodForMonth(payslipMonth, 10), calendarMonthGross),
+        calculateDeductions(getPayrollPeriodForMonth(payslipMonth, 25), calendarMonthGross),
+      );
+    }
+    return calculateDeductions(selectedPayslipPeriod, payrollPeriodMonthGross);
+  }, [
+    calendarMonthGross,
+    payrollDeductionSettings,
+    payrollPeriodMonthGross,
+    payslipMonth,
+    payslipPeriodMode,
+    selectedPayslipPeriod,
+  ]);
+  const selectedPayslipNetPay =
+    selectedPayslipSummary.recordedEarnings -
+    selectedPayslipDeductions.total;
   const selectedWorkedHours = hasValidAttendanceRecord(selectedAttendanceRecord)
     ? getAttendanceHours(selectedAttendanceRecord)
     : 0;
   const selectedHolidayPay = selectedHoliday
     ? selectedAttendanceRecord.clockedIn
-      ? { amount: null, message: "The holiday-pay estimate is available after Time Out." }
+      ? {
+          amount: null,
+          message: "The holiday-pay estimate is available after Time Out.",
+        }
       : calculateHolidayPay({
-        holiday: { ...selectedHoliday, classification: getHolidayClassification(selectedHoliday) },
-        dailyWage: Number(dailyWage),
-        hoursWorked: getAttendanceHours(selectedAttendanceRecord),
-        hasSchedule: selectedAttendanceRecord.type === "Rest Day" ||
-          (selectedAttendanceRecord.hasAssignedShift === true &&
-            Boolean(selectedAttendanceRecord.shiftStartTime && selectedAttendanceRecord.shiftEndTime)),
-        isRestDay: selectedAttendanceRecord.type === "Rest Day",
-        eligibilityKnown: holidayEligibilityConfirmed,
-        worked: hasValidAttendanceRecord(selectedAttendanceRecord) && !selectedAttendanceRecord.clockedIn,
-        unworked: selectedAttendanceRecord.holidayUnworked ||
-          selectedAttendanceRecord.type === "Absent",
-        overtimeMultiplier: Number(overtimeMultiplier),
-      })
+          holiday: {
+            ...selectedHoliday,
+            classification: getHolidayClassification(selectedHoliday),
+          },
+          dailyWage: Number(dailyWage),
+          hoursWorked: getAttendanceHours(selectedAttendanceRecord),
+          hasSchedule:
+            selectedAttendanceRecord.type === "Rest Day" ||
+            (selectedAttendanceRecord.hasAssignedShift === true &&
+              Boolean(
+                selectedAttendanceRecord.shiftStartTime &&
+                selectedAttendanceRecord.shiftEndTime,
+              )),
+          isRestDay: selectedAttendanceRecord.type === "Rest Day",
+          eligibilityKnown: holidayEligibilityConfirmed,
+          worked:
+            hasValidAttendanceRecord(selectedAttendanceRecord) &&
+            !selectedAttendanceRecord.clockedIn,
+          unworked:
+            selectedAttendanceRecord.holidayUnworked ||
+            selectedAttendanceRecord.type === "Absent",
+          overtimeMultiplier: Number(overtimeMultiplier),
+        })
     : null;
   const selectedNightDifferentialPay = (() => {
-    const applicableDailyWage = selectedHoliday ? Number(dailyWage) : getAmount(selectedAttendanceRecord.base);
+    const applicableDailyWage = selectedHoliday
+      ? Number(dailyWage)
+      : getAmount(selectedAttendanceRecord.base);
     const rate = Number(nightDifferential);
-    const nightHours = getNightShiftMinutes(
-      selectedAttendanceRecord.workStartTime,
-      selectedAttendanceRecord.workEndTime,
-    ) / 60;
+    const nightHours =
+      getNightShiftMinutes(
+        selectedAttendanceRecord.workStartTime,
+        selectedAttendanceRecord.workEndTime,
+      ) / 60;
     if (
       selectedAttendanceRecord.clockedIn ||
       !hasValidAttendanceRecord(selectedAttendanceRecord) ||
@@ -897,12 +1221,14 @@ export default function App() {
       !Number.isFinite(rate) ||
       rate <= 0 ||
       nightHours <= 0
-    ) return null;
+    )
+      return null;
     return (applicableDailyWage / 8) * nightHours * (rate / 100);
   })();
   const selectedOvertimePay = selectedHoliday
     ? selectedHolidayPay?.overtimePay != null
-      ? selectedHolidayPay.overtimePay + (selectedAttendanceRecord.overtimeAmount || 0)
+      ? selectedHolidayPay.overtimePay +
+        (selectedAttendanceRecord.overtimeAmount || 0)
       : null
     : Number.isFinite(selectedAttendanceRecord.overtimeAmount)
       ? selectedAttendanceRecord.overtimeAmount
@@ -911,29 +1237,42 @@ export default function App() {
     const multiplier = Number(overtimeMultiplier);
     if (!Number.isFinite(multiplier) || multiplier <= 0) return null;
     if (selectedAttendanceRecord.overtimeMinutes > 0) {
-      const shiftStart = parseTimeMinutes(selectedAttendanceRecord.shiftStartTime);
-      const shiftEndOfDay = parseTimeMinutes(selectedAttendanceRecord.shiftEndTime);
+      const shiftStart = parseTimeMinutes(
+        selectedAttendanceRecord.shiftStartTime,
+      );
+      const shiftEndOfDay = parseTimeMinutes(
+        selectedAttendanceRecord.shiftEndTime,
+      );
       if (shiftStart === null || shiftEndOfDay === null) return null;
-      const shiftEnd = shiftEndOfDay <= shiftStart ? shiftEndOfDay + 1440 : shiftEndOfDay;
+      const shiftEnd =
+        shiftEndOfDay <= shiftStart ? shiftEndOfDay + 1440 : shiftEndOfDay;
       const scheduledHours = (shiftEnd - shiftStart) / 60;
-      const hourlyRate = getAmount(selectedAttendanceRecord.base) / scheduledHours;
+      const hourlyRate =
+        getAmount(selectedAttendanceRecord.base) / scheduledHours;
       return `${formatDuration(selectedAttendanceRecord.overtimeMinutes)} × ₱${hourlyRate.toFixed(2)}/hr × ${multiplier}x`;
     }
     if (selectedHolidayPay?.overtimeHours > 0) {
       const holidayMultiplier = selectedHolidayPay.multiplier || 1;
-      const hourlyRate = Number(dailyWage) / 8 * holidayMultiplier;
+      const hourlyRate = (Number(dailyWage) / 8) * holidayMultiplier;
       return `${selectedHolidayPay.overtimeHours}h × ₱${hourlyRate.toFixed(2)}/hr × ${multiplier}x`;
     }
     return `Hourly rate × OT hours × ${multiplier}x`;
   })();
   const allowanceAmount = Number(dailyAllowance);
-  const hasDailyAllowance = Number.isFinite(allowanceAmount) && allowanceAmount >= 0;
-  const hasAssignedShift = selectedAttendanceRecord.type === "Rest Day" ||
+  const hasDailyAllowance =
+    Number.isFinite(allowanceAmount) && allowanceAmount >= 0;
+  const hasAssignedShift =
+    selectedAttendanceRecord.type === "Rest Day" ||
     selectedAttendanceRecord.hasAssignedShift === true ||
-    Boolean(selectedAttendanceRecord.shiftStartTime && selectedAttendanceRecord.shiftEndTime);
+    Boolean(
+      selectedAttendanceRecord.shiftStartTime &&
+      selectedAttendanceRecord.shiftEndTime,
+    );
   const isSelectedDateAbsent = selectedRecord.type === "Absent";
   const selectedEstimatedEarnings = selectedHoliday
-    ? hasAssignedShift && selectedHolidayPay?.amount != null && hasDailyAllowance
+    ? hasAssignedShift &&
+      selectedHolidayPay?.amount != null &&
+      hasDailyAllowance
       ? selectedHolidayPay.amount +
         (selectedAttendanceRecord.overtimeAmount || 0) +
         (selectedNightDifferentialPay || 0) +
@@ -941,14 +1280,20 @@ export default function App() {
       : null
     : hasAssignedShift &&
         selectedRecord.type !== "Absent" &&
-        ["Regular", "Official Business"].includes(selectedAttendanceRecord.type) &&
+        ["Regular", "Official Business"].includes(
+          selectedAttendanceRecord.type,
+        ) &&
         hasDailyAllowance
-    ? getAmount(selectedAttendanceRecord.est) +
-      allowanceAmount +
-      (selectedNightDifferentialPay || 0)
-    : null;
-  const canRecordAttendance = selectedAttendanceRecord.hasAssignedShift === true ||
-    Boolean(selectedAttendanceRecord.shiftStartTime && selectedAttendanceRecord.shiftEndTime);
+      ? getAmount(selectedAttendanceRecord.est) +
+        allowanceAmount +
+        (selectedNightDifferentialPay || 0)
+      : null;
+  const canRecordAttendance =
+    selectedAttendanceRecord.hasAssignedShift === true ||
+    Boolean(
+      selectedAttendanceRecord.shiftStartTime &&
+      selectedAttendanceRecord.shiftEndTime,
+    );
   const punchRecord = activeTimeEntry
     ? attendance[activeTimeEntry.date] || defaultAttendance
     : selectedAttendanceRecord;
@@ -963,25 +1308,30 @@ export default function App() {
     currentMinutes: currentManilaMinutes,
     activeTimeEntryDate: activeTimeEntry?.date,
     earlyPunchWindowMinutes,
-    hasAttendanceRecord: hasValidAttendanceRecord(selectedAttendanceRecord) ||
+    hasAttendanceRecord:
+      hasValidAttendanceRecord(selectedAttendanceRecord) ||
       selectedAttendanceRecord.clockedIn ||
       (selectedAttendanceRecord.in && selectedAttendanceRecord.in !== "—") ||
       (selectedAttendanceRecord.out && selectedAttendanceRecord.out !== "—"),
   });
   const { canTimeIn, canTimeOut } = punchAvailability;
-  const selectedRecordWithNightDifferential = applyNightDifferential(selectedRecord, nightDifferential);
+  const selectedRecordWithNightDifferential = applyNightDifferential(
+    selectedRecord,
+    nightDifferential,
+  );
   const yearOptions = useMemo(
     () => Array.from({ length: 11 }, (_, index) => year - 5 + index),
     [year],
   );
   const user = authSession?.user
     ? {
-      id: authSession.user.id,
-      email: authSession.user.email || "",
-      name: authSession.user.user_metadata?.full_name ||
-        authSession.user.email?.split("@")[0] ||
-        "TimeCloud user",
-    }
+        id: authSession.user.id,
+        email: authSession.user.email || "",
+        name:
+          authSession.user.user_metadata?.full_name ||
+          authSession.user.email?.split("@")[0] ||
+          "TimeCloud user",
+      }
     : null;
   const currentMonthPrefix = `${year}-${String(monthIndex + 1).padStart(2, "0")}-`;
   const grossPay = Object.entries(attendance)
@@ -989,37 +1339,52 @@ export default function App() {
     .reduce((sum, [, record]) => {
       if (record.clockedIn) return sum;
       if (record.type === "Leave") return sum + getAmount(record.est);
-      return hasValidAttendanceRecord(record) ? sum + getAmount(record.est) : sum;
+      return hasValidAttendanceRecord(record)
+        ? sum + getAmount(record.est)
+        : sum;
     }, 0);
   const payrollDeductions = sumCutoffPayrollDeductions(
-    ...[10, 25].map((cutoffDay) => calculateCutoffPayrollDeductions({
-      period: getPayrollPeriodForMonth(calendarPayrollMonth, cutoffDay),
-      mode: payrollDeductionSettings.payrollDeductionMode,
-      monthlyGrossPay: grossPay,
-      manualPerPaycheck: {
-        sss: payrollDeductionSettings.manualSssPerPaycheck,
-        philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
-        pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
-      },
-      settings: payrollDeductionSettings,
-    })),
+    ...[10, 25].map((cutoffDay) =>
+      calculateCutoffPayrollDeductions({
+        period: getPayrollPeriodForMonth(calendarPayrollMonth, cutoffDay),
+        mode: payrollDeductionSettings.payrollDeductionMode,
+        monthlyGrossPay: grossPay,
+        manualPerPaycheck: {
+          sss: payrollDeductionSettings.manualSssPerPaycheck,
+          philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
+          pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
+        },
+        settings: payrollDeductionSettings,
+      }),
+    ),
   );
   const netPay = Math.max(0, grossPay - payrollDeductions.total);
   const totalHours = Object.entries(attendance)
     .filter(([date]) => date.startsWith(currentMonthPrefix))
-    .reduce((sum, [, record]) => sum + (
-      hasValidAttendanceRecord(record) ? getAttendanceHours(record) : 0
-    ), 0);
+    .reduce(
+      (sum, [, record]) =>
+        sum +
+        (hasValidAttendanceRecord(record) ? getAttendanceHours(record) : 0),
+      0,
+    );
   const monthExpenses = getExpensesForMonth(expenses, calendarPayrollMonth);
-  const totalExpenses = monthExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const totalExpenses = monthExpenses.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0,
+  );
   const { remaining, percentage } = getBudgetUtilization(netPay, totalExpenses);
   const financeCutoffPeriods = useMemo(
-    () => [10, 25].map((cutoffDay) => getPayrollPeriodForMonth(calendarPayrollMonth, cutoffDay)),
+    () =>
+      [10, 25].map((cutoffDay) =>
+        getPayrollPeriodForMonth(calendarPayrollMonth, cutoffDay),
+      ),
     [calendarPayrollMonth],
   );
   const financeCutoffSummaries = useMemo(
-    () => financeCutoffPeriods.map((period) =>
-      summarizePayrollPeriod(attendance, period, getPayrollRecordEarnings)),
+    () =>
+      financeCutoffPeriods.map((period) =>
+        summarizePayrollPeriod(attendance, period, getPayrollRecordEarnings),
+      ),
     [attendance, financeCutoffPeriods, getPayrollRecordEarnings],
   );
   const financeCutoffMonthlyGross = financeCutoffSummaries.reduce(
@@ -1027,159 +1392,341 @@ export default function App() {
     0,
   );
   const financeCutoffDeductions = useMemo(
-    () => financeCutoffPeriods.map((period) => calculateCutoffPayrollDeductions({
-      period,
-      mode: payrollDeductionSettings.payrollDeductionMode,
-      monthlyGrossPay: financeCutoffMonthlyGross,
-      manualPerPaycheck: {
-        sss: payrollDeductionSettings.manualSssPerPaycheck,
-        philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
-        pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
-      },
-      settings: payrollDeductionSettings,
-    })),
+    () =>
+      financeCutoffPeriods.map((period) =>
+        calculateCutoffPayrollDeductions({
+          period,
+          mode: payrollDeductionSettings.payrollDeductionMode,
+          monthlyGrossPay: financeCutoffMonthlyGross,
+          manualPerPaycheck: {
+            sss: payrollDeductionSettings.manualSssPerPaycheck,
+            philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
+            pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
+          },
+          settings: payrollDeductionSettings,
+        }),
+      ),
     [financeCutoffMonthlyGross, financeCutoffPeriods, payrollDeductionSettings],
   );
-  const selectedFinanceCutoffIndex = financeTrackingScope === "cutoff-25" ? 1 : 0;
-  const selectedFinancePeriod = financeCutoffPeriods[selectedFinanceCutoffIndex];
-  const financeExpenses = financeTrackingScope === "month"
-    ? monthExpenses
-    : getExpensesForPeriod(expenses, selectedFinancePeriod);
+  const selectedFinanceCutoffIndex =
+    financeTrackingScope === "cutoff-25" ? 1 : 0;
+  const selectedFinancePeriod =
+    financeCutoffPeriods[selectedFinanceCutoffIndex];
+  const financeExpenses =
+    financeTrackingScope === "month"
+      ? monthExpenses
+      : getExpensesForPeriod(expenses, selectedFinancePeriod);
   const financeTotalExpenses = financeExpenses.reduce(
     (sum, item) => sum + Number(item.amount || 0),
     0,
   );
-  const financeGrossPay = financeTrackingScope === "month"
-    ? grossPay
-    : financeCutoffSummaries[selectedFinanceCutoffIndex].recordedEarnings;
-  const financePayrollDeductions = financeTrackingScope === "month"
-    ? payrollDeductions
-    : financeCutoffDeductions[selectedFinanceCutoffIndex];
-  const financeNetPay = Math.max(0, financeGrossPay - financePayrollDeductions.total);
-  const financeTotalHours = financeTrackingScope === "month"
-    ? totalHours
-    : financeCutoffSummaries[selectedFinanceCutoffIndex].regularHours +
-      financeCutoffSummaries[selectedFinanceCutoffIndex].overtimeHours;
-  const financePeriodLabel = financeTrackingScope === "month"
-    ? `Full month · ${monthLabel}`
-    : formatPayrollPeriod(selectedFinancePeriod);
-  const {
-    remaining: financeRemaining,
-    percentage: financePercentage,
-  } = getBudgetUtilization(financeNetPay, financeTotalExpenses);
-  const workspaceData = useMemo(() => ({
-    attendance: serializeWorkspaceForCloud({ attendance }).attendance,
-    activeTimeEntry,
-    holidays,
-    selectedLocality,
-    holidayEligibilityConfirmed,
-    expenses,
-    shiftTemplates,
-    leaveBalances,
-    settingsBalances,
-  }), [
-    attendance,
-    activeTimeEntry,
-    holidays,
-    selectedLocality,
-    holidayEligibilityConfirmed,
-    expenses,
-    shiftTemplates,
-    leaveBalances,
-    settingsBalances,
-    payrollPeriod.endDate,
-  ]);
+  const financeGrossPay =
+    financeTrackingScope === "month"
+      ? grossPay
+      : financeCutoffSummaries[selectedFinanceCutoffIndex].recordedEarnings;
+  const financePayrollDeductions =
+    financeTrackingScope === "month"
+      ? payrollDeductions
+      : financeCutoffDeductions[selectedFinanceCutoffIndex];
+  const financeNetPay = Math.max(
+    0,
+    financeGrossPay - financePayrollDeductions.total,
+  );
+  const financeTotalHours =
+    financeTrackingScope === "month"
+      ? totalHours
+      : financeCutoffSummaries[selectedFinanceCutoffIndex].regularHours +
+        financeCutoffSummaries[selectedFinanceCutoffIndex].overtimeHours;
+  const financePeriodLabel =
+    financeTrackingScope === "month"
+      ? `Full month · ${monthLabel}`
+      : formatPayrollPeriod(selectedFinancePeriod);
+  const { remaining: financeRemaining, percentage: financePercentage } =
+    getBudgetUtilization(financeNetPay, financeTotalExpenses);
+  const workspaceData = useMemo(
+    () => ({
+      attendance: serializeWorkspaceForCloud({ attendance }).attendance,
+      activeTimeEntry,
+      holidays,
+      selectedLocality,
+      holidayEligibilityConfirmed,
+      expenses,
+      shiftTemplates,
+      leaveBalances,
+      settingsBalances,
+    }),
+    [
+      attendance,
+      activeTimeEntry,
+      holidays,
+      selectedLocality,
+      holidayEligibilityConfirmed,
+      expenses,
+      shiftTemplates,
+      leaveBalances,
+      settingsBalances,
+      payrollPeriod.endDate,
+    ],
+  );
 
   const addToast = useCallback((message, type = "success") => {
     const id = Date.now() + Math.random();
     setToasts((current) => [...current, { id, message, type }]);
-    timers.current.set(id, window.setTimeout(() => {
-      setToasts((current) => current.filter((toast) => toast.id !== id));
-      timers.current.delete(id);
-    }, 3500));
+    timers.current.set(
+      id,
+      window.setTimeout(() => {
+        setToasts((current) => current.filter((toast) => toast.id !== id));
+        timers.current.delete(id);
+      }, 3500),
+    );
   }, []);
 
-  const showToast = useCallback((message, type = "success") => {
-    if (type === "success" && workspaceLoadedRef.current && userRef.current) {
-      pendingSuccessToasts.current.push(message);
-      setSaveRequest((request) => request + 1);
-      return;
-    }
-    addToast(message, type);
-  }, [addToast]);
-
-  const queueWorkspaceSave = useCallback((userId, snapshot) => {
-    const write = async () => {
-      workspaceRevisionRef.current = await saveWorkspace(
-        snapshot,
-        workspaceRevisionRef.current,
-      );
-    };
-    const operation = saveQueueRef.current.then(write, () => {
-      if (userRef.current === userId) {
-        addToast("Retrying the latest cloud save after an earlier failure.", "warning");
+  const showToast = useCallback(
+    (message, type = "success") => {
+      if (type === "success" && workspaceLoadedRef.current && userRef.current) {
+        pendingSuccessToasts.current.push(message);
+        setSaveRequest((request) => request + 1);
+        return;
       }
-      return write();
-    });
-    saveQueueRef.current = operation;
-    return operation;
-  }, [addToast]);
+      addToast(message, type);
+    },
+    [addToast],
+  );
 
-  const persistPrivateSalaryVault = useCallback((payload) => {
-    const vaultKey = salaryVaultKeyRef.current;
-    if (!user?.id || !vaultKey) {
-      return Promise.reject(new Error("Unlock the encrypted salary vault before syncing salary data."));
-    }
+  const queueWorkspaceSave = useCallback(
+    (userId, snapshot) => {
+      const write = async () => {
+        workspaceRevisionRef.current = await saveWorkspace(
+          snapshot,
+          workspaceRevisionRef.current,
+        );
+      };
+      const operation = saveQueueRef.current.then(write, () => {
+        if (userRef.current === userId) {
+          addToast(
+            "Retrying the latest cloud save after an earlier failure.",
+            "warning",
+          );
+        }
+        return write();
+      });
+      saveQueueRef.current = operation;
+      return operation;
+    },
+    [addToast],
+  );
 
-    const operation = salaryVaultQueueRef.current.then(async () => {
-      if (userRef.current !== user.id) {
-        throw new Error("The signed-in account changed before the encrypted salary vault could be saved.");
+  const persistPrivateSalaryVault = useCallback(
+    (payload) => {
+      const vaultKey = salaryVaultKeyRef.current;
+      if (!user?.id || !vaultKey) {
+        return Promise.reject(
+          new Error(
+            "Unlock the encrypted salary vault before syncing salary data.",
+          ),
+        );
       }
-      const encryptedRecord = await encryptSalaryVault({
-        ...payload,
-        payslips: payload.payslips ?? salaryVaultPayslipsRef.current,
-      }, vaultKey.key, vaultKey.salt);
-      if (userRef.current !== user.id) {
-        throw new Error("The signed-in account changed before the encrypted salary vault could be saved.");
-      }
-      const revision = await savePrivateSalaryVault(
-        encryptedRecord,
-        salaryVaultRevisionRef.current,
-        user.id,
-      );
-      if (userRef.current === user.id) {
+
+      const operation = salaryVaultQueueRef.current.then(async () => {
+        if (userRef.current !== user.id) {
+          throw new Error(
+            "The signed-in account changed before the encrypted salary vault could be saved.",
+          );
+        }
+        const encryptedRecord = await encryptSalaryVault(
+          {
+            ...payload,
+            payslips: payload.payslips ?? salaryVaultPayslipsRef.current,
+          },
+          vaultKey.key,
+          vaultKey.salt,
+        );
+        if (userRef.current !== user.id) {
+          throw new Error(
+            "The signed-in account changed before the encrypted salary vault could be saved.",
+          );
+        }
+        const revision = await savePrivateSalaryVault(
+          encryptedRecord,
+          salaryVaultRevisionRef.current,
+          user.id,
+        );
+        if (userRef.current === user.id) {
+          salaryVaultRevisionRef.current = revision;
+          setSalaryVaultRecord({
+            ...encryptedRecord,
+            revision,
+            updated_at: new Date().toISOString(),
+          });
+          if (!preserveLegacyLocalRef.current) {
+            try {
+              clearLegacyPrivateFinancialData(user.id);
+              setSalaryVaultError("");
+            } catch {
+              setSalaryVaultError(
+                "Vault saved, but the prior unencrypted browser copy could not be removed. Keep this browser secure and retry cleanup.",
+              );
+            }
+            setSalaryVaultConflict(false);
+          }
+        }
+        return revision;
+      });
+      salaryVaultQueueRef.current = operation.catch((error) => {
+        if (userRef.current === user.id && error?.code === "40001") {
+          setSalaryVaultConflict(true);
+        }
+      });
+      return operation;
+    },
+    [user?.id],
+  );
+
+  const unlockOrCreateSalaryVault = useCallback(
+    async (passphrase, confirmation) => {
+      if (!user?.id)
+        throw new Error("Sign in before unlocking the salary vault.");
+
+      if (!salaryVaultRecord) {
+        if (passphrase !== confirmation) {
+          throw new Error("The vault passphrases do not match.");
+        }
+        const payload = {
+          settings: {
+            ...salaryVaultExtraSettings,
+            dailyWage,
+            dailyAllowance,
+            overtimeMultiplier,
+            nightDifferential,
+          },
+          attendance: extractPrivateFinancialAttendance(attendance),
+          payslips: [],
+        };
+        const { record, key } = await createSalaryVault(payload, passphrase);
+        const revision = await savePrivateSalaryVault(record, 0, user.id);
+        let localCopyRemains = hasLegacyPrivateFinancialData(user.id);
+        salaryVaultKeyRef.current = {
+          key,
+          salt: Uint8Array.from(atob(record.salt), (character) =>
+            character.charCodeAt(0),
+          ),
+        };
         salaryVaultRevisionRef.current = revision;
+        salaryVaultPayslipsRef.current = [];
+        setHistoricalPayslips([]);
         setSalaryVaultRecord({
-          ...encryptedRecord,
+          ...record,
           revision,
           updated_at: new Date().toISOString(),
         });
-        if (!preserveLegacyLocalRef.current) {
+        try {
+          clearLegacyPrivateFinancialData(user.id);
+          localCopyRemains = false;
+        } catch {
+          setSalaryVaultError(
+            "Vault created, but the prior unencrypted browser copy could not be removed. Keep this browser secure and retry cleanup.",
+          );
+        }
+        preserveLegacyLocalRef.current = localCopyRemains;
+        salaryVaultSkipNextSyncRef.current = true;
+        setSalaryVaultStatus("unlocked");
+        if (!localCopyRemains) setSalaryVaultError("");
+        setSalaryVaultConflict(false);
+        return { settings: payload.settings };
+      }
+
+      const unlocked = await unlockSalaryVault(salaryVaultRecord, passphrase);
+      let payload = unlocked.payload;
+      let revision = salaryVaultRecord.revision;
+      let localCopyRemains = hasLegacyPrivateFinancialData(user.id);
+      if (localCopyRemains) {
+        const legacyLocalData = getLegacyPrivateFinancialData(user.id, null);
+        const conflicts = findPrivateFinancialConflicts(
+          legacyLocalData,
+          payload,
+        );
+        if (conflicts.length > 0) {
+          setSalaryVaultError(
+            "This browser has older local salary values that differ from the cloud vault. The cloud copy was not overwritten and the local copy was preserved; export or reconcile it before removing browser data.",
+          );
+        } else {
+          payload = {
+            ...mergePrivateFinancialData(legacyLocalData, payload),
+            payslips: payload.payslips || [],
+          };
+          const encryptedRecord = await encryptSalaryVault(
+            payload,
+            unlocked.key,
+            unlocked.salt,
+          );
+          revision = await savePrivateSalaryVault(
+            encryptedRecord,
+            revision,
+            user.id,
+          );
+          setSalaryVaultRecord({
+            ...encryptedRecord,
+            revision,
+            updated_at: new Date().toISOString(),
+          });
           try {
             clearLegacyPrivateFinancialData(user.id);
-            setSalaryVaultError("");
+            localCopyRemains = false;
           } catch {
-            setSalaryVaultError("Vault saved, but the prior unencrypted browser copy could not be removed. Keep this browser secure and retry cleanup.");
+            setSalaryVaultError(
+              "Vault synced, but the prior unencrypted browser copy could not be removed. Keep this browser secure and retry cleanup.",
+            );
           }
-          setSalaryVaultConflict(false);
         }
       }
-      return revision;
-    });
-    salaryVaultQueueRef.current = operation.catch((error) => {
-      if (userRef.current === user.id && error?.code === "40001") {
-        setSalaryVaultConflict(true);
+      preserveLegacyLocalRef.current = localCopyRemains;
+
+      salaryVaultKeyRef.current = { key: unlocked.key, salt: unlocked.salt };
+      salaryVaultRevisionRef.current = revision;
+      salaryVaultPayslipsRef.current = payload.payslips || [];
+      setHistoricalPayslips(payload.payslips || []);
+      setActiveHistoricalPayslip(null);
+      setDailyWage(payload.settings.dailyWage);
+      setDailyAllowance(payload.settings.dailyAllowance);
+      setOvertimeMultiplier(payload.settings.overtimeMultiplier);
+      setNightDifferential(payload.settings.nightDifferential);
+      setSalaryVaultExtraSettings(
+        extractPrivateFinancialSettings(payload.settings),
+      );
+      setAttendance((current) =>
+        mergeLocalPrivateAttendance(current, payload.attendance),
+      );
+      salaryVaultSkipNextSyncRef.current = true;
+      setSalaryVaultStatus("unlocked");
+      if (!localCopyRemains) setSalaryVaultError("");
+      setSalaryVaultConflict(false);
+      return { settings: payload.settings };
+    },
+    [
+      user?.id,
+      salaryVaultRecord,
+      dailyWage,
+      dailyAllowance,
+      overtimeMultiplier,
+      nightDifferential,
+      salaryVaultExtraSettings,
+      attendance,
+    ],
+  );
+
+  const rotateSalaryVaultPassphrase = useCallback(
+    async (nextPassphrase, confirmation) => {
+      if (nextPassphrase !== confirmation) {
+        throw new Error("The new vault passphrases do not match.");
       }
-    });
-    return operation;
-  }, [user?.id]);
-
-  const unlockOrCreateSalaryVault = useCallback(async (passphrase, confirmation) => {
-    if (!user?.id) throw new Error("Sign in before unlocking the salary vault.");
-
-    if (!salaryVaultRecord) {
-      if (passphrase !== confirmation) {
-        throw new Error("The vault passphrases do not match.");
+      if (
+        salaryVaultStatus !== "unlocked" ||
+        !salaryVaultRecord ||
+        !salaryVaultKeyRef.current
+      ) {
+        throw new Error(
+          "Unlock the salary vault before changing its passphrase.",
+        );
       }
       const payload = {
         settings: {
@@ -1190,151 +1737,47 @@ export default function App() {
           nightDifferential,
         },
         attendance: extractPrivateFinancialAttendance(attendance),
-        payslips: [],
+        payslips: salaryVaultPayslipsRef.current,
       };
-      const { record, key } = await createSalaryVault(payload, passphrase);
-      const revision = await savePrivateSalaryVault(record, 0, user.id);
-      let localCopyRemains = hasLegacyPrivateFinancialData(user.id);
+      await persistPrivateSalaryVault(payload);
+      const nextVersion = salaryVaultRecord.key_version + 1;
+      const { record, key } = await createSalaryVault(
+        payload,
+        nextPassphrase,
+        nextVersion,
+      );
+      const revision = await savePrivateSalaryVault(
+        record,
+        salaryVaultRevisionRef.current,
+        user.id,
+      );
       salaryVaultKeyRef.current = {
         key,
-        salt: Uint8Array.from(atob(record.salt), (character) => character.charCodeAt(0)),
+        salt: Uint8Array.from(atob(record.salt), (character) =>
+          character.charCodeAt(0),
+        ),
       };
       salaryVaultRevisionRef.current = revision;
-      salaryVaultPayslipsRef.current = [];
-      setHistoricalPayslips([]);
       setSalaryVaultRecord({
         ...record,
         revision,
         updated_at: new Date().toISOString(),
       });
-      try {
-        clearLegacyPrivateFinancialData(user.id);
-        localCopyRemains = false;
-      } catch {
-        setSalaryVaultError("Vault created, but the prior unencrypted browser copy could not be removed. Keep this browser secure and retry cleanup.");
-      }
-      preserveLegacyLocalRef.current = localCopyRemains;
-      salaryVaultSkipNextSyncRef.current = true;
-      setSalaryVaultStatus("unlocked");
-      if (!localCopyRemains) setSalaryVaultError("");
-      setSalaryVaultConflict(false);
-      return { settings: payload.settings };
-    }
-
-    const unlocked = await unlockSalaryVault(salaryVaultRecord, passphrase);
-    let payload = unlocked.payload;
-    let revision = salaryVaultRecord.revision;
-    let localCopyRemains = hasLegacyPrivateFinancialData(user.id);
-    if (localCopyRemains) {
-      const legacyLocalData = getLegacyPrivateFinancialData(user.id, null);
-      const conflicts = findPrivateFinancialConflicts(legacyLocalData, payload);
-      if (conflicts.length > 0) {
-        setSalaryVaultError("This browser has older local salary values that differ from the cloud vault. The cloud copy was not overwritten and the local copy was preserved; export or reconcile it before removing browser data.");
-      } else {
-        payload = {
-          ...mergePrivateFinancialData(legacyLocalData, payload),
-          payslips: payload.payslips || [],
-        };
-        const encryptedRecord = await encryptSalaryVault(
-          payload,
-          unlocked.key,
-          unlocked.salt,
-        );
-        revision = await savePrivateSalaryVault(encryptedRecord, revision, user.id);
-        setSalaryVaultRecord({
-          ...encryptedRecord,
-          revision,
-          updated_at: new Date().toISOString(),
-        });
-        try {
-          clearLegacyPrivateFinancialData(user.id);
-          localCopyRemains = false;
-        } catch {
-          setSalaryVaultError("Vault synced, but the prior unencrypted browser copy could not be removed. Keep this browser secure and retry cleanup.");
-        }
-      }
-    }
-    preserveLegacyLocalRef.current = localCopyRemains;
-
-    salaryVaultKeyRef.current = { key: unlocked.key, salt: unlocked.salt };
-    salaryVaultRevisionRef.current = revision;
-    salaryVaultPayslipsRef.current = payload.payslips || [];
-    setHistoricalPayslips(payload.payslips || []);
-    setActiveHistoricalPayslip(null);
-    setDailyWage(payload.settings.dailyWage);
-    setDailyAllowance(payload.settings.dailyAllowance);
-    setOvertimeMultiplier(payload.settings.overtimeMultiplier);
-    setNightDifferential(payload.settings.nightDifferential);
-    setSalaryVaultExtraSettings(extractPrivateFinancialSettings(payload.settings));
-    setAttendance((current) => mergeLocalPrivateAttendance(current, payload.attendance));
-    salaryVaultSkipNextSyncRef.current = true;
-    setSalaryVaultStatus("unlocked");
-    if (!localCopyRemains) setSalaryVaultError("");
-    setSalaryVaultConflict(false);
-    return { settings: payload.settings };
-  }, [
-    user?.id,
-    salaryVaultRecord,
-    dailyWage,
-    dailyAllowance,
-    overtimeMultiplier,
-    nightDifferential,
-    salaryVaultExtraSettings,
-    attendance,
-  ]);
-
-  const rotateSalaryVaultPassphrase = useCallback(async (
-    nextPassphrase,
-    confirmation,
-  ) => {
-    if (nextPassphrase !== confirmation) {
-      throw new Error("The new vault passphrases do not match.");
-    }
-    if (salaryVaultStatus !== "unlocked" || !salaryVaultRecord || !salaryVaultKeyRef.current) {
-      throw new Error("Unlock the salary vault before changing its passphrase.");
-    }
-    const payload = {
-      settings: {
-        ...salaryVaultExtraSettings,
-        dailyWage,
-        dailyAllowance,
-        overtimeMultiplier,
-        nightDifferential,
-      },
-      attendance: extractPrivateFinancialAttendance(attendance),
-      payslips: salaryVaultPayslipsRef.current,
-    };
-    await persistPrivateSalaryVault(payload);
-    const nextVersion = salaryVaultRecord.key_version + 1;
-    const { record, key } = await createSalaryVault(payload, nextPassphrase, nextVersion);
-    const revision = await savePrivateSalaryVault(
-      record,
-      salaryVaultRevisionRef.current,
-      user.id,
-    );
-    salaryVaultKeyRef.current = {
-      key,
-      salt: Uint8Array.from(atob(record.salt), (character) => character.charCodeAt(0)),
-    };
-    salaryVaultRevisionRef.current = revision;
-    setSalaryVaultRecord({
-      ...record,
-      revision,
-      updated_at: new Date().toISOString(),
-    });
-    setSalaryVaultError("");
-  }, [
-    salaryVaultStatus,
-    salaryVaultRecord,
-    dailyWage,
-    dailyAllowance,
-    overtimeMultiplier,
-    nightDifferential,
-    salaryVaultExtraSettings,
-    attendance,
-    persistPrivateSalaryVault,
-    user?.id,
-  ]);
+      setSalaryVaultError("");
+    },
+    [
+      salaryVaultStatus,
+      salaryVaultRecord,
+      dailyWage,
+      dailyAllowance,
+      overtimeMultiplier,
+      nightDifferential,
+      salaryVaultExtraSettings,
+      attendance,
+      persistPrivateSalaryVault,
+      user?.id,
+    ],
+  );
 
   const reloadSalaryVault = useCallback(async () => {
     if (!user?.id) return;
@@ -1346,7 +1789,9 @@ export default function App() {
     try {
       const latestVault = await loadPrivateSalaryVault(user.id);
       if (!latestVault) {
-        throw new Error("No encrypted salary vault was found for this account.");
+        throw new Error(
+          "No encrypted salary vault was found for this account.",
+        );
       }
       salaryVaultKeyRef.current = null;
       salaryVaultPayslipsRef.current = [];
@@ -1360,13 +1805,17 @@ export default function App() {
       setOvertimeMultiplier(localPrivateFinancialDefaults.overtimeMultiplier);
       setNightDifferential(localPrivateFinancialDefaults.nightDifferential);
       setSalaryVaultExtraSettings({});
-      setAttendance((current) => serializeWorkspaceForCloud({ attendance: current }).attendance);
+      setAttendance(
+        (current) =>
+          serializeWorkspaceForCloud({ attendance: current }).attendance,
+      );
       setSalaryVaultConflict(false);
       setSalaryVaultError("");
     } catch (error) {
-      const message = error instanceof Error
-        ? error.message
-        : "Unable to reload the encrypted salary vault.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to reload the encrypted salary vault.";
       setSalaryVaultError(message);
       addToast(message, "error");
     } finally {
@@ -1388,9 +1837,10 @@ export default function App() {
         attendance: extractPrivateFinancialAttendance(attendance),
       });
     } catch (error) {
-      const message = error?.code === "40001"
-        ? "Encrypted salary data changed on another device. Reload the vault before locking."
-        : "Encrypted salary data could not be saved. The vault remains unlocked so you can retry.";
+      const message =
+        error?.code === "40001"
+          ? "Encrypted salary data changed on another device. Reload the vault before locking."
+          : "Encrypted salary data could not be saved. The vault remains unlocked so you can retry.";
       setSalaryVaultError(message);
       addToast(message, "error");
       return false;
@@ -1405,7 +1855,10 @@ export default function App() {
     setOvertimeMultiplier(localPrivateFinancialDefaults.overtimeMultiplier);
     setNightDifferential(localPrivateFinancialDefaults.nightDifferential);
     setSalaryVaultExtraSettings({});
-    setAttendance((current) => serializeWorkspaceForCloud({ attendance: current }).attendance);
+    setAttendance(
+      (current) =>
+        serializeWorkspaceForCloud({ attendance: current }).attendance,
+    );
     return true;
   }, [
     salaryVaultRecord,
@@ -1432,7 +1885,9 @@ export default function App() {
     }
 
     let active = true;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setAuthSession(session);
       if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
       if (event === "SIGNED_OUT") setRecoveryMode(false);
@@ -1440,7 +1895,11 @@ export default function App() {
 
     supabase.auth.getSession().then(({ data, error }) => {
       if (!active) return;
-      if (error) addToast("Unable to restore the sign-in session. Please sign in again.", "warning");
+      if (error)
+        addToast(
+          "Unable to restore the sign-in session. Please sign in again.",
+          "warning",
+        );
       setAuthSession(data.session);
       setAuthLoading(false);
     });
@@ -1464,7 +1923,10 @@ export default function App() {
     const warnStorageFailure = (error) => {
       if (storageWarningShown) return;
       storageWarningShown = true;
-      console.warn("Could not persist the authentication activity timestamp:", error);
+      console.warn(
+        "Could not persist the authentication activity timestamp:",
+        error,
+      );
       addToast(
         "This browser cannot save the session activity timer. Sign out manually when finished.",
         "warning",
@@ -1473,7 +1935,9 @@ export default function App() {
 
     const readStoredActivity = () => {
       try {
-        return parseAuthActivityTimestamp(window.localStorage.getItem(activityKey));
+        return parseAuthActivityTimestamp(
+          window.localStorage.getItem(activityKey),
+        );
       } catch (error) {
         warnStorageFailure(error);
         return null;
@@ -1491,7 +1955,8 @@ export default function App() {
 
     const storedActivityAt = readStoredActivity();
     const lastSignInAt = Date.parse(authSession?.user?.last_sign_in_at || "");
-    lastActivityAt = storedActivityAt ||
+    lastActivityAt =
+      storedActivityAt ||
       (Number.isFinite(lastSignInAt) ? lastSignInAt : Date.now());
     lastPersistedActivityAt = storedActivityAt || 0;
 
@@ -1499,28 +1964,31 @@ export default function App() {
       if (signOutStarted) return;
       signOutStarted = true;
       if (expirationTimer !== null) window.clearInterval(expirationTimer);
-      supabase.auth.signOut({ scope: "local" }).then(({ error }) => {
-        if (error) {
+      supabase.auth
+        .signOut({ scope: "local" })
+        .then(({ error }) => {
+          if (error) {
+            console.error("Automatic inactivity sign-out failed:", error);
+            addToast(
+              "Automatic sign-out failed. Please sign out manually to secure this account.",
+              "error",
+            );
+            return;
+          }
+          try {
+            window.localStorage.removeItem(activityKey);
+          } catch (error) {
+            warnStorageFailure(error);
+          }
+          addToast("You were signed out after one hour of inactivity.", "info");
+        })
+        .catch((error) => {
           console.error("Automatic inactivity sign-out failed:", error);
           addToast(
             "Automatic sign-out failed. Please sign out manually to secure this account.",
             "error",
           );
-          return;
-        }
-        try {
-          window.localStorage.removeItem(activityKey);
-        } catch (error) {
-          warnStorageFailure(error);
-        }
-        addToast("You were signed out after one hour of inactivity.", "info");
-      }).catch((error) => {
-        console.error("Automatic inactivity sign-out failed:", error);
-        addToast(
-          "Automatic sign-out failed. Please sign out manually to secure this account.",
-          "error",
-        );
-      });
+        });
     };
 
     const checkExpiration = () => {
@@ -1558,18 +2026,34 @@ export default function App() {
 
     const handlePageHide = (event) => {
       if (event.persisted) return;
-      supabase.auth.signOut({ scope: "local" }).then(({ error }) => {
-        if (error) console.warn("Could not clear the local session while closing the page:", error);
-      }).catch((error) => {
-        console.warn("Could not clear the local session while closing the page:", error);
-      });
+      supabase.auth
+        .signOut({ scope: "local" })
+        .then(({ error }) => {
+          if (error)
+            console.warn(
+              "Could not clear the local session while closing the page:",
+              error,
+            );
+        })
+        .catch((error) => {
+          console.warn(
+            "Could not clear the local session while closing the page:",
+            error,
+          );
+        });
     };
 
     expirationTimer = window.setInterval(
       checkExpiration,
       AUTH_ACTIVITY_WRITE_INTERVAL_MS,
     );
-    const activityEvents = ["pointerdown", "keydown", "touchstart", "scroll", "mousemove"];
+    const activityEvents = [
+      "pointerdown",
+      "keydown",
+      "touchstart",
+      "scroll",
+      "mousemove",
+    ];
     activityEvents.forEach((eventName) =>
       window.addEventListener(eventName, handleActivity, { passive: true }),
     );
@@ -1618,7 +2102,12 @@ export default function App() {
       pendingExpenseClearRef.current = false;
       setAttendance({});
       setActiveTimeEntry(null);
-      setHolidays(holidayCalendarByYear[2026].map((holiday) => ({ ...holiday, enabled: true })));
+      setHolidays(
+        holidayCalendarByYear[2026].map((holiday) => ({
+          ...holiday,
+          enabled: true,
+        })),
+      );
       setSelectedLocality("");
       setHolidayEligibilityConfirmed(false);
       setDailyWage("");
@@ -1643,91 +2132,123 @@ export default function App() {
     setWorkspaceLoading(true);
     setWorkspaceError("");
 
-    loadWorkspace(user.id).then(({
-      workspace,
-      revision,
-      legacyPrivateFinancialData,
-      salaryVault,
-      salaryVaultTableAvailable,
-    }) => {
-      if (!active) return;
-      let localPrivateData;
-      try {
-        localPrivateData = getLegacyPrivateFinancialData(
-          user.id,
+    loadWorkspace(user.id)
+      .then(
+        ({
+          workspace,
+          revision,
           legacyPrivateFinancialData,
-        );
-      } catch (privateDataError) {
-        const detail = privateDataError instanceof Error
-          ? privateDataError.message
-          : "Browser storage is unavailable.";
-        setWorkspaceError(`Private salary settings could not be preserved in this browser. ${detail}`);
+          salaryVault,
+          salaryVaultTableAvailable,
+        }) => {
+          if (!active) return;
+          let localPrivateData;
+          try {
+            localPrivateData = getLegacyPrivateFinancialData(
+              user.id,
+              legacyPrivateFinancialData,
+            );
+          } catch (privateDataError) {
+            const detail =
+              privateDataError instanceof Error
+                ? privateDataError.message
+                : "Browser storage is unavailable.";
+            setWorkspaceError(
+              `Private salary settings could not be preserved in this browser. ${detail}`,
+            );
+            setWorkspaceLoading(false);
+            return;
+          }
+          salaryVaultKeyRef.current = null;
+          salaryVaultRevisionRef.current = salaryVault?.revision ?? 0;
+          setSalaryVaultRecord(salaryVault);
+          setSalaryVaultStatus(
+            !salaryVaultTableAvailable
+              ? "unavailable"
+              : salaryVault
+                ? "locked"
+                : "uninitialized",
+          );
+          setSalaryVaultError(
+            !salaryVaultTableAvailable
+              ? "Apply the pending Supabase migration to enable encrypted salary sync. Other workspace data remains available."
+              : "",
+          );
+          setSalaryVaultConflict(false);
+          const attendance = Object.fromEntries(
+            Object.entries(
+              mergeLocalPrivateAttendance(
+                workspace.attendance,
+                salaryVault ? {} : localPrivateData.attendance,
+              ),
+            ).map(([date, record]) => [
+              date,
+              record.punchSource === "ordinary"
+                ? applyAttendanceTiming(
+                    record,
+                    record.workStartTime,
+                    record.workEndTime,
+                    lateGracePeriodMinutes,
+                  )
+                : record,
+            ]),
+          );
+          const activePunch = Object.entries(attendance).find(
+            ([, record]) =>
+              record.punchSource === "ordinary" && record.clockedIn,
+          );
+          setAttendance(attendance);
+          setActiveTimeEntry(
+            activePunch
+              ? { date: activePunch[0], time: activePunch[1].workStartTime }
+              : null,
+          );
+          setHolidays(
+            workspace.holidays ||
+              holidayCalendarByYear[2026].map((holiday) => ({
+                ...holiday,
+                enabled: true,
+              })),
+          );
+          setSelectedLocality(workspace.selectedLocality);
+          setHolidayEligibilityConfirmed(workspace.holidayEligibilityConfirmed);
+          setDailyWage(salaryVault ? "" : localPrivateData.settings.dailyWage);
+          setDailyAllowance(
+            salaryVault
+              ? localPrivateFinancialDefaults.dailyAllowance
+              : localPrivateData.settings.dailyAllowance,
+          );
+          setOvertimeMultiplier(
+            salaryVault
+              ? localPrivateFinancialDefaults.overtimeMultiplier
+              : localPrivateData.settings.overtimeMultiplier,
+          );
+          setExpenses(workspace.expenses);
+          setShiftTemplates(workspace.shiftTemplates || defaultShiftTemplates);
+          setLeaveBalances(workspace.leaveBalances);
+          setSettingsBalances(workspace.settingsBalances);
+          setNightDifferential(
+            salaryVault
+              ? localPrivateFinancialDefaults.nightDifferential
+              : localPrivateData.settings.nightDifferential,
+          );
+          setSalaryVaultExtraSettings(
+            extractPrivateFinancialSettings(
+              salaryVault ? {} : localPrivateData.settings,
+            ),
+          );
+          workspaceRevisionRef.current = revision;
+          setWorkspaceLoadedForUser(user.id);
+          workspaceLoadedRef.current = true;
+          setWorkspaceSaveError("");
+          setWorkspaceLoading(false);
+        },
+      )
+      .catch((loadError) => {
+        if (!active) return;
+        setWorkspaceError(getWorkspaceLoadErrorMessage(loadError));
         setWorkspaceLoading(false);
-        return;
-      }
-      salaryVaultKeyRef.current = null;
-      salaryVaultRevisionRef.current = salaryVault?.revision ?? 0;
-      setSalaryVaultRecord(salaryVault);
-      setSalaryVaultStatus(!salaryVaultTableAvailable
-        ? "unavailable"
-        : salaryVault ? "locked" : "uninitialized");
-      setSalaryVaultError(!salaryVaultTableAvailable
-        ? "Apply the pending Supabase migration to enable encrypted salary sync. Other workspace data remains available."
-        : "");
-      setSalaryVaultConflict(false);
-      const attendance = Object.fromEntries(
-        Object.entries(mergeLocalPrivateAttendance(
-          workspace.attendance,
-          salaryVault ? {} : localPrivateData.attendance,
-        )).map(([date, record]) => [
-          date,
-          record.punchSource === "ordinary"
-            ? applyAttendanceTiming(
-              record,
-              record.workStartTime,
-              record.workEndTime,
-              lateGracePeriodMinutes,
-            )
-            : record,
-        ]),
-      );
-      const activePunch = Object.entries(attendance).find(([, record]) =>
-        record.punchSource === "ordinary" && record.clockedIn,
-      );
-      setAttendance(attendance);
-      setActiveTimeEntry(activePunch
-        ? { date: activePunch[0], time: activePunch[1].workStartTime }
-        : null);
-      setHolidays(workspace.holidays || holidayCalendarByYear[2026].map((holiday) => ({ ...holiday, enabled: true })));
-      setSelectedLocality(workspace.selectedLocality);
-      setHolidayEligibilityConfirmed(workspace.holidayEligibilityConfirmed);
-      setDailyWage(salaryVault ? "" : localPrivateData.settings.dailyWage);
-      setDailyAllowance(salaryVault
-        ? localPrivateFinancialDefaults.dailyAllowance
-        : localPrivateData.settings.dailyAllowance);
-      setOvertimeMultiplier(salaryVault
-        ? localPrivateFinancialDefaults.overtimeMultiplier
-        : localPrivateData.settings.overtimeMultiplier);
-      setExpenses(workspace.expenses);
-      setShiftTemplates(workspace.shiftTemplates || defaultShiftTemplates);
-      setLeaveBalances(workspace.leaveBalances);
-      setSettingsBalances(workspace.settingsBalances);
-      setNightDifferential(salaryVault
-        ? localPrivateFinancialDefaults.nightDifferential
-        : localPrivateData.settings.nightDifferential);
-      setSalaryVaultExtraSettings(extractPrivateFinancialSettings(
-        salaryVault ? {} : localPrivateData.settings,
-      ));
-      workspaceRevisionRef.current = revision;
-      setWorkspaceLoadedForUser(user.id);
-      workspaceLoadedRef.current = true;
-      setWorkspaceSaveError("");
-      setWorkspaceLoading(false);
-    }).catch((loadError) => {
-      if (!active) return;
-      setWorkspaceError(getWorkspaceLoadErrorMessage(loadError));
-      setWorkspaceLoading(false);
-    });
+      });
 
     return () => {
       active = false;
@@ -1741,7 +2262,8 @@ export default function App() {
       !workspaceLoadedRef.current ||
       salaryVaultStatus !== "unlocked" ||
       !salaryVaultKeyRef.current
-    ) return;
+    )
+      return;
     if (salaryVaultSkipNextSyncRef.current) {
       salaryVaultSkipNextSyncRef.current = false;
       return;
@@ -1759,17 +2281,19 @@ export default function App() {
     salaryVaultSyncTimerRef.current = window.setTimeout(() => {
       salaryVaultSyncTimerRef.current = null;
       setSalaryVaultSyncing(true);
-      persistPrivateSalaryVault(payload).then(() => {
-        setSalaryVaultSyncing(false);
-      }).catch((error) => {
-        setSalaryVaultSyncing(false);
-        const conflict = error?.code === "40001";
-        const message = conflict
-          ? "Encrypted salary data changed on another device. Lock and unlock the vault again before retrying."
-          : "Encrypted salary data could not be saved to Supabase. Your changes remain in memory; retry after checking your connection.";
-        setSalaryVaultError(message);
-        addToast(message, "error");
-      });
+      persistPrivateSalaryVault(payload)
+        .then(() => {
+          setSalaryVaultSyncing(false);
+        })
+        .catch((error) => {
+          setSalaryVaultSyncing(false);
+          const conflict = error?.code === "40001";
+          const message = conflict
+            ? "Encrypted salary data changed on another device. Lock and unlock the vault again before retrying."
+            : "Encrypted salary data could not be saved to Supabase. Your changes remain in memory; retry after checking your connection.";
+          setSalaryVaultError(message);
+          addToast(message, "error");
+        });
     }, 500);
     return () => {
       window.clearTimeout(salaryVaultSyncTimerRef.current);
@@ -1794,45 +2318,69 @@ export default function App() {
       !user?.id ||
       workspaceLoadedForUser !== user.id ||
       !workspaceLoadedRef.current
-    ) return undefined;
+    )
+      return undefined;
 
     const snapshot = workspaceData;
     const timer = window.setTimeout(() => {
       const saveOperation = queueWorkspaceSave(user.id, snapshot);
-      saveOperation.then(() => {
-        if (userRef.current !== user.id) return;
-        setWorkspaceSaveError("");
-        if (pendingExpenseClearRef.current) {
-          pendingExpenseClearRef.current = false;
-          setExpenseName("");
-          setExpenseAmount("");
-        }
-        const savedMessages = pendingSuccessToasts.current.splice(0);
-        savedMessages.forEach((message) => addToast(message, "success"));
-      }).catch(() => {
-        if (userRef.current !== user.id) return;
-        pendingSuccessToasts.current = [];
-        setWorkspaceSaveError("Cloud save failed. Changes are not confirmed. Retry, or reload to discard unsynced changes and load the latest cloud copy.");
-        addToast("Cloud save failed. Your changes are not confirmed as saved.", "error");
-      });
+      saveOperation
+        .then(() => {
+          if (userRef.current !== user.id) return;
+          setWorkspaceSaveError("");
+          if (pendingExpenseClearRef.current) {
+            pendingExpenseClearRef.current = false;
+            setExpenseName("");
+            setExpenseAmount("");
+          }
+          const savedMessages = pendingSuccessToasts.current.splice(0);
+          savedMessages.forEach((message) => addToast(message, "success"));
+        })
+        .catch(() => {
+          if (userRef.current !== user.id) return;
+          pendingSuccessToasts.current = [];
+          setWorkspaceSaveError(
+            "Cloud save failed. Changes are not confirmed. Retry, or reload to discard unsynced changes and load the latest cloud copy.",
+          );
+          addToast(
+            "Cloud save failed. Your changes are not confirmed as saved.",
+            "error",
+          );
+        });
     }, 500);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [user?.id, workspaceLoadedForUser, workspaceData, saveRequest, addToast, queueWorkspaceSave]);
+  }, [
+    user?.id,
+    workspaceLoadedForUser,
+    workspaceData,
+    saveRequest,
+    addToast,
+    queueWorkspaceSave,
+  ]);
 
-  useEffect(() => () => {
-    timers.current.forEach(window.clearTimeout);
-    window.clearTimeout(monthCarouselTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      timers.current.forEach(window.clearTimeout);
+      window.clearTimeout(monthCarouselTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     const tick = () => {
       const now = new Date();
-      setClock(new Intl.DateTimeFormat("en-US", {
-        timeZone: "Asia/Manila", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true,
-      }).format(now));
+      setClock(
+        new Intl.DateTimeFormat("en-US", {
+          timeZone: "Asia/Manila",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        }).format(now),
+      );
       setManilaNow(getManilaDateTime(now));
     };
     const timer = window.setInterval(tick, 1000);
@@ -1857,11 +2405,15 @@ export default function App() {
     const baseMonthIndex = monthCarouselMotion?.monthIndex ?? monthIndex;
     const offset = (nextYear - baseYear) * 12 + nextMonthIndex - baseMonthIndex;
     window.clearTimeout(monthCarouselTimer.current);
-    setMonthCarouselMotion(offset === 0 ? null : {
-      year: baseYear,
-      monthIndex: baseMonthIndex,
-      offset,
-    });
+    setMonthCarouselMotion(
+      offset === 0
+        ? null
+        : {
+            year: baseYear,
+            monthIndex: baseMonthIndex,
+            offset,
+          },
+    );
     if (offset !== 0) {
       monthCarouselTimer.current = window.setTimeout(() => {
         setMonthCarouselMotion(null);
@@ -1903,28 +2455,43 @@ export default function App() {
   const addExpense = () => {
     const name = expenseName.trim();
     const amount = Number(expenseAmount);
-    if (!name) return showToast("Please provide a valid expense description.", "warning");
+    if (!name)
+      return showToast(
+        "Please provide a valid expense description.",
+        "warning",
+      );
     if (!getExpenseDate({ date: expenseDate })) {
       return showToast("Please select a valid expense date.", "warning");
     }
     if (!Number.isFinite(amount) || amount <= 0) {
-      return showToast("Please enter a valid expense amount greater than 0.", "warning");
+      return showToast(
+        "Please enter a valid expense amount greater than 0.",
+        "warning",
+      );
     }
-    setExpenses((current) => [{
-      id: globalThis.crypto?.randomUUID?.() ||
-        `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      name,
-      category: expenseCategory,
-      amount,
-      date: expenseDate,
-    }, ...current]);
-    const [expenseYear, expenseMonth, expenseDay] = expenseDate.split("-").map(Number);
+    setExpenses((current) => [
+      {
+        id:
+          globalThis.crypto?.randomUUID?.() ||
+          `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name,
+        category: expenseCategory,
+        amount,
+        date: expenseDate,
+      },
+      ...current,
+    ]);
+    const [expenseYear, expenseMonth, expenseDay] = expenseDate
+      .split("-")
+      .map(Number);
     setYear(expenseYear);
     setMonthIndex(expenseMonth - 1);
-    setSelectedDay(Math.min(
-      expenseDay,
-      new Date(Date.UTC(expenseYear, expenseMonth, 0)).getUTCDate(),
-    ));
+    setSelectedDay(
+      Math.min(
+        expenseDay,
+        new Date(Date.UTC(expenseYear, expenseMonth, 0)).getUTCDate(),
+      ),
+    );
     pendingExpenseClearRef.current = true;
     showToast("Expense record added successfully.", "success");
   };
@@ -1935,8 +2502,15 @@ export default function App() {
   };
 
   const savePayslipToHistory = async () => {
-    if (salaryVaultStatus !== "unlocked" || !salaryVaultKeyRef.current || !user?.id) {
-      showToast("Unlock the salary vault before saving a payslip snapshot.", "warning");
+    if (
+      salaryVaultStatus !== "unlocked" ||
+      !salaryVaultKeyRef.current ||
+      !user?.id
+    ) {
+      showToast(
+        "Unlock the salary vault before saving a payslip snapshot.",
+        "warning",
+      );
       return false;
     }
 
@@ -1944,14 +2518,15 @@ export default function App() {
     try {
       const snapshot = createPayslipSnapshot({
         employeeId: user.id,
-        employeeName: typeof user.name === "string" && user.name.trim()
-          ? user.name
-          : "Employee",
-        period: payrollPeriod,
-        summary: payrollPeriodSummary,
-        earningsBreakdown: payrollEarningsBreakdown,
-        deductions: cutoffPayrollDeductions,
-        netPay: payrollPeriodNetPay,
+        employeeName:
+          typeof user.name === "string" && user.name.trim()
+            ? user.name
+            : "Employee",
+        period: selectedPayslipPeriod,
+        summary: selectedPayslipSummary,
+        earningsBreakdown: selectedPayslipBreakdown,
+        deductions: selectedPayslipDeductions,
+        netPay: selectedPayslipNetPay,
         settings: {
           dailyWage,
           dailyAllowance,
@@ -1960,9 +2535,17 @@ export default function App() {
           payrollDeductions: payrollDeductionSettings,
         },
       });
-      nextHistory = appendPayslipSnapshot(salaryVaultPayslipsRef.current, snapshot);
+      nextHistory = appendPayslipSnapshot(
+        salaryVaultPayslipsRef.current,
+        snapshot,
+      );
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Payslip history could not be updated.", "warning");
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Payslip history could not be updated.",
+        "warning",
+      );
       return false;
     }
 
@@ -1988,9 +2571,10 @@ export default function App() {
       return true;
     } catch (error) {
       const detail = error instanceof Error ? ` ${error.message}` : "";
-      const message = error?.code === "40001"
-        ? "Encrypted salary data changed on another device. Reload and unlock the vault before saving this payslip."
-        : `Payslip history could not be saved. No success was recorded.${detail}`;
+      const message =
+        error?.code === "40001"
+          ? "Encrypted salary data changed on another device. Reload and unlock the vault before saving this payslip."
+          : `Payslip history could not be saved. No success was recorded.${detail}`;
       setSalaryVaultError(message);
       addToast(message, "error");
       return false;
@@ -2007,8 +2591,15 @@ export default function App() {
 
   const deleteHistoricalPayslip = async (snapshot) => {
     if (payslipHistorySaving) return false;
-    if (salaryVaultStatus !== "unlocked" || !salaryVaultKeyRef.current || !user?.id) {
-      showToast("Unlock the salary vault before deleting a saved payslip.", "warning");
+    if (
+      salaryVaultStatus !== "unlocked" ||
+      !salaryVaultKeyRef.current ||
+      !user?.id
+    ) {
+      showToast(
+        "Unlock the salary vault before deleting a saved payslip.",
+        "warning",
+      );
       return false;
     }
 
@@ -2019,7 +2610,12 @@ export default function App() {
         snapshot.id,
       );
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "The saved payslip could not be deleted.", "error");
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "The saved payslip could not be deleted.",
+        "error",
+      );
       return false;
     }
 
@@ -2048,9 +2644,10 @@ export default function App() {
       return true;
     } catch (error) {
       const detail = error instanceof Error ? ` ${error.message}` : "";
-      const message = error?.code === "40001"
-        ? "Encrypted salary data changed on another device. Reload and unlock the vault before deleting this payslip."
-        : `Saved payslip could not be deleted. No deletion was recorded.${detail}`;
+      const message =
+        error?.code === "40001"
+          ? "Encrypted salary data changed on another device. Reload and unlock the vault before deleting this payslip."
+          : `Saved payslip could not be deleted. No deletion was recorded.${detail}`;
       setSalaryVaultError(message);
       addToast(message, "error");
       return false;
@@ -2071,11 +2668,18 @@ export default function App() {
         setExpenseName("");
         setExpenseAmount("");
       }
-      pendingSuccessToasts.current.splice(0).forEach((message) => addToast(message, "success"));
+      pendingSuccessToasts.current
+        .splice(0)
+        .forEach((message) => addToast(message, "success"));
       return true;
     } catch {
-      setWorkspaceSaveError("Cloud save failed. Changes are not confirmed. Retry, or reload to discard unsynced changes and load the latest cloud copy.");
-      addToast("Cloud save failed. Your changes are not confirmed as saved.", "error");
+      setWorkspaceSaveError(
+        "Cloud save failed. Changes are not confirmed. Retry, or reload to discard unsynced changes and load the latest cloud copy.",
+      );
+      addToast(
+        "Cloud save failed. Your changes are not confirmed as saved.",
+        "error",
+      );
       return false;
     }
   };
@@ -2100,9 +2704,10 @@ export default function App() {
       return true;
     } catch (error) {
       setSalaryVaultSyncing(false);
-      const message = error?.code === "40001"
-        ? "Encrypted salary data changed on another device. Unlock the vault again before signing out."
-        : "Encrypted salary data could not be saved. Stay signed in and retry before signing out.";
+      const message =
+        error?.code === "40001"
+          ? "Encrypted salary data changed on another device. Unlock the vault again before signing out."
+          : "Encrypted salary data could not be saved. Stay signed in and retry before signing out.";
       setSalaryVaultError(message);
       addToast(message, "error");
       return false;
@@ -2119,16 +2724,19 @@ export default function App() {
         dailyAllowance,
         overtimeMultiplier,
         nightDifferential,
-        attendance: Object.fromEntries(Object.entries(attendance).map(([date, record]) => [
-          date,
-          mergeLocalPrivateAttendanceRecord({}, record),
-        ])),
+        attendance: Object.fromEntries(
+          Object.entries(attendance).map(([date, record]) => [
+            date,
+            mergeLocalPrivateAttendanceRecord({}, record),
+          ]),
+        ),
       },
     };
-    const objectUrl = URL.createObjectURL(new Blob(
-      [JSON.stringify(exportData, null, 2)],
-      { type: "application/json" },
-    ));
+    const objectUrl = URL.createObjectURL(
+      new Blob([JSON.stringify(exportData, null, 2)], {
+        type: "application/json",
+      }),
+    );
     const link = document.createElement("a");
     link.href = objectUrl;
     link.download = `timecloud-export-${manilaNow.date}.json`;
@@ -2156,7 +2764,9 @@ export default function App() {
         return;
       }
 
-      const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+      const { error: signOutError } = await supabase.auth.signOut({
+        scope: "local",
+      });
       pendingSuccessToasts.current = [];
       setAuthSession(null);
       setWorkspaceLoadedForUser(null);
@@ -2164,17 +2774,26 @@ export default function App() {
       try {
         clearLegacyPrivateFinancialData(user.id);
       } catch {
-        addToast("Account deleted, but an older unencrypted salary copy remains in this browser's storage. Clear it manually after preserving any needed data.", "error");
+        addToast(
+          "Account deleted, but an older unencrypted salary copy remains in this browser's storage. Clear it manually after preserving any needed data.",
+          "error",
+        );
       }
       salaryVaultKeyRef.current = null;
       salaryVaultRevisionRef.current = 0;
       setSalaryVaultRecord(null);
       setSalaryVaultStatus("loading");
       if (signOutError) {
-        showToast("Your account and app data were deleted, but this browser could not clear its saved session. Reload the page.", "error");
+        showToast(
+          "Your account and app data were deleted, but this browser could not clear its saved session. Reload the page.",
+          "error",
+        );
         return;
       }
-      addToast("Account and all associated TimeCloud app data were deleted.", "info");
+      addToast(
+        "Account and all associated TimeCloud app data were deleted.",
+        "info",
+      );
     } catch (error) {
       console.error("Account deletion request failed:", error);
       showToast(
@@ -2201,17 +2820,28 @@ export default function App() {
     if (action.startsWith("openModal(")) setActiveModal(actionArgument(action));
     else if (action.startsWith("closeModal(")) setActiveModal(null);
     else if (action.startsWith("showToast(")) {
-      const match = action.match(/showToast\(\s*['"]([\s\S]*?)['"]\s*(?:,\s*['"]([^'"]+)['"])?/);
+      const match = action.match(
+        /showToast\(\s*['"]([\s\S]*?)['"]\s*(?:,\s*['"]([^'"]+)['"])?/,
+      );
       if (match) showToast(match[1], match[2] || "success");
-    } else if (action.startsWith("slidePage(")) setPage(Number(action.match(/\d+/)?.[0] || 0));
+    } else if (action.startsWith("slidePage("))
+      setPage(Number(action.match(/\d+/)?.[0] || 0));
     else if (action === "exportWorkspace()") exportWorkspace();
-    else if (action.startsWith("changeMonth(")) changeMonth(Number(action.match(/-?\d+/)?.[0] || 0));
+    else if (action.startsWith("changeMonth("))
+      changeMonth(Number(action.match(/-?\d+/)?.[0] || 0));
     else if (action === "resetCalendar()") resetCalendar();
-    else if (action === "openManualEntryModal()") setActiveModal("manualEntryModal");
+    else if (action === "openManualEntryModal()")
+      setActiveModal("manualEntryModal");
     else if (action === "clearSelectedShift()") {
       const currentRecord = attendance[selectedDate] || defaultAttendance;
-      if (!isShiftClearable(currentRecord) || activeTimeEntry?.date === selectedDate) {
-        showToast("A shift can only be cleared when assigned and no Time In is currently active.", "warning");
+      if (
+        !isShiftClearable(currentRecord) ||
+        activeTimeEntry?.date === selectedDate
+      ) {
+        showToast(
+          "A shift can only be cleared when assigned and no Time In is currently active.",
+          "warning",
+        );
         return;
       }
       setAttendance((state) => ({
@@ -2219,15 +2849,19 @@ export default function App() {
         [selectedDate]: { ...defaultAttendance },
       }));
       showToast(`Shift cleared for ${selectedDate}.`, "success");
-    }
-    else if (action === "openAssignShiftModal()") {
+    } else if (action === "openAssignShiftModal()") {
       setCustomShiftName("");
       setSelectedShiftTemplate("rest-day");
       setActiveModal("assignShiftModal");
     } else if (action === "addExpense()") addExpense();
-    else if (action.startsWith("switchSettingsTab(")) setActiveSettingsTab(actionArgument(action));
+    else if (action.startsWith("switchSettingsTab("))
+      setActiveSettingsTab(actionArgument(action));
     else if (action.startsWith("selectShiftIcon(")) {
-      setSelectedIcon(actionArgument(action).replace(/\bfa-solid\b/g, "").trim());
+      setSelectedIcon(
+        actionArgument(action)
+          .replace(/\bfa-solid\b/g, "")
+          .trim(),
+      );
     } else if (action.startsWith("selectShiftCard(")) {
       setSelectedShiftTemplate(actionArgument(action));
       setCustomShiftName("");
@@ -2243,20 +2877,29 @@ export default function App() {
       const name = customShiftName.trim();
       if (!name) return;
       let iconColor = "text-teal-600";
-      if (selectedIcon.includes("sun") && !selectedIcon.includes("cloud")) iconColor = "text-amber-500";
+      if (selectedIcon.includes("sun") && !selectedIcon.includes("cloud"))
+        iconColor = "text-amber-500";
       else if (selectedIcon.includes("moon")) iconColor = "text-indigo-600";
-      else if (selectedIcon.includes("cloud-sun")) iconColor = "text-orange-500";
+      else if (selectedIcon.includes("cloud-sun"))
+        iconColor = "text-orange-500";
       else if (selectedIcon.includes("shield")) iconColor = "text-rose-600";
       else if (selectedIcon.includes("bolt")) iconColor = "text-amber-500";
       else if (selectedIcon.includes("clock")) iconColor = "text-slate-600";
       const id = `custom-${crypto.randomUUID()}`;
-      setShiftTemplates((current) => [...current, {
-        id, name, label: name, range: `${formatTime(customShiftStart)} - ${formatTime(customShiftEnd)}`,
-        assigned: `${formatTime(customShiftStart)} - ${formatTime(customShiftEnd)}`,
-        startTime: customShiftStart,
-        endTime: customShiftEnd,
-        icon: selectedIcon, iconColor,
-      }]);
+      setShiftTemplates((current) => [
+        ...current,
+        {
+          id,
+          name,
+          label: name,
+          range: `${formatTime(customShiftStart)} - ${formatTime(customShiftEnd)}`,
+          assigned: `${formatTime(customShiftStart)} - ${formatTime(customShiftEnd)}`,
+          startTime: customShiftStart,
+          endTime: customShiftEnd,
+          icon: selectedIcon,
+          iconColor,
+        },
+      ]);
       setSelectedShiftTemplate(id);
       setCustomShiftName("");
       showToast(`Custom shift "${name}" saved to options.`, "success");
@@ -2280,7 +2923,10 @@ export default function App() {
         hasAttendanceRecord: hasValidAttendanceRecord(activeRecord),
       });
       if (!availability.canTimeOut) {
-        showToast("Time Out is available after Time In and until the assigned shift ends. Select the scheduled date or today for an overnight shift.", "warning");
+        showToast(
+          "Time Out is available after Time In and until the assigned shift ends. Select the scheduled date or today for an overnight shift.",
+          "warning",
+        );
         return;
       }
       try {
@@ -2289,32 +2935,57 @@ export default function App() {
         const recordedTimeIn = punch.record.workStartTime || timeIn;
         const inValue = formatTime(recordedTimeIn);
         const outValue = formatTime(timeOut);
-        const completedRecord = applyAttendanceTiming(mergeLocalPrivateAttendanceRecord({
-          ...punch.record,
-          assigned: punch.record.hasAssignedShift
-            ? punch.record.assigned
-            : `${inValue} - ${outValue}`,
-          in: inValue,
-          out: outValue,
-          workStartTime: recordedTimeIn,
-          workEndTime: timeOut,
-          clockedIn: false,
-          dots: [{ title: "Present", color: "bg-emerald-500" }],
-          badges: [{ text: "Present", color: "bg-emerald-100 text-emerald-800" }],
-        }, activeRecord), recordedTimeIn, timeOut, lateGracePeriodMinutes);
+        const completedRecord = applyAttendanceTiming(
+          mergeLocalPrivateAttendanceRecord(
+            {
+              ...punch.record,
+              assigned: punch.record.hasAssignedShift
+                ? punch.record.assigned
+                : `${inValue} - ${outValue}`,
+              in: inValue,
+              out: outValue,
+              workStartTime: recordedTimeIn,
+              workEndTime: timeOut,
+              clockedIn: false,
+              dots: [{ title: "Present", color: "bg-emerald-500" }],
+              badges: [
+                { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+              ],
+            },
+            activeRecord,
+          ),
+          recordedTimeIn,
+          timeOut,
+          lateGracePeriodMinutes,
+        );
         setAttendance((state) => ({ ...state, [date]: completedRecord }));
         setActiveTimeEntry(null);
-        showToast(`Timed out at ${outValue}. Attendance saved for ${date}.`, "success");
+        showToast(
+          `Timed out at ${outValue}. Attendance saved for ${date}.`,
+          "success",
+        );
       } catch (error) {
         if (error?.code === "23514") {
-          showToast("Time Out requires an active cloud-recorded Time In and can only be recorded once.", "warning");
+          showToast(
+            "Time Out requires an active cloud-recorded Time In and can only be recorded once.",
+            "warning",
+          );
         } else if (error?.code === "22023") {
-          showToast("The server rejected Time Out because the shift time is invalid or the clock-out window has ended. Use Manual Entry to correct a missed punch.", "error");
+          showToast(
+            "The server rejected Time Out because the shift time is invalid or the clock-out window has ended. Use Manual Entry to correct a missed punch.",
+            "error",
+          );
         } else if (error?.code === "42702") {
-          showToast("The cloud clock-out function needs its latest Supabase migration. Contact the project administrator to apply pending migrations.", "error");
+          showToast(
+            "The cloud clock-out function needs its latest Supabase migration. Contact the project administrator to apply pending migrations.",
+            "error",
+          );
         } else {
           console.error("Time Out cloud save failed:", error);
-          showToast(`Time Out could not be saved to the cloud${error?.message ? `: ${error.message}` : ". Check your connection and try again."}`, "error");
+          showToast(
+            `Time Out could not be saved to the cloud${error?.message ? `: ${error.message}` : ". Check your connection and try again."}`,
+            "error",
+          );
         }
         return;
       }
@@ -2335,7 +3006,10 @@ export default function App() {
       hasAttendanceRecord: hasValidAttendanceRecord(currentRecord),
     });
     if (!availability.canTimeIn) {
-      showToast(`Time In is available only on the scheduled date, up to ${earlyPunchWindowMinutes} minutes before shift start and before shift end.`, "warning");
+      showToast(
+        `Time In is available only on the scheduled date, up to ${earlyPunchWindowMinutes} minutes before shift start and before shift end.`,
+        "warning",
+      );
       return;
     }
     if (
@@ -2345,8 +3019,15 @@ export default function App() {
       showToast("Assign a shift to this date before clocking in.", "warning");
       return;
     }
-    if (["Leave", "Absent", "Rest Day", "Company Break"].includes(currentRecord.type)) {
-      showToast(`Cannot clock in on a ${currentRecord.type.toLowerCase()} record.`, "warning");
+    if (
+      ["Leave", "Absent", "Rest Day", "Company Break"].includes(
+        currentRecord.type,
+      )
+    ) {
+      showToast(
+        `Cannot clock in on a ${currentRecord.type.toLowerCase()} record.`,
+        "warning",
+      );
       return;
     }
     if (
@@ -2354,57 +3035,82 @@ export default function App() {
       (currentRecord.in && currentRecord.in !== "—") ||
       (currentRecord.out && currentRecord.out !== "—")
     ) {
-      showToast("A time record already exists for this date. Use Manual Entry to correct it.", "warning");
+      showToast(
+        "A time record already exists for this date. Use Manual Entry to correct it.",
+        "warning",
+      );
       return;
     }
 
     const targetDate = selectedDate;
     const configuredWage = Number(dailyWage);
-    const shiftPay = Number.isFinite(configuredWage) && configuredWage > 0
-      ? formatPayAmount(configuredWage)
-      : "P0.00";
-    const hasScheduledShift = currentRecord.hasAssignedShift === true ||
+    const shiftPay =
+      Number.isFinite(configuredWage) && configuredWage > 0
+        ? formatPayAmount(configuredWage)
+        : "P0.00";
+    const hasScheduledShift =
+      currentRecord.hasAssignedShift === true ||
       Boolean(currentRecord.shiftStartTime && currentRecord.shiftEndTime);
     const punchRecord = {
-        ...currentRecord,
-        type: "Regular",
-        shift: hasScheduledShift && currentRecord.type !== "Absent"
+      ...currentRecord,
+      type: "Regular",
+      shift:
+        hasScheduledShift && currentRecord.type !== "Absent"
           ? currentRecord.shift
           : "Time Record",
-        wageRate: "100%",
-        base: shiftPay,
-        ot: "P0.00",
-        penalty: "P0.00",
-        est: `${shiftPay} PHP`,
-        assigned: currentRecord.assigned,
-        in: "—",
-        out: "—",
-        workStartTime: "",
-        workEndTime: "",
-        clockedIn: false,
-        hasAssignedShift: hasScheduledShift,
-        undertime: false,
-        undertimeMinutes: 0,
-        dots: [{ title: "Clocked In", color: "bg-amber-500" }],
-        badges: [{ text: "Clocked In", color: "bg-amber-100 text-amber-800" }],
+      wageRate: "100%",
+      base: shiftPay,
+      ot: "P0.00",
+      penalty: "P0.00",
+      est: `${shiftPay} PHP`,
+      assigned: currentRecord.assigned,
+      in: "—",
+      out: "—",
+      workStartTime: "",
+      workEndTime: "",
+      clockedIn: false,
+      hasAssignedShift: hasScheduledShift,
+      undertime: false,
+      undertimeMinutes: 0,
+      dots: [{ title: "Clocked In", color: "bg-amber-500" }],
+      badges: [{ text: "Clocked In", color: "bg-amber-100 text-amber-800" }],
     };
     try {
       if (!(await flushWorkspace())) return;
       const punch = await clockInForShift(targetDate, punchRecord);
       const time = punch.record.workStartTime;
       const inValue = formatTime(time);
-      const clockedInRecord = applyAttendanceTiming(mergeLocalPrivateAttendanceRecord({
-        ...punch.record,
-        assigned: hasScheduledShift ? currentRecord.assigned : `${inValue} - Tracking`,
-      }, currentRecord), time, "", lateGracePeriodMinutes);
+      const clockedInRecord = applyAttendanceTiming(
+        mergeLocalPrivateAttendanceRecord(
+          {
+            ...punch.record,
+            assigned: hasScheduledShift
+              ? currentRecord.assigned
+              : `${inValue} - Tracking`,
+          },
+          currentRecord,
+        ),
+        time,
+        "",
+        lateGracePeriodMinutes,
+      );
       setAttendance((state) => ({ ...state, [targetDate]: clockedInRecord }));
       setActiveTimeEntry({ date: targetDate, time });
-      showToast(`Timed in at ${inValue}. Remember to time out when your shift ends.`, "success");
+      showToast(
+        `Timed in at ${inValue}. Remember to time out when your shift ends.`,
+        "success",
+      );
     } catch (error) {
       if (error?.code === "23505") {
-        showToast("A Time In was already recorded for this shift, possibly in another browser.", "warning");
+        showToast(
+          "A Time In was already recorded for this shift, possibly in another browser.",
+          "warning",
+        );
       } else {
-        showToast("Time In could not be saved to the cloud. Check your connection and try again.", "error");
+        showToast(
+          "Time In could not be saved to the cloud. Check your connection and try again.",
+          "error",
+        );
       }
     }
   };
@@ -2426,7 +3132,9 @@ export default function App() {
       const entryType = data.get("manualEntryType");
       const isAbsentEntry = entryType === "Absent";
       const targetDate = String(data.get("manualEntryDate") || "");
-      const [targetYear, targetMonth, targetDay] = targetDate.split("-").map(Number);
+      const [targetYear, targetMonth, targetDay] = targetDate
+        .split("-")
+        .map(Number);
       const parsedTargetDate = new Date(`${targetDate}T00:00:00Z`);
       const isValidTargetDate =
         /^\d{4}-\d{2}-\d{2}$/.test(targetDate) &&
@@ -2440,12 +3148,16 @@ export default function App() {
         showToast("Choose a valid target date.", "warning");
         return;
       }
-      if (!isAbsentEntry && (
-        manualInMinutes === null ||
-        manualOutMinutes === null ||
-        manualInMinutes === manualOutMinutes
-      )) {
-        showToast("Enter valid Time In and Time Out values. Overnight shifts are supported.", "warning");
+      if (
+        !isAbsentEntry &&
+        (manualInMinutes === null ||
+          manualOutMinutes === null ||
+          manualInMinutes === manualOutMinutes)
+      ) {
+        showToast(
+          "Enter valid Time In and Time Out values. Overnight shifts are supported.",
+          "warning",
+        );
         return;
       }
       const assignedRecord = attendance[targetDate] || defaultAttendance;
@@ -2453,28 +3165,41 @@ export default function App() {
         assignedRecord.hasAssignedShift !== true &&
         !(assignedRecord.shiftStartTime && assignedRecord.shiftEndTime)
       ) {
-        showToast("Assign a shift to the target date before adding a manual attendance entry.", "warning");
+        showToast(
+          "Assign a shift to the target date before adding a manual attendance entry.",
+          "warning",
+        );
         return;
       }
       if (assignedRecord.type !== "Regular") {
-        showToast(`Manual attendance cannot replace a ${assignedRecord.type.toLowerCase()} date without an eligible scheduled shift.`, "warning");
+        showToast(
+          `Manual attendance cannot replace a ${assignedRecord.type.toLowerCase()} date without an eligible scheduled shift.`,
+          "warning",
+        );
         return;
       }
       const scheduledStart = parseTimeMinutes(assignedRecord.shiftStartTime);
       const scheduledEndOfDay = parseTimeMinutes(assignedRecord.shiftEndTime);
       if (scheduledStart === null || scheduledEndOfDay === null) {
-        showToast("The assigned shift has invalid scheduled times. Update the shift before entering attendance.", "warning");
+        showToast(
+          "The assigned shift has invalid scheduled times. Update the shift before entering attendance.",
+          "warning",
+        );
         return;
       }
       const overnightShift = scheduledEndOfDay <= scheduledStart;
-      const scheduledEnd = overnightShift ? scheduledEndOfDay + 1440 : scheduledEndOfDay;
-      const manualStart = overnightShift && manualInMinutes < scheduledEndOfDay
-        ? manualInMinutes + 1440
-        : manualInMinutes;
-      const manualEnd = overnightShift &&
+      const scheduledEnd = overnightShift
+        ? scheduledEndOfDay + 1440
+        : scheduledEndOfDay;
+      const manualStart =
+        overnightShift && manualInMinutes < scheduledEndOfDay
+          ? manualInMinutes + 1440
+          : manualInMinutes;
+      const manualEnd =
+        overnightShift &&
         (manualOutMinutes <= manualInMinutes || manualStart >= 1440)
-        ? manualOutMinutes + 1440
-        : manualOutMinutes;
+          ? manualOutMinutes + 1440
+          : manualOutMinutes;
       const isOvertimeClaim = entryType === "Overtime";
       if (!isAbsentEntry) {
         const invalidShiftTimes =
@@ -2495,7 +3220,9 @@ export default function App() {
           return;
         }
       }
-      let badges = [{ text: "Present", color: "bg-emerald-100 text-emerald-800" }];
+      let badges = [
+        { text: "Present", color: "bg-emerald-100 text-emerald-800" },
+      ];
       let dots = [{ title: "Present", color: "bg-emerald-500" }];
       let shift = "Manual Entry Adjustment";
       let base = assignedRecord.base || "P0.00";
@@ -2508,18 +3235,20 @@ export default function App() {
       const rawTimingFlags = isAbsentEntry
         ? { late: false, lateMinutes: 0, undertime: false, undertimeMinutes: 0 }
         : getAttendanceTimingFlags(
-          assignedRecord,
-          manualTimeIn,
-          manualTimeOut,
-          lateGracePeriodMinutes,
-        );
-      const timingFlags = entryType === "Half-day"
-        ? { ...rawTimingFlags, undertime: false, undertimeMinutes: 0 }
-        : rawTimingFlags;
+            assignedRecord,
+            manualTimeIn,
+            manualTimeOut,
+            lateGracePeriodMinutes,
+          );
+      const timingFlags =
+        entryType === "Half-day"
+          ? { ...rawTimingFlags, undertime: false, undertimeMinutes: 0 }
+          : rawTimingFlags;
       const timingIndicators = getTimingIndicators(timingFlags);
       if (entryType === "Half-day") {
         const scheduledShiftMinutes = scheduledEnd - scheduledStart;
-        const hourlyBase = getAmount(assignedRecord.base) / (scheduledShiftMinutes / 60);
+        const hourlyBase =
+          getAmount(assignedRecord.base) / (scheduledShiftMinutes / 60);
         base = formatPayAmount(hourlyBase * 4);
         est = `${base} PHP`;
         shift = "Half-day";
@@ -2528,20 +3257,31 @@ export default function App() {
       } else if (entryType === "Overtime") {
         const scheduledShiftMinutes = scheduledEnd - scheduledStart;
         overtimeMinutes = manualEnd - scheduledEnd;
-        const hourlyBase = getAmount(assignedRecord.base) / (scheduledShiftMinutes / 60);
+        const hourlyBase =
+          getAmount(assignedRecord.base) / (scheduledShiftMinutes / 60);
         const configuredOvertimeMultiplier = Number(overtimeMultiplier);
-        if (!Number.isFinite(configuredOvertimeMultiplier) || configuredOvertimeMultiplier <= 0) {
-          showToast("Enter a valid overtime multiplier in Settings before recording overtime.", "warning");
+        if (
+          !Number.isFinite(configuredOvertimeMultiplier) ||
+          configuredOvertimeMultiplier <= 0
+        ) {
+          showToast(
+            "Enter a valid overtime multiplier in Settings before recording overtime.",
+            "warning",
+          );
           return;
         }
-        overtimeAmount = hourlyBase * (overtimeMinutes / 60) * configuredOvertimeMultiplier;
+        overtimeAmount =
+          hourlyBase * (overtimeMinutes / 60) * configuredOvertimeMultiplier;
         const overtimeDurationLabel = formatDuration(overtimeMinutes);
         badges.push({
           text: "Overtime Claim",
           color: "bg-purple-100 text-purple-800",
           title: `Overtime: ${overtimeDurationLabel}`,
         });
-        dots.push({ title: `Overtime: ${overtimeDurationLabel}`, color: "bg-purple-500" });
+        dots.push({
+          title: `Overtime: ${overtimeDurationLabel}`,
+          color: "bg-purple-500",
+        });
         shift = "Overtime Claim";
         est = formatPayAmount(getAmount(base) + overtimeAmount) + " PHP";
         ot = `${formatPayAmount(overtimeAmount)} (${formatDuration(overtimeMinutes)} OT)`;
@@ -2555,17 +3295,23 @@ export default function App() {
         inValue = "—";
         outValue = "—";
       } else if (entryType === "Official Business") {
-        badges = [{ text: "Official Business", color: "bg-teal-100 text-teal-800" }];
+        badges = [
+          { text: "Official Business", color: "bg-teal-100 text-teal-800" },
+        ];
         shift = "Official Business / Field Work";
       }
       const key = getAttendanceKey(targetMonth - 1, targetDay, targetYear);
       setAttendance((state) => ({
         ...state,
-        [key]: applyAttendanceTiming({
+        [key]: applyAttendanceTiming(
+          {
             ...assignedRecord,
             type: isAbsentEntry ? "Absent" : "Regular",
             punchSource: "manual",
-            assignedShiftName: getAssignedShiftName(assignedRecord, shiftTemplates),
+            assignedShiftName: getAssignedShiftName(
+              assignedRecord,
+              shiftTemplates,
+            ),
             shift,
             wageRate: isAbsentEntry ? "0%" : "100%",
             base,
@@ -2577,13 +3323,20 @@ export default function App() {
             assigned: `${inValue} - ${outValue}`,
             in: inValue,
             out: outValue,
-            hasAssignedShift: assignedRecord.hasAssignedShift === true ||
-              Boolean(assignedRecord.shiftStartTime && assignedRecord.shiftEndTime),
+            hasAssignedShift:
+              assignedRecord.hasAssignedShift === true ||
+              Boolean(
+                assignedRecord.shiftStartTime && assignedRecord.shiftEndTime,
+              ),
             clockedIn: false,
             workStartTime: isAbsentEntry ? "" : manualTimeIn,
             workEndTime: isAbsentEntry ? "" : manualTimeOut,
-            manualTimeInAt: isAbsentEntry ? null : getManilaTimestamp(targetDate, manualStart),
-            manualTimeOutAt: isAbsentEntry ? null : getManilaTimestamp(targetDate, manualEnd),
+            manualTimeInAt: isAbsentEntry
+              ? null
+              : getManilaTimestamp(targetDate, manualStart),
+            manualTimeOutAt: isAbsentEntry
+              ? null
+              : getManilaTimestamp(targetDate, manualEnd),
             timeZone: "Asia/Manila",
             isHalfDay: entryType === "Half-day",
             overtimeAmount,
@@ -2606,7 +3359,12 @@ export default function App() {
       const endValue = String(data.get("assignEndDate") || "");
       const startDate = new Date(`${startValue}T00:00:00`);
       const endDate = new Date(`${endValue}T00:00:00`);
-      if (!startValue || !endValue || Number.isNaN(startDate.valueOf()) || Number.isNaN(endDate.valueOf())) {
+      if (
+        !startValue ||
+        !endValue ||
+        Number.isNaN(startDate.valueOf()) ||
+        Number.isNaN(endDate.valueOf())
+      ) {
         showToast("Please select both start and end dates.", "warning");
         return;
       }
@@ -2614,41 +3372,79 @@ export default function App() {
         showToast("Start date cannot be after end date.", "warning");
         return;
       }
-      const template = shiftTemplates.find((item) => item.id === selectedShiftTemplate) ||
+      const template =
+        shiftTemplates.find((item) => item.id === selectedShiftTemplate) ||
         shiftTemplates.find((item) => item.id === "rest-day");
       const updates = {};
       const day = new Date(startDate);
       const configuredWage = Number(dailyWage);
-      const shiftPay = Number.isFinite(configuredWage) && configuredWage > 0
-        ? formatPayAmount(configuredWage)
-        : "P0.00";
+      const shiftPay =
+        Number.isFinite(configuredWage) && configuredWage > 0
+          ? formatPayAmount(configuredWage)
+          : "P0.00";
       let assigned = 0;
       while (day <= endDate) {
-        const key = getAttendanceKey(day.getMonth(), day.getDate(), day.getFullYear());
-        updates[key] = template.id === "rest-day"
+        const key = getAttendanceKey(
+          day.getMonth(),
+          day.getDate(),
+          day.getFullYear(),
+        );
+        updates[key] =
+          template.id === "rest-day"
             ? {
-                type: "Rest Day", shift: "Rest Day", wageRate: "0%", base: "P0.00",
-                ot: "P0.00", penalty: "P0.00", est: "P0.00 PHP", assigned: "Rest Day",
-                in: "—", out: "—", workStartTime: "", workEndTime: "", dots: [],
-                badges: [{ text: "Rest Day", color: "bg-slate-200 text-slate-700" }],
+                type: "Rest Day",
+                shift: "Rest Day",
+                wageRate: "0%",
+                base: "P0.00",
+                ot: "P0.00",
+                penalty: "P0.00",
+                est: "P0.00 PHP",
+                assigned: "Rest Day",
+                in: "—",
+                out: "—",
+                workStartTime: "",
+                workEndTime: "",
+                dots: [],
+                badges: [
+                  { text: "Rest Day", color: "bg-slate-200 text-slate-700" },
+                ],
               }
             : {
-                type: "Regular", shift: template.label || template.name, wageRate: "100%", base: shiftPay,
-                ot: "P0.00", penalty: "P0.00", est: `${shiftPay} PHP`, assigned: template.assigned,
-                workStartTime: "", workEndTime: "",
-                shiftStartTime: template.startTime || "", shiftEndTime: template.endTime || "",
+                type: "Regular",
+                shift: template.label || template.name,
+                wageRate: "100%",
+                base: shiftPay,
+                ot: "P0.00",
+                penalty: "P0.00",
+                est: `${shiftPay} PHP`,
+                assigned: template.assigned,
+                workStartTime: "",
+                workEndTime: "",
+                shiftStartTime: template.startTime || "",
+                shiftEndTime: template.endTime || "",
                 assignedShiftTemplateId: template.id,
                 hasAssignedShift: true,
-                in: "—", out: "—", customIcon: template.icon,
-                customIconColor: template.iconColor, dots: [],
-                badges: [{ text: template.label || template.name, color: "bg-teal-100 text-teal-800" }],
+                in: "—",
+                out: "—",
+                customIcon: template.icon,
+                customIconColor: template.iconColor,
+                dots: [],
+                badges: [
+                  {
+                    text: template.label || template.name,
+                    color: "bg-teal-100 text-teal-800",
+                  },
+                ],
               };
         assigned += 1;
         day.setDate(day.getDate() + 1);
       }
       setAttendance((state) => ({ ...state, ...updates }));
       setActiveModal(null);
-      showToast(`Shift "${template.name}" assigned to ${assigned} day(s).`, "success");
+      showToast(
+        `Shift "${template.name}" assigned to ${assigned} day(s).`,
+        "success",
+      );
     } else if (action.startsWith("handleGrantLeaveSubmit")) {
       const type = String(data.get("grantLeaveTypeSelect") || "VL");
       if (!Object.hasOwn(leaveBalances, type)) {
@@ -2663,7 +3459,10 @@ export default function App() {
         /^\d{4}-\d{2}-\d{2}$/.test(value) &&
         !Number.isNaN(parsed.getTime()) &&
         parsed.toISOString().slice(0, 10) === value;
-      if (!isValidDate(startDate, parsedStart) || !isValidDate(endDate, parsedEnd)) {
+      if (
+        !isValidDate(startDate, parsedStart) ||
+        !isValidDate(endDate, parsedEnd)
+      ) {
         showToast("Choose valid leave start and end dates.", "warning");
         return;
       }
@@ -2673,7 +3472,10 @@ export default function App() {
       }
       const dayCount = Math.round((parsedEnd - parsedStart) / 86400000) + 1;
       if (dayCount > leaveBalances[type]) {
-        showToast(`Not enough ${type} credits for ${dayCount} day(s).`, "warning");
+        showToast(
+          `Not enough ${type} credits for ${dayCount} day(s).`,
+          "warning",
+        );
         return;
       }
       const leaveDates = Array.from({ length: dayCount }, (_, index) => {
@@ -2683,13 +3485,18 @@ export default function App() {
       });
       const hasIneligibleDate = leaveDates.some((date) => {
         const record = attendance[date] || defaultAttendance;
-        return record.type === "Leave" ||
+        return (
+          record.type === "Leave" ||
           record.type === "Rest Day" ||
           record.clockedIn ||
-          (record.in && record.in !== "—");
+          (record.in && record.in !== "—")
+        );
       });
       if (hasIneligibleDate) {
-        showToast("The selected range includes a rest day, existing leave, or a date with attendance already recorded.", "warning");
+        showToast(
+          "The selected range includes a rest day, existing leave, or a date with attendance already recorded.",
+          "warning",
+        );
         return;
       }
       const leave = leaveTypes[type];
@@ -2701,7 +3508,10 @@ export default function App() {
             type: "Leave",
             shift: leaveName,
             wageRate: "100%",
-            base: Number(dailyWage) > 0 ? formatPayAmount(Number(dailyWage)) : "P0.00",
+            base:
+              Number(dailyWage) > 0
+                ? formatPayAmount(Number(dailyWage))
+                : "P0.00",
             ot: "P0.00",
             penalty: "P0.00",
             est: `${Number(dailyWage) > 0 ? formatPayAmount(Number(dailyWage)) : "P0.00"} PHP`,
@@ -2716,29 +3526,36 @@ export default function App() {
         });
         return updated;
       });
-      setLeaveBalances((state) => ({ ...state, [type]: state[type] - dayCount }));
-      const [firstYear, firstMonth, firstDay] = startDate.split("-").map(Number);
+      setLeaveBalances((state) => ({
+        ...state,
+        [type]: state[type] - dayCount,
+      }));
+      const [firstYear, firstMonth, firstDay] = startDate
+        .split("-")
+        .map(Number);
       changeMonthTo(firstYear, firstMonth - 1);
       setYear(firstYear);
       setMonthIndex(firstMonth - 1);
       setSelectedDay(firstDay);
       setActiveModal(null);
-      showToast(`${leaveName} granted for ${dayCount} day(s). Remaining credits updated.`, "success");
+      showToast(
+        `${leaveName} granted for ${dayCount} day(s). Remaining credits updated.`,
+        "success",
+      );
     }
   };
 
-  const monthTabs = useMemo(
-    () => {
-      const baseYear = monthCarouselMotion?.year ?? year;
-      const baseMonthIndex = monthCarouselMotion?.monthIndex ?? monthIndex;
-      const padding = 4 + Math.abs(monthCarouselMotion?.offset ?? 0);
-      return Array.from({ length: padding * 2 + 1 }, (_, position) => {
-        const monthOffset = position - padding;
-        const tabDate = new Date(baseYear, baseMonthIndex + monthOffset, 1);
-        const tabMonthIndex = tabDate.getMonth();
-        const tabYear = tabDate.getFullYear();
-        const isActive = tabMonthIndex === monthIndex && tabYear === year;
-        return (
+  const monthTabs = useMemo(() => {
+    const baseYear = monthCarouselMotion?.year ?? year;
+    const baseMonthIndex = monthCarouselMotion?.monthIndex ?? monthIndex;
+    const padding = 4 + Math.abs(monthCarouselMotion?.offset ?? 0);
+    return Array.from({ length: padding * 2 + 1 }, (_, position) => {
+      const monthOffset = position - padding;
+      const tabDate = new Date(baseYear, baseMonthIndex + monthOffset, 1);
+      const tabMonthIndex = tabDate.getMonth();
+      const tabYear = tabDate.getFullYear();
+      const isActive = tabMonthIndex === monthIndex && tabYear === year;
+      return (
         <button
           key={`${tabYear}-${tabMonthIndex}`}
           type="button"
@@ -2748,11 +3565,9 @@ export default function App() {
         >
           {monthAbbreviations[tabMonthIndex]}
         </button>
-        );
-      });
-    },
-    [monthIndex, monthCarouselMotion, year],
-  );
+      );
+    });
+  }, [monthIndex, monthCarouselMotion, year]);
 
   const calendarCells = useMemo(() => {
     const firstDay = new Date(year, monthIndex, 1).getDay();
@@ -2761,9 +3576,14 @@ export default function App() {
     const cells = [];
     for (let offset = firstDay; offset > 0; offset -= 1) {
       cells.push(
-        <div key={`previous-${offset}`} className="bg-slate-50/50 border border-slate-100 rounded-xl p-0 min-h-[90px] opacity-40">
+        <div
+          key={`previous-${offset}`}
+          className="bg-slate-50/50 border border-slate-100 rounded-xl p-0 min-h-[90px] opacity-40"
+        >
           <div className="p-2.5 h-full flex flex-col">
-            <span className="text-xs font-semibold text-slate-400">{previousMonthDays - offset + 1}</span>
+            <span className="text-xs font-semibold text-slate-400">
+              {previousMonthDays - offset + 1}
+            </span>
           </div>
         </div>,
       );
@@ -2786,7 +3606,11 @@ export default function App() {
                 ),
                 lateGracePeriodMinutes,
               ),
-              getHolidayForDate(holidays, formatDate(year, monthIndex, day), selectedLocality),
+              getHolidayForDate(
+                holidays,
+                formatDate(year, monthIndex, day),
+                selectedLocality,
+              ),
             ),
             nightDifferential,
           )}
@@ -2796,7 +3620,18 @@ export default function App() {
       );
     }
     return cells;
-  }, [attendance, holidays, lateGracePeriodMinutes, manilaNow, monthIndex, nightDifferential, selectedDay, selectedLocality, shiftTemplates, year]);
+  }, [
+    attendance,
+    holidays,
+    lateGracePeriodMinutes,
+    manilaNow,
+    monthIndex,
+    nightDifferential,
+    selectedDay,
+    selectedLocality,
+    shiftTemplates,
+    year,
+  ]);
 
   const shiftTemplateCards = shiftTemplates.map((template) => (
     <div
@@ -2819,10 +3654,14 @@ export default function App() {
       className={`shift-card relative cursor-pointer border-2 rounded-2xl p-3.5 flex flex-col items-center text-center transition ${selectedShiftTemplate === template.id ? "border-indigo-600 bg-indigo-50/30 shadow-xs" : "border-slate-200 bg-white hover:border-slate-300"}`}
     >
       <span className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center mb-2">
-        <i className={`fa-solid ${template.icon} text-sm ${template.iconColor}`} />
+        <i
+          className={`fa-solid ${template.icon} text-sm ${template.iconColor}`}
+        />
       </span>
       <span className="font-bold text-slate-800 text-xs">{template.label}</span>
-      <span className="text-[10px] text-slate-500 mt-0.5">{template.range}</span>
+      <span className="text-[10px] text-slate-500 mt-0.5">
+        {template.range}
+      </span>
       {!template.protected && (
         <button
           type="button"
@@ -2856,7 +3695,9 @@ export default function App() {
       {workspaceError && user && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-50 p-6">
           <div className="max-w-md rounded-2xl bg-white p-8 text-center shadow-lg">
-            <p className="text-sm text-rose-700" role="alert">{workspaceError}</p>
+            <p className="text-sm text-rose-700" role="alert">
+              {workspaceError}
+            </p>
             <button
               type="button"
               onClick={() => setWorkspaceLoadAttempt((attempt) => attempt + 1)}
@@ -2868,7 +3709,8 @@ export default function App() {
               type="button"
               onClick={async () => {
                 const { error } = await supabase.auth.signOut();
-                if (error) showToast("Unable to sign out. Please try again.", "error");
+                if (error)
+                  showToast("Unable to sign out. Please try again.", "error");
               }}
               className="ml-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
             >
@@ -2877,276 +3719,326 @@ export default function App() {
           </div>
         </div>
       )}
-      {user && !recoveryMode && workspaceLoadedForUser === user.id && !workspaceError && (
-      <>
-      <Header
-        clock={clock}
-        user={user}
-        onLogout={async () => {
-          if (!(await flushSalaryVault())) return;
-          if (!(await flushWorkspace())) return;
-          const { error } = await supabase.auth.signOut();
-          if (error) showToast("Unable to sign out. Please try again.", "error");
-          else addToast("Signed out successfully.", "info");
-        }}
-      />
-      {salaryVaultStatus !== "unlocked" && (
-        <div className="flex flex-col gap-2 border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between" role="status">
-          <span>
-            {salaryVaultStatus === "locked"
-              ? "Salary vault is locked. Unlock it in Settings to view and sync encrypted salary data."
-              : salaryVaultStatus === "unavailable"
-                ? "Apply the pending Supabase migration to enable encrypted salary sync. Other workspace data remains available."
-                : "Create an encrypted salary vault in Settings to sync salary settings and earnings across devices."}
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              setActiveSettingsTab("general");
-              setActiveModal("settingsModal");
-            }}
-            className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold hover:bg-amber-100"
-          >
-            Open salary vault
-          </button>
-        </div>
-      )}
-      {salaryVaultError && (
-        <div className="border-b border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800" role="alert">
-          {salaryVaultError}
-        </div>
-      )}
-      {workspaceSaveError && (
-        <div className="flex flex-col gap-3 border-b border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800 sm:flex-row sm:items-center sm:justify-between" role="alert">
-          <span>{workspaceSaveError}</span>
-          <div className="flex shrink-0 gap-2">
-            <button
-              type="button"
-              onClick={() => setSaveRequest((request) => request + 1)}
-              className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 font-semibold hover:bg-rose-100"
-            >
-              Retry save
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm("Reloading will discard unsynced changes. Continue?")) {
-                  window.location.reload();
-                }
+      {user &&
+        !recoveryMode &&
+        workspaceLoadedForUser === user.id &&
+        !workspaceError && (
+          <>
+            <div className="sticky top-0 z-50">
+              <Header
+                clock={clock}
+                user={user}
+                onLogout={async () => {
+                  if (!(await flushSalaryVault())) return;
+                  if (!(await flushWorkspace())) return;
+                  const { error } = await supabase.auth.signOut();
+                  if (error)
+                    showToast("Unable to sign out. Please try again.", "error");
+                  else addToast("Signed out successfully.", "info");
+                }}
+              />
+              {salaryVaultStatus !== "unlocked" && (
+                <div
+                  className="flex flex-col gap-2 border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between"
+                  role="status"
+                >
+                  <span>
+                    {salaryVaultStatus === "locked"
+                      ? "Salary vault is locked. Unlock it in Settings to view and sync encrypted salary data."
+                      : salaryVaultStatus === "unavailable"
+                        ? "Apply the pending Supabase migration to enable encrypted salary sync. Other workspace data remains available."
+                        : "Create an encrypted salary vault in Settings to sync salary settings and earnings across devices."}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveSettingsTab("general");
+                      setActiveModal("settingsModal");
+                    }}
+                    className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold hover:bg-amber-100"
+                  >
+                    Open salary vault
+                  </button>
+                </div>
+              )}
+            </div>
+            {salaryVaultError && (
+              <div
+                className="border-b border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800"
+                role="alert"
+              >
+                {salaryVaultError}
+              </div>
+            )}
+            {workspaceSaveError && (
+              <div
+                className="flex flex-col gap-3 border-b border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800 sm:flex-row sm:items-center sm:justify-between"
+                role="alert"
+              >
+                <span>{workspaceSaveError}</span>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSaveRequest((request) => request + 1)}
+                    className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 font-semibold hover:bg-rose-100"
+                  >
+                    Retry save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Reloading will discard unsynced changes. Continue?",
+                        )
+                      ) {
+                        window.location.reload();
+                      }
+                    }}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-100"
+                  >
+                    Reload cloud data
+                  </button>
+                </div>
+              </div>
+            )}
+            <DashboardContent
+              page={page}
+              monthTabs={monthTabs}
+              monthCarouselOffset={monthCarouselMotion?.offset ?? 0}
+              onMonthCarouselTransitionEnd={finishMonthCarouselMotion}
+              yearOptions={yearOptions}
+              onYearChange={changeYear}
+              calendarCells={calendarCells}
+              monthLabel={monthLabel}
+              monthValue={calendarPayrollMonth}
+              year={year}
+              selectedDate={selectedDate}
+              canClearShift={canClearSelectedShift}
+              isTimedIn={Boolean(
+                activeTimeEntry &&
+                (activeTimeEntry.date === selectedDate || canTimeOut),
+              )}
+              canRecordAttendance={canRecordAttendance}
+              canTimeIn={canTimeIn}
+              canTimeOut={canTimeOut}
+              earlyPunchWindowMinutes={earlyPunchWindowMinutes}
+              holidayPayEstimate={selectedHolidayPay}
+              estimatedEarnings={selectedEstimatedEarnings}
+              dailyAllowance={dailyAllowance}
+              holidayWorkedHours={selectedWorkedHours}
+              nightDifferentialPay={selectedNightDifferentialPay}
+              overtimePay={selectedOvertimePay}
+              overtimeCalculation={selectedOvertimeCalculation}
+              configuredDailyWage={dailyWage}
+              onOpenHolidayPaySettings={() => {
+                setActiveSettingsTab("earnings");
+                setActiveModal("settingsModal");
               }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-100"
-            >
-              Reload cloud data
-            </button>
-          </div>
-        </div>
-      )}
-      <DashboardContent
-        page={page}
-        monthTabs={monthTabs}
-        monthCarouselOffset={monthCarouselMotion?.offset ?? 0}
-        onMonthCarouselTransitionEnd={finishMonthCarouselMotion}
-        yearOptions={yearOptions}
-        onYearChange={changeYear}
-        calendarCells={calendarCells}
-        monthLabel={monthLabel}
-        monthValue={calendarPayrollMonth}
-        year={year}
-        selectedDate={selectedDate}
-        canClearShift={canClearSelectedShift}
-        isTimedIn={Boolean(
-          activeTimeEntry &&
-          (activeTimeEntry.date === selectedDate || canTimeOut),
+              onTimeClockClick={handleTimeClockClick}
+              record={selectedRecordWithNightDifferential}
+              monthExpenses={financeExpenses}
+              expenses={expenses}
+              totalExpenses={financeTotalExpenses}
+              grossPay={financeGrossPay}
+              payrollDeductions={financePayrollDeductions}
+              remaining={financeRemaining}
+              percentage={financePercentage}
+              netPay={financeNetPay}
+              totalHours={financeTotalHours}
+              financeTrackingScope={financeTrackingScope}
+              setFinanceTrackingScope={setFinanceTrackingScope}
+              financePeriodLabel={financePeriodLabel}
+              formatCurrency={formatCurrency}
+              expenseName={expenseName}
+              setExpenseName={setExpenseName}
+              expenseAmount={expenseAmount}
+              setExpenseAmount={setExpenseAmount}
+              expenseDate={expenseDate}
+              setExpenseDate={setExpenseDate}
+              expenseCategory={expenseCategory}
+              setExpenseCategory={setExpenseCategory}
+              onDeleteExpense={deleteExpense}
+              workspaceLoading={workspaceLoading}
+              workspaceError={workspaceError}
+              workspaceSaveError={workspaceSaveError}
+              historicalPayslips={
+                salaryVaultStatus === "unlocked" ? historicalPayslips : []
+              }
+              payslipHistorySaving={payslipHistorySaving}
+              salaryVaultStatus={salaryVaultStatus}
+              currentPayrollPeriod={payrollPeriod}
+              onViewCurrentPayslip={() => {
+                setActiveHistoricalPayslip(null);
+                setActiveModal("payslipModal");
+              }}
+              onViewHistoricalPayslip={viewHistoricalPayslip}
+              onDeleteHistoricalPayslip={deleteHistoricalPayslip}
+            />
+            <ManualEntryModal
+              key={`manual-${selectedDate}`}
+              open={activeModal === "manualEntryModal"}
+              selectedDate={selectedDate}
+              initialTimeIn={
+                selectedAttendanceRecord.shiftStartTime ||
+                selectedAttendanceRecord.workStartTime ||
+                "06:00"
+              }
+              initialTimeOut={
+                selectedAttendanceRecord.shiftEndTime ||
+                selectedAttendanceRecord.workEndTime ||
+                "14:00"
+              }
+            />
+            <AssignShiftModal
+              key={`shift-${selectedDate}`}
+              open={activeModal === "assignShiftModal"}
+              selectedDate={selectedDate}
+              shiftTemplateCards={shiftTemplateCards}
+              customShiftName={customShiftName}
+              setCustomShiftName={setCustomShiftName}
+              selectedIcon={selectedIcon}
+            />
+            <GrantLeaveModal
+              key={`leave-${selectedDate}`}
+              open={activeModal === "grantLeaveModal"}
+              balances={leaveBalances}
+              selectedDate={selectedDate}
+            />
+            <PayslipModal
+              open={activeModal === "payslipModal"}
+              userName={user?.name}
+              historicalPayslip={
+                salaryVaultStatus === "unlocked"
+                  ? activeHistoricalPayslip
+                  : null
+              }
+              payrollPeriodMode={payslipPeriodMode}
+              onPayrollPeriodModeChange={setPayslipPeriodMode}
+              payrollPeriod={selectedPayslipPeriod}
+              payrollPeriodSummary={selectedPayslipSummary}
+              payrollEarningsBreakdown={selectedPayslipBreakdown}
+              cutoffPayrollDeductions={selectedPayslipDeductions}
+              payrollPeriodNetPay={selectedPayslipNetPay}
+              payrollPeriodEarningsAvailable={isPayrollPeriodEarningsAvailable(
+                salaryVaultStatus,
+              )}
+              dailyWage={dailyWage}
+              formatCurrency={formatCurrency}
+              canSavePayslip={salaryVaultStatus === "unlocked"}
+              payslipAlreadySaved={Boolean(
+                findPayslipSnapshot(
+                  historicalPayslips,
+                  user?.id,
+                  selectedPayslipPeriod,
+                ),
+              )}
+              payslipHistorySaving={payslipHistorySaving}
+              onSavePayslipToHistory={savePayslipToHistory}
+            />
+            <SettingsModal
+              open={activeModal === "settingsModal"}
+              activeSettingsTab={activeSettingsTab}
+              holidays={holidays}
+              selectedLocality={selectedLocality}
+              holidayEligibilityConfirmed={holidayEligibilityConfirmed}
+              settingsBalances={settingsBalances}
+              dailyWage={dailyWage}
+              dailyAllowance={dailyAllowance}
+              overtimeMultiplier={overtimeMultiplier}
+              payrollSettings={salaryVaultExtraSettings}
+              payrollDeductions={payrollDeductions}
+              nightDifferential={nightDifferential}
+              onDeleteAccount={deleteAccount}
+              accountDeletionLoading={accountDeletionLoading}
+              salaryVaultStatus={salaryVaultStatus}
+              salaryVaultError={salaryVaultError}
+              salaryVaultConflict={salaryVaultConflict}
+              salaryVaultSyncing={salaryVaultSyncing}
+              onUnlockSalaryVault={unlockOrCreateSalaryVault}
+              onLockSalaryVault={lockSalaryVault}
+              onRotateSalaryVault={rotateSalaryVaultPassphrase}
+              onReloadSalaryVault={reloadSalaryVault}
+              onSettingsValidationError={(message) =>
+                showToast(message, "warning")
+              }
+              onSaveSettings={async (draft) => {
+                const currentPayrollSettings =
+                  getPayrollDeductionSettingsDefaults(salaryVaultExtraSettings);
+                const financialSettingsChanged =
+                  draft.dailyWage !== dailyWage ||
+                  draft.dailyAllowance !== dailyAllowance ||
+                  draft.overtimeMultiplier !== overtimeMultiplier ||
+                  draft.nightDifferential !== nightDifferential ||
+                  payrollDeductionSettingKeys.some(
+                    (key) => draft[key] !== currentPayrollSettings[key],
+                  );
+                if (
+                  financialSettingsChanged &&
+                  salaryVaultStatus !== "unlocked"
+                ) {
+                  addToast(
+                    "Unlock or create the encrypted salary vault before changing salary settings.",
+                    "warning",
+                  );
+                  return false;
+                }
+                if (salaryVaultStatus === "unlocked") {
+                  try {
+                    await persistPrivateSalaryVault({
+                      settings: {
+                        ...salaryVaultExtraSettings,
+                        dailyWage: draft.dailyWage,
+                        dailyAllowance: draft.dailyAllowance,
+                        overtimeMultiplier: draft.overtimeMultiplier,
+                        nightDifferential: draft.nightDifferential,
+                        ...Object.fromEntries(
+                          payrollDeductionSettingKeys.map((key) => [
+                            key,
+                            draft[key],
+                          ]),
+                        ),
+                      },
+                      attendance: extractPrivateFinancialAttendance(attendance),
+                    });
+                  } catch (error) {
+                    const conflict = error?.code === "40001";
+                    const message = conflict
+                      ? "Encrypted salary data changed on another device. Unlock the vault again before saving."
+                      : "Salary settings could not be saved to the encrypted cloud vault. Your settings were not confirmed as saved.";
+                    setSalaryVaultError(message);
+                    addToast(message, "error");
+                    return false;
+                  }
+                }
+                setHolidays(draft.holidays);
+                setSelectedLocality(draft.selectedLocality);
+                setHolidayEligibilityConfirmed(
+                  draft.holidayEligibilityConfirmed,
+                );
+                setDailyWage(draft.dailyWage);
+                setDailyAllowance(draft.dailyAllowance);
+                setOvertimeMultiplier(draft.overtimeMultiplier);
+                setNightDifferential(draft.nightDifferential);
+                setSalaryVaultExtraSettings((current) => ({
+                  ...current,
+                  ...Object.fromEntries(
+                    payrollDeductionSettingKeys.map((key) => [key, draft[key]]),
+                  ),
+                }));
+                setSettingsBalances(draft.settingsBalances);
+                setLeaveBalances({
+                  VL: Number(draft.settingsBalances.VL) || 0,
+                  SL: Number(draft.settingsBalances.SL) || 0,
+                  EL: Number(draft.settingsBalances.EL) || 0,
+                });
+                setActiveModal(null);
+                showToast("Settings saved successfully.", "success");
+                return true;
+              }}
+            />
+          </>
         )}
-        canRecordAttendance={canRecordAttendance}
-        canTimeIn={canTimeIn}
-        canTimeOut={canTimeOut}
-        earlyPunchWindowMinutes={earlyPunchWindowMinutes}
-        holidayPayEstimate={selectedHolidayPay}
-        estimatedEarnings={selectedEstimatedEarnings}
-        dailyAllowance={dailyAllowance}
-        holidayWorkedHours={selectedWorkedHours}
-        nightDifferentialPay={selectedNightDifferentialPay}
-        overtimePay={selectedOvertimePay}
-        overtimeCalculation={selectedOvertimeCalculation}
-        configuredDailyWage={dailyWage}
-        onOpenHolidayPaySettings={() => {
-          setActiveSettingsTab("earnings");
-          setActiveModal("settingsModal");
-        }}
-        onTimeClockClick={handleTimeClockClick}
-        record={selectedRecordWithNightDifferential}
-        monthExpenses={financeExpenses}
-        expenses={expenses}
-        totalExpenses={financeTotalExpenses}
-        grossPay={financeGrossPay}
-        payrollDeductions={financePayrollDeductions}
-        remaining={financeRemaining}
-        percentage={financePercentage}
-        netPay={financeNetPay}
-        totalHours={financeTotalHours}
-        financeTrackingScope={financeTrackingScope}
-        setFinanceTrackingScope={setFinanceTrackingScope}
-        financePeriodLabel={financePeriodLabel}
-        formatCurrency={formatCurrency}
-        expenseName={expenseName}
-        setExpenseName={setExpenseName}
-        expenseAmount={expenseAmount}
-        setExpenseAmount={setExpenseAmount}
-        expenseDate={expenseDate}
-        setExpenseDate={setExpenseDate}
-        expenseCategory={expenseCategory}
-        setExpenseCategory={setExpenseCategory}
-        onDeleteExpense={deleteExpense}
-        workspaceLoading={workspaceLoading}
-        workspaceError={workspaceError}
-        workspaceSaveError={workspaceSaveError}
-        historicalPayslips={
-          salaryVaultStatus === "unlocked" ? historicalPayslips : []
-        }
-        payslipHistorySaving={payslipHistorySaving}
-        salaryVaultStatus={salaryVaultStatus}
-        currentPayrollPeriod={payrollPeriod}
-        onViewCurrentPayslip={() => {
-          setActiveHistoricalPayslip(null);
-          setActiveModal("payslipModal");
-        }}
-        onViewHistoricalPayslip={viewHistoricalPayslip}
-        onDeleteHistoricalPayslip={deleteHistoricalPayslip}
-      />
-      <ManualEntryModal
-        key={`manual-${selectedDate}`}
-        open={activeModal === "manualEntryModal"}
-        selectedDate={selectedDate}
-        initialTimeIn={selectedAttendanceRecord.shiftStartTime || selectedAttendanceRecord.workStartTime || "06:00"}
-        initialTimeOut={selectedAttendanceRecord.shiftEndTime || selectedAttendanceRecord.workEndTime || "14:00"}
-      />
-      <AssignShiftModal
-        key={`shift-${selectedDate}`}
-        open={activeModal === "assignShiftModal"}
-        selectedDate={selectedDate}
-        shiftTemplateCards={shiftTemplateCards}
-        customShiftName={customShiftName}
-        setCustomShiftName={setCustomShiftName}
-        selectedIcon={selectedIcon}
-      />
-      <GrantLeaveModal
-        key={`leave-${selectedDate}`}
-        open={activeModal === "grantLeaveModal"}
-        balances={leaveBalances}
-        selectedDate={selectedDate}
-      />
-      <PayslipModal
-        open={activeModal === "payslipModal"}
-        userName={user?.name}
-        historicalPayslip={
-          salaryVaultStatus === "unlocked" ? activeHistoricalPayslip : null
-        }
-        payrollPeriod={payrollPeriod}
-        payrollPeriodSummary={payrollPeriodSummary}
-        payrollEarningsBreakdown={payrollEarningsBreakdown}
-        cutoffPayrollDeductions={cutoffPayrollDeductions}
-        payrollPeriodNetPay={payrollPeriodNetPay}
-        payrollPeriodEarningsAvailable={isPayrollPeriodEarningsAvailable(salaryVaultStatus)}
-        dailyWage={dailyWage}
-        formatCurrency={formatCurrency}
-        canSavePayslip={salaryVaultStatus === "unlocked"}
-        payslipAlreadySaved={Boolean(
-          findPayslipSnapshot(historicalPayslips, user?.id, payrollPeriod),
-        )}
-        payslipHistorySaving={payslipHistorySaving}
-        onSavePayslipToHistory={savePayslipToHistory}
-      />
-      <SettingsModal
-        open={activeModal === "settingsModal"}
-        activeSettingsTab={activeSettingsTab}
-        holidays={holidays}
-        selectedLocality={selectedLocality}
-        holidayEligibilityConfirmed={holidayEligibilityConfirmed}
-        settingsBalances={settingsBalances}
-        dailyWage={dailyWage}
-        dailyAllowance={dailyAllowance}
-        overtimeMultiplier={overtimeMultiplier}
-        payrollSettings={salaryVaultExtraSettings}
-        payrollDeductions={payrollDeductions}
-        nightDifferential={nightDifferential}
-        onDeleteAccount={deleteAccount}
-        accountDeletionLoading={accountDeletionLoading}
-        salaryVaultStatus={salaryVaultStatus}
-        salaryVaultError={salaryVaultError}
-        salaryVaultConflict={salaryVaultConflict}
-        salaryVaultSyncing={salaryVaultSyncing}
-        onUnlockSalaryVault={unlockOrCreateSalaryVault}
-        onLockSalaryVault={lockSalaryVault}
-        onRotateSalaryVault={rotateSalaryVaultPassphrase}
-        onReloadSalaryVault={reloadSalaryVault}
-        onSettingsValidationError={(message) => showToast(message, "warning")}
-        onSaveSettings={async (draft) => {
-          const currentPayrollSettings =
-            getPayrollDeductionSettingsDefaults(salaryVaultExtraSettings);
-          const financialSettingsChanged = draft.dailyWage !== dailyWage ||
-            draft.dailyAllowance !== dailyAllowance ||
-            draft.overtimeMultiplier !== overtimeMultiplier ||
-            draft.nightDifferential !== nightDifferential ||
-            payrollDeductionSettingKeys.some((key) =>
-              draft[key] !== currentPayrollSettings[key]);
-          if (financialSettingsChanged && salaryVaultStatus !== "unlocked") {
-            addToast("Unlock or create the encrypted salary vault before changing salary settings.", "warning");
-            return false;
-          }
-          if (salaryVaultStatus === "unlocked") {
-            try {
-              await persistPrivateSalaryVault({
-                settings: {
-                  ...salaryVaultExtraSettings,
-                  dailyWage: draft.dailyWage,
-                  dailyAllowance: draft.dailyAllowance,
-                  overtimeMultiplier: draft.overtimeMultiplier,
-                  nightDifferential: draft.nightDifferential,
-                  ...Object.fromEntries(payrollDeductionSettingKeys.map((key) => [
-                    key,
-                    draft[key],
-                  ])),
-                },
-                attendance: extractPrivateFinancialAttendance(attendance),
-              });
-            } catch (error) {
-              const conflict = error?.code === "40001";
-              const message = conflict
-                ? "Encrypted salary data changed on another device. Unlock the vault again before saving."
-                : "Salary settings could not be saved to the encrypted cloud vault. Your settings were not confirmed as saved.";
-              setSalaryVaultError(message);
-              addToast(message, "error");
-              return false;
-            }
-          }
-          setHolidays(draft.holidays);
-          setSelectedLocality(draft.selectedLocality);
-          setHolidayEligibilityConfirmed(draft.holidayEligibilityConfirmed);
-          setDailyWage(draft.dailyWage);
-          setDailyAllowance(draft.dailyAllowance);
-          setOvertimeMultiplier(draft.overtimeMultiplier);
-          setNightDifferential(draft.nightDifferential);
-          setSalaryVaultExtraSettings((current) => ({
-            ...current,
-            ...Object.fromEntries(payrollDeductionSettingKeys.map((key) => [
-              key,
-              draft[key],
-            ])),
-          }));
-          setSettingsBalances(draft.settingsBalances);
-          setLeaveBalances({
-            VL: Number(draft.settingsBalances.VL) || 0,
-            SL: Number(draft.settingsBalances.SL) || 0,
-            EL: Number(draft.settingsBalances.EL) || 0,
-          });
-          setActiveModal(null);
-          showToast("Settings saved successfully.", "success");
-          return true;
-        }}
-      />
-      </>
-      )}
       <ToastContainer toasts={toasts} dismissToast={dismissToast} />
       <AuthPage
         open={!authLoading && (!user || recoveryMode)}

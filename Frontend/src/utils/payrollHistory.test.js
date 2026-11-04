@@ -60,10 +60,20 @@ test("payslip snapshots require a valid semi-monthly period", () => {
   assert.throws(
     () => createPayslipSnapshot({
       ...createSnapshot(),
-      period: { startDate: "2026-11-01", endDate: "2026-11-30" },
+      period: { startDate: "2026-11-02", endDate: "2026-11-30" },
     }),
     /invalid payroll data/,
   );
+});
+
+test("payslip snapshots accept a full calendar month", () => {
+  const snapshot = createPayslipSnapshot({
+    ...createSnapshot(),
+    period: { startDate: "2026-11-01", endDate: "2026-11-30" },
+  });
+
+  assert.equal(snapshot.period.startDate, "2026-11-01");
+  assert.equal(snapshot.period.endDate, "2026-11-30");
 });
 
 test("removes a saved payslip without changing the existing history", () => {

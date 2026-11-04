@@ -29,6 +29,8 @@ export default function AttendanceDashboard({
   year,
 }) {
   const [isYearPickerOpen, setIsYearPickerOpen] = useState(false);
+  const [isPayComponentsExpanded, setIsPayComponentsExpanded] = useState(false);
+  const [isTimeAttendanceExpanded, setIsTimeAttendanceExpanded] = useState(false);
   const salaryDataPrivate = salaryVaultStatus !== "unlocked";
   const holidayTextColors = {
     "Regular Holiday": "text-rose-700",
@@ -274,12 +276,23 @@ export default function AttendanceDashboard({
               </span>
             </div>
 
-            {/* Pay Components Section Header */}
-            <div className="mb-2 flex items-center justify-between border-b border-slate-100 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              <span>Pay Components Breakdown</span>
+            <div className="mb-2 flex items-center justify-between border-b border-slate-100 pb-2">
               <button
                 type="button"
-                className="text-teal-700 hover:underline flex items-center gap-1 lowercase font-normal normal-case"
+                aria-expanded={isPayComponentsExpanded}
+                aria-controls="payComponentsDetails"
+                onClick={() => setIsPayComponentsExpanded((expanded) => !expanded)}
+                className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500"
+              >
+                <span>Pay Components Breakdown</span>
+                <i
+                  className={`fa-solid ${isPayComponentsExpanded ? "fa-chevron-down" : "fa-chevron-right"} text-[9px] transition-transform duration-300`}
+                  aria-hidden="true"
+                ></i>
+              </button>
+              <button
+                type="button"
+                className="flex items-center gap-1 text-[10px] font-normal normal-case text-teal-700 hover:underline"
               >
                 <i
                   className="fa-regular fa-circle-question text-[10px]"
@@ -289,6 +302,15 @@ export default function AttendanceDashboard({
               </button>
             </div>
 
+            <div
+              className="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out"
+              style={{
+                gridTemplateRows: isPayComponentsExpanded ? "1fr" : "0fr",
+                opacity: isPayComponentsExpanded ? 1 : 0,
+              }}
+              aria-hidden={!isPayComponentsExpanded}
+            >
+              <div id="payComponentsDetails" className="min-h-0 overflow-hidden">
             {/* Pay Components Borderless List */}
             <div className="divide-y divide-slate-100 text-[11px]">
               {record.holidayClassification && (
@@ -312,7 +334,7 @@ export default function AttendanceDashboard({
                       ? `₱${holidayPayEstimate.regularPay.toFixed(2)}`
                       : "Estimate unavailable"}
                   </span>
-                </div>
+              </div>
               )}
 
               {hasAllowance && (
@@ -409,60 +431,84 @@ export default function AttendanceDashboard({
                 </div>
               </div>
             )}
+              </div>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <div className="mb-3 flex items-center gap-2">
+            <div
+              className={`flex items-center gap-2 transition-[margin] duration-300 ease-in-out ${
+                isTimeAttendanceExpanded ? "mb-3" : ""
+              }`}
+            >
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
                 <i className="fa-regular fa-clock" aria-hidden="true"></i>
               </span>
-              <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                Time &amp; Attendance
-              </h3>
+              <button
+                type="button"
+                aria-expanded={isTimeAttendanceExpanded}
+                aria-controls="timeAttendanceDetails"
+                onClick={() => setIsTimeAttendanceExpanded((expanded) => !expanded)}
+                className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-700"
+              >
+                <span>Time &amp; Attendance</span>
+                <i
+                  className={`fa-solid fa-chevron-right text-[9px] transition-transform duration-300 ${
+                    isTimeAttendanceExpanded ? "rotate-90" : ""
+                  }`}
+                  aria-hidden="true"
+                ></i>
+              </button>
+              <span className="ml-auto shrink-0 text-right text-[11px] font-semibold text-textMain">
+                {record.assigned}
+              </span>
             </div>
-            <div className="space-y-2.5 text-[11px]">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-textMuted">Assigned Shift</span>
-                <span
-                  id="assignedShiftTime"
-                  className="text-right font-semibold text-textMain"
-                >
-                  {record.assigned}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-textMuted">First Time In</span>
-                <span
-                  id="firstTimeIn"
-                  className="text-right font-semibold text-teal-700"
-                >
-                  {record.in}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-textMuted">Last Time Out</span>
-                <span
-                  id="lastTimeOut"
-                  className="text-right font-semibold text-teal-700"
-                >
-                  {record.clockedIn ? "Tracking" : record.out}
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
-                <span className="text-textMuted">Status</span>
-                <div
-                  id="statusBadgesContainer"
-                  className="flex flex-wrap justify-end gap-1.5"
-                >
-                  {record.badges.map((badge) => (
-                    <span
-                      key={badge.text}
-                      title={badge.title}
-                      className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${badge.color}`}
-                    >
-                      {badge.text}
-                    </span>
-                  ))}
+            <div
+              className="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out"
+              style={{
+                gridTemplateRows: isTimeAttendanceExpanded ? "1fr" : "0fr",
+                opacity: isTimeAttendanceExpanded ? 1 : 0,
+              }}
+              aria-hidden={!isTimeAttendanceExpanded}
+            >
+              <div
+                id="timeAttendanceDetails"
+                className="min-h-0 overflow-hidden space-y-2.5 text-[11px]"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-textMuted">First Time In</span>
+                  <span
+                    id="firstTimeIn"
+                    className="text-right font-semibold text-teal-700"
+                  >
+                    {record.in}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-textMuted">Last Time Out</span>
+                  <span
+                    id="lastTimeOut"
+                    className="text-right font-semibold text-teal-700"
+                  >
+                    {record.clockedIn ? "Tracking" : record.out}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
+                  <span className="text-textMuted">Status</span>
+                  <div
+                    id="statusBadgesContainer"
+                    className="flex flex-wrap justify-end gap-1.5"
+                  >
+                    {record.badges.map((badge) => (
+                      <span
+                        key={badge.text}
+                        title={badge.title}
+                        className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${badge.color}`}
+                      >
+                        {badge.text}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>

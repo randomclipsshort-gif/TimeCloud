@@ -66,6 +66,41 @@ export default function DashboardContent(props) {
   } = props;
   return (
     <main className="flex-1 max-w-[1600px] w-full mx-auto p-6 flex flex-col gap-6">
+      <nav
+        className="flex justify-center"
+        aria-label="Dashboard pages"
+      >
+        <div className="flex items-center space-x-3 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
+          <button
+            type="button"
+            data-action="slidePage(0)"
+            id="navDot0"
+            aria-current={page === 0 ? "page" : undefined}
+            className={
+              page === 0
+                ? "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-teal-600 text-white shadow-xs"
+                : "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            }
+          >
+            <i className="fa-solid fa-calendar-days" aria-hidden="true"></i>
+            <span>Time &amp; Calendar Hub</span>
+          </button>
+          <button
+            type="button"
+            data-action="slidePage(1)"
+            id="navDot1"
+            aria-current={page === 1 ? "page" : undefined}
+            className={
+              page === 1
+                ? "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-teal-600 text-white shadow-xs"
+                : "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            }
+          >
+            <i className="fa-solid fa-wallet" aria-hidden="true"></i>
+            <span>Quick Stats &amp; Finance Hub</span>
+          </button>
+        </div>
+      </nav>
       <div className="relative w-full overflow-x-clip">
         <div
           id="sliderTrack"
@@ -136,34 +171,6 @@ export default function DashboardContent(props) {
             onViewHistoricalPayslip={onViewHistoricalPayslip}
             onDeleteHistoricalPayslip={onDeleteHistoricalPayslip}
           />
-        </div>
-      </div>
-      <div className="flex items-center justify-center pb-2 ">
-        <div className="bg-white border border-slate-200 p-1.5 rounded-2xl shadow-sm flex items-center space-x-3">
-          <button
-            data-action="slidePage(0)"
-            id="navDot0"
-            className={
-              page === 0
-                ? "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-teal-600 text-white shadow-xs"
-                : "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            }
-          >
-            <i className="fa-solid fa-calendar-days"></i>
-            <span>Time &amp; Calendar Hub</span>
-          </button>
-          <button
-            data-action="slidePage(1)"
-            id="navDot1"
-            className={
-              page === 1
-                ? "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-teal-600 text-white shadow-xs"
-                : "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            }
-          >
-            <i className="fa-solid fa-wallet"></i>
-            <span>Quick Stats &amp; Finance Hub</span>
-          </button>
         </div>
       </div>
     </main>

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   formatPayrollPeriod,
+  getCalendarPayrollPeriod,
   getNextPayrollPeriod,
   getPayrollPeriodForDate,
   getPayrollPeriodForEndDate,
@@ -71,6 +72,18 @@ test("creates month/cutoff periods and validates persisted end dates", () => {
   assert.equal(isValidPayrollPeriodEndDate("2026-02-29"), false);
   assert.equal(isValidPayrollPeriodEndDate("2026-10-11"), false);
   assert.equal(getPayrollPeriodForEndDate("2026-10-11"), null);
+});
+
+test("creates valid full-calendar-month payroll periods", () => {
+  assert.deepEqual(getCalendarPayrollPeriod("2026-11"), {
+    startDate: "2026-11-01",
+    endDate: "2026-11-30",
+  });
+  assert.deepEqual(getCalendarPayrollPeriod("2024-02"), {
+    startDate: "2024-02-01",
+    endDate: "2024-02-29",
+  });
+  assert.equal(getCalendarPayrollPeriod("2026-13"), null);
 });
 
 test("keeps private period earnings hidden while the salary vault is locked", () => {

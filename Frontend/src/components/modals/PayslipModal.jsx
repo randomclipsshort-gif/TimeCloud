@@ -5,6 +5,8 @@ export default function PayslipModal({
   open,
   userName,
   historicalPayslip,
+  payrollPeriodMode,
+  onPayrollPeriodModeChange,
   payrollPeriod,
   payrollPeriodSummary,
   payrollEarningsBreakdown,
@@ -114,9 +116,33 @@ export default function PayslipModal({
                 ? `Saved estimate snapshot · ${new Date(historicalPayslip.generatedAt).toLocaleDateString()}`
                 : "Estimate only · not finalized payroll"}
             </span>
-            <span className="text-[11px] font-medium text-slate-500">
-              {`${recordedHours.toFixed(2)} recorded hours`}
-            </span>
+            {!historicalPayslip && (
+              <div
+                className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1"
+                role="group"
+                aria-label="Payslip period"
+              >
+                {[
+                  { value: "first", label: "1st cutoff" },
+                  { value: "second", label: "2nd cutoff" },
+                  { value: "month", label: "Whole month" },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={payrollPeriodMode === option.value}
+                    onClick={() => onPayrollPeriodModeChange(option.value)}
+                    className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
+                      payrollPeriodMode === option.value
+                        ? "bg-teal-600 text-white shadow-sm"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Employee Meta Grid */}

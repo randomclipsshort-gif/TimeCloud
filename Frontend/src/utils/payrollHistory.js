@@ -1,15 +1,27 @@
-import { getPayrollPeriodForEndDate } from "./payrollPeriods.js";
+import {
+  getCalendarPayrollPeriod,
+  getPayrollPeriodForEndDate,
+} from "./payrollPeriods.js";
 
 export function isValidPayslipSnapshot(snapshot) {
   const expectedPeriod = getPayrollPeriodForEndDate(snapshot?.period?.endDate);
+  const expectedCalendarPeriod = snapshot?.period?.endDate
+    ? getCalendarPayrollPeriod(snapshot.period.endDate.slice(0, 7))
+    : null;
+  const isValidPeriod = Boolean(
+    (expectedPeriod &&
+      snapshot.period.startDate === expectedPeriod.startDate &&
+      snapshot.period.endDate === expectedPeriod.endDate) ||
+    (expectedCalendarPeriod &&
+      snapshot.period.startDate === expectedCalendarPeriod.startDate &&
+      snapshot.period.endDate === expectedCalendarPeriod.endDate)
+  );
   return Boolean(
     snapshot &&
     typeof snapshot.employeeId === "string" &&
     snapshot.employeeId.length > 0 &&
     typeof snapshot.employeeName === "string" &&
-    expectedPeriod &&
-    snapshot.period.startDate === expectedPeriod.startDate &&
-    snapshot.period.endDate === expectedPeriod.endDate &&
+    isValidPeriod &&
     typeof snapshot.generatedAt === "string" &&
     Number.isFinite(Date.parse(snapshot.generatedAt)) &&
     Number.isFinite(snapshot.summary?.recordedEarnings) &&

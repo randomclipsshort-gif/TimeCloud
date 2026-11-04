@@ -66,6 +66,22 @@ export function getPayrollPeriodForMonth(monthValue, cutoffDay) {
   return periodFromParts(year, month, Number(cutoffDay));
 }
 
+export function getCalendarPayrollPeriod(monthValue) {
+  if (typeof monthValue !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(monthValue)) {
+    return null;
+  }
+  const [year, month] = monthValue.split("-").map(Number);
+  const startDate = dateKeyFromParts(year, month, 1);
+  const endDate = dateKeyFromParts(
+    year,
+    month,
+    new Date(Date.UTC(year, month, 0)).getUTCDate(),
+  );
+  return parseDateKey(startDate) && parseDateKey(endDate)
+    ? { startDate, endDate }
+    : null;
+}
+
 export function getPayrollPeriodForDate(dateKey) {
   const parsed = parseDateKey(dateKey);
   if (!parsed) return null;
