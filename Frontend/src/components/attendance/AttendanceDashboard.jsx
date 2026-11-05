@@ -217,31 +217,6 @@ export default function AttendanceDashboard({
 
           {/* Earnings and pay components */}
           <div className="mb-4 rounded-2xl border border-teal-100 bg-white p-4 shadow-xs">
-            {/* Reference Rate Line */}
-            <div className="mb-4 flex items-center justify-between text-[10px]">
-              <span className="text-slate-500 flex items-center gap-1.5">
-                <i
-                  className="fa-solid fa-circle-info text-slate-400 text-[10px]"
-                  aria-hidden="true"
-                ></i>
-                Base Daily Wage (8 hrs):{" "}
-                <strong className="text-slate-700 font-semibold" id="baseWage">
-                  {salaryDataPrivate
-                    ? "Private"
-                    : record.holidayClassification || record.type === "Unassigned"
-                    ? Number(configuredDailyWage) > 0
-                      ? `₱${Number(configuredDailyWage).toFixed(2)}`
-                      : record.holidayClassification
-                        ? "Required"
-                        : record.base
-                    : record.base}
-                </strong>
-              </span>
-              <span className="text-[9px] italic text-slate-400">
-                Reference rate · Not added separately
-              </span>
-            </div>
-
             <div className="mb-2 flex items-center justify-between border-b border-slate-100 pb-2">
               <button
                 type="button"
@@ -279,6 +254,31 @@ export default function AttendanceDashboard({
               <div id="payComponentsDetails" className="min-h-0 overflow-hidden">
             {/* Pay Components Borderless List */}
             <div className="divide-y divide-slate-100 text-[11px]">
+              <div className="py-2.5 flex items-center justify-between gap-3">
+                <span className="flex flex-col min-w-0">
+                  <span className="font-semibold text-slate-800">
+                    Base Daily Wage (8 hrs)
+                  </span>
+                  <span className="text-[10px] italic text-slate-500 mt-0.5">
+                    Reference rate · Not added separately
+                  </span>
+                </span>
+                <span
+                  id="baseWage"
+                  className="font-semibold text-slate-700 shrink-0 tabular-nums"
+                >
+                  {salaryDataPrivate
+                    ? "Private"
+                    : record.holidayClassification || record.type === "Unassigned"
+                    ? Number(configuredDailyWage) > 0
+                      ? `₱${Number(configuredDailyWage).toFixed(2)}`
+                      : record.holidayClassification
+                        ? "Required"
+                        : record.base
+                    : record.base}
+                </span>
+              </div>
+
               {record.holidayClassification && (
                 <div className="py-2.5 flex items-center justify-between gap-3">
                   <span className="flex flex-col min-w-0">
