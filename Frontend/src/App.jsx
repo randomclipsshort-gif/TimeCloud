@@ -576,6 +576,7 @@ function CalendarDay({
   record,
   shiftTemplates,
   selected,
+  hasIncentive,
   onSelect,
 }) {
   let cardStyle =
@@ -698,9 +699,10 @@ function CalendarDay({
   return (
     <button
       type="button"
-      aria-label={`${formatDate(year, monthIndex, day)}: ${record.holidayName ? `${record.holidayName}, ${record.holidayClassification}, ` : ""}${record.type === "Absent" && record.holidayName ? "Unworked Holiday" : calendarShiftName}`}
+      aria-label={`${formatDate(year, monthIndex, day)}: ${record.holidayName ? `${record.holidayName}, ${record.holidayClassification}, ` : ""}${record.type === "Absent" && record.holidayName ? "Unworked Holiday" : calendarShiftName}${hasIncentive ? ", incentive recorded" : ""}`}
       aria-pressed={selected}
       onClick={onSelect}
+      title={hasIncentive ? "Incentive recorded" : undefined}
       className={`rounded-xl min-h-[90px] flex flex-col transition cursor-pointer relative box-border text-left ${cardStyle}`}
     >
       <span className="p-2.5 flex flex-col justify-between h-full w-full">
@@ -715,6 +717,12 @@ function CalendarDay({
               <span className="text-[9px] font-bold text-amber-700">
                 Tracking
               </span>
+            )}
+            {hasIncentive && (
+              <i
+                className="fa-solid fa-gift text-[10px] text-teal-600"
+                aria-hidden="true"
+              ></i>
             )}
             {record.late && (
               <span
@@ -3692,6 +3700,9 @@ export default function App() {
     const firstDay = new Date(year, monthIndex, 1).getDay();
     const totalDays = new Date(year, monthIndex + 1, 0).getDate();
     const previousMonthDays = new Date(year, monthIndex, 0).getDate();
+    const incentiveDates = new Set(
+      availableEmployeeIncentives.map((incentive) => incentive.date),
+    );
     const cells = [];
     for (let offset = firstDay; offset > 0; offset -= 1) {
       cells.push(
@@ -3734,6 +3745,7 @@ export default function App() {
             nightDifferential,
           )}
           selected={day === selectedDay}
+          hasIncentive={incentiveDates.has(formatDate(year, monthIndex, day))}
           onSelect={() => setSelectedDay(day)}
         />,
       );
@@ -3741,6 +3753,7 @@ export default function App() {
     return cells;
   }, [
     attendance,
+    availableEmployeeIncentives,
     holidays,
     lateGracePeriodMinutes,
     manilaNow,
