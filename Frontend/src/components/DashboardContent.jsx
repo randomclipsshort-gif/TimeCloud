@@ -4,6 +4,7 @@ import FinancialDashboard from "./finance/FinancialDashboard.jsx";
 export default function DashboardContent(props) {
   const {
     page,
+    requestConfirmation,
     monthTabs,
     monthCarouselOffset,
     onMonthCarouselTransitionEnd,
@@ -145,6 +146,7 @@ export default function DashboardContent(props) {
           }`}
         >
           <FinancialDashboard
+            requestConfirmation={requestConfirmation}
             monthExpenses={monthExpenses}
             expenses={expenses}
             financeTrackingScope={financeTrackingScope}

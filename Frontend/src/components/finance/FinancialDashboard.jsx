@@ -4,6 +4,7 @@ import EmployeeIncentives from "./EmployeeIncentives.jsx";
 import { formatPayrollPeriod } from "../../utils/payrollPeriods.js";
 
 export default function FinancialDashboard({
+  requestConfirmation,
   monthExpenses,
   expenses,
   financeTrackingScope,
@@ -586,8 +587,13 @@ export default function FinancialDashboard({
                         </span>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (window.confirm(`Delete "${expense.name}" dated ${getExpenseDate(expense)}? This cannot be undone.`)) {
+                          onClick={async () => {
+                            if (await requestConfirmation({
+                              title: "Delete expense?",
+                              message: `Delete "${expense.name}" dated ${getExpenseDate(expense)}? This cannot be undone.`,
+                              confirmLabel: "Delete expense",
+                              variant: "danger",
+                            })) {
                               onDeleteExpense(expense.id);
                             }
                           }}
@@ -611,6 +617,7 @@ export default function FinancialDashboard({
           <EmployeeIncentives
             incentives={employeeIncentives}
             onDeleteIncentive={onDeleteIncentive}
+            requestConfirmation={requestConfirmation}
             salaryVaultStatus={salaryVaultStatus}
             salaryVaultError={salaryVaultError}
             formatCurrency={formatCurrency}
@@ -735,10 +742,13 @@ export default function FinancialDashboard({
                                 aria-label={`Delete saved payslip for ${formatPayrollPeriod(snapshot.period)}`}
                                 title="Delete saved payslip"
                                 disabled={payslipHistorySaving}
-                                onClick={() => {
-                                  if (window.confirm(
-                                    `Delete the saved payslip for ${formatPayrollPeriod(snapshot.period)}? This cannot be undone.`,
-                                  )) {
+                                onClick={async () => {
+                                  if (await requestConfirmation({
+                                    title: "Delete saved payslip?",
+                                    message: `Delete the saved payslip for ${formatPayrollPeriod(snapshot.period)}? This cannot be undone.`,
+                                    confirmLabel: "Delete payslip",
+                                    variant: "danger",
+                                  })) {
                                     onDeleteHistoricalPayslip(snapshot);
                                   }
                                 }}

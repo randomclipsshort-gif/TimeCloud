@@ -7,6 +7,7 @@ import AssignShiftModal from "./components/modals/AssignShiftModal.jsx";
 import GrantLeaveModal from "./components/modals/GrantLeaveModal.jsx";
 import PayslipModal from "./components/modals/PayslipModal.jsx";
 import SettingsModal from "./components/modals/SettingsModal.jsx";
+import ConfirmationDialog from "./components/ui/ConfirmationDialog.jsx";
 import ToastContainer from "./components/ui/ToastContainer.jsx";
 import { holidayCalendarByYear } from "./data/holidayCalendar.js";
 import {
@@ -767,6 +768,7 @@ function CalendarDay({
 }
 
 export default function App() {
+  const [confirmation, setConfirmation] = useState(null);
   const [authSession, setAuthSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [workspaceLoadedForUser, setWorkspaceLoadedForUser] = useState(null);
@@ -834,6 +836,7 @@ export default function App() {
   const [expenseCategory, setExpenseCategory] = useState("Utilities");
   const [toasts, setToasts] = useState([]);
   const timers = useRef(new Map());
+  const confirmationResolver = useRef(null);
   const monthCarouselTimer = useRef(null);
   const [clock, setClock] = useState(() =>
     new Intl.DateTimeFormat("en-US", {
@@ -876,6 +879,22 @@ export default function App() {
   const salaryVaultSkipNextSyncRef = useRef(false);
   const preserveLegacyLocalRef = useRef(false);
   const salaryVaultSyncTimerRef = useRef(null);
+
+  const requestConfirmation = useCallback(
+    (options) =>
+      new Promise((resolve) => {
+        confirmationResolver.current?.(false);
+        confirmationResolver.current = resolve;
+        setConfirmation(options);
+      }),
+    [],
+  );
+  const resolveConfirmation = useCallback((confirmed) => {
+    const resolve = confirmationResolver.current;
+    confirmationResolver.current = null;
+    setConfirmation(null);
+    resolve?.(confirmed);
+  }, []);
 
   const employeeIncentives = Array.isArray(
     salaryVaultExtraSettings.employeeIncentives,
@@ -1837,9 +1856,13 @@ export default function App() {
 
   const reloadSalaryVault = useCallback(async () => {
     if (!user?.id) return;
-    const confirmed = window.confirm(
-      "Reload the encrypted cloud vault? Any salary changes in this browser that were not saved will be discarded. Export them first if you need to keep them.",
-    );
+    const confirmed = await requestConfirmation({
+      title: "Reload encrypted vault?",
+      message:
+        "Any salary changes in this browser that were not saved will be discarded. Export them first if you need to keep them.",
+      confirmLabel: "Reload vault",
+      variant: "warning",
+    });
     if (!confirmed) return;
     setSalaryVaultSyncing(true);
     try {
@@ -1877,7 +1900,7 @@ export default function App() {
     } finally {
       setSalaryVaultSyncing(false);
     }
-  }, [user?.id, addToast]);
+  }, [user?.id, addToast, requestConfirmation]);
 
   const lockSalaryVault = useCallback(async () => {
     window.clearTimeout(salaryVaultSyncTimerRef.current);
@@ -2868,9 +2891,13 @@ export default function App() {
 
   const deleteAccount = async () => {
     if (accountDeletionLoading) return;
-    const confirmed = window.confirm(
-      "Permanently delete your account and all TimeCloud app data (workspace, attendance, and encrypted salary vault)? Unsaved changes will be discarded. This cannot be undone. Supabase operational logs and backups may be retained under the provider's retention policies.",
-    );
+    const confirmed = await requestConfirmation({
+      title: "Permanently delete your account?",
+      message:
+        "This deletes your account and all TimeCloud app data, including your workspace, attendance, and encrypted salary vault. Unsaved changes will be discarded. This cannot be undone. Supabase operational logs and backups may be retained under the provider's retention policies.",
+      confirmLabel: "Delete account",
+      variant: "danger",
+    });
     if (!confirmed || !supabase) return;
 
     setAccountDeletionLoading(true);
@@ -3912,12 +3939,14 @@ export default function App() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          "Reloading will discard unsynced changes. Continue?",
-                        )
-                      ) {
+                    onClick={async () => {
+                      if (await requestConfirmation({
+                        title: "Reload cloud data?",
+                        message:
+                          "Reloading will discard unsynced changes. Continue only if you are sure you do not need them.",
+                        confirmLabel: "Reload data",
+                        variant: "warning",
+                      })) {
                         window.location.reload();
                       }
                     }}
@@ -3929,6 +3958,7 @@ export default function App() {
               </div>
             )}
             <DashboardContent
+              requestConfirmation={requestConfirmation}
               page={page}
               monthTabs={monthTabs}
               monthCarouselOffset={monthCarouselMotion?.offset ?? 0}
@@ -4171,6 +4201,10 @@ export default function App() {
           </>
         )}
       <ToastContainer toasts={toasts} dismissToast={dismissToast} />
+      <ConfirmationDialog
+        options={confirmation}
+        onResolve={resolveConfirmation}
+      />
       <AuthPage
         open={!authLoading && (!user || recoveryMode)}
         recoveryMode={recoveryMode}

@@ -3,6 +3,7 @@ import { getIncentiveTotal } from "../../utils/incentiveTracker.js";
 export default function EmployeeIncentives({
   incentives,
   onDeleteIncentive,
+  requestConfirmation,
   salaryVaultStatus,
   salaryVaultError,
   formatCurrency,
@@ -115,8 +116,13 @@ export default function EmployeeIncentives({
                         </span>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (window.confirm(`Delete "${incentive.name}" dated ${incentive.date}? This also updates estimated payroll earnings.`)) {
+                          onClick={async () => {
+                            if (await requestConfirmation({
+                              title: "Delete incentive?",
+                              message: `Delete "${incentive.name}" dated ${incentive.date}? This also updates estimated payroll earnings.`,
+                              confirmLabel: "Delete incentive",
+                              variant: "danger",
+                            })) {
                               onDeleteIncentive(incentive.id);
                             }
                           }}
