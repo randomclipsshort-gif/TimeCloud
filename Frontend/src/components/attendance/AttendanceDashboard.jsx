@@ -265,7 +265,7 @@ export default function AttendanceDashboard({
                 </span>
                 <span
                   id="baseWage"
-                  className="font-semibold text-slate-700 shrink-0 tabular-nums"
+                  className="font-semibold text-slate-500 shrink-0 tabular-nums"
                 >
                   {salaryDataPrivate
                     ? "Private"
