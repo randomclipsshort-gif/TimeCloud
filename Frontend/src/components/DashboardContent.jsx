@@ -65,7 +65,7 @@ export default function DashboardContent(props) {
     onDeleteHistoricalPayslip,
   } = props;
   return (
-    <main className="flex-1 max-w-[1600px] w-full mx-auto p-6 flex flex-col gap-6">
+    <main className="min-h-0 flex-1 overflow-y-auto max-w-[1600px] w-full mx-auto p-6 flex flex-col gap-6">
       <nav
         className="flex justify-center"
         aria-label="Dashboard pages"

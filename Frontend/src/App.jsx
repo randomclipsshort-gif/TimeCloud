@@ -3677,7 +3677,12 @@ export default function App() {
 
   return (
     <div
-      className="bg-slateBg text-textMain font-sans antialiased min-h-screen flex flex-col selection:bg-teal-500 selection:text-white overflow-x-clip"
+      className={`${user &&
+      !recoveryMode &&
+      workspaceLoadedForUser === user.id &&
+      !workspaceError
+        ? "h-dvh overflow-hidden"
+        : "min-h-screen"} bg-slateBg text-textMain font-sans antialiased flex flex-col selection:bg-teal-500 selection:text-white overflow-x-clip`}
       onClick={handleClick}
       onChange={handleChange}
       onSubmit={handleSubmit}
@@ -3724,6 +3729,7 @@ export default function App() {
         workspaceLoadedForUser === user.id &&
         !workspaceError && (
           <>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="sticky top-0 z-50">
               <Header
                 clock={clock}
@@ -3875,6 +3881,7 @@ export default function App() {
               onViewHistoricalPayslip={viewHistoricalPayslip}
               onDeleteHistoricalPayslip={deleteHistoricalPayslip}
             />
+            </div>
             <ManualEntryModal
               key={`manual-${selectedDate}`}
               open={activeModal === "manualEntryModal"}
