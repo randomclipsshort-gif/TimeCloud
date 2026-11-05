@@ -222,7 +222,7 @@ export default function AttendanceDashboard({
                 aria-expanded={isPayComponentsExpanded}
                 aria-controls="payComponentsDetails"
                 onClick={() => setIsPayComponentsExpanded((expanded) => !expanded)}
-                className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500"
+                className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-400"
               >
                 <span>Pay Components Breakdown</span>
                 <i
@@ -241,7 +241,7 @@ export default function AttendanceDashboard({
                         : record.est}
                 </span>
               ) : (
-                <span className="flex items-center gap-1 text-[10px] font-normal normal-case text-teal-700">
+                <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                   <i
                     className="fa-regular fa-circle-question text-[10px]"
                     aria-hidden="true"
@@ -261,13 +261,13 @@ export default function AttendanceDashboard({
             >
               <div id="payComponentsDetails" className="min-h-0 overflow-hidden">
             {/* Pay Components Borderless List */}
-            <div className="divide-y divide-slate-100 text-[11px]">
+            <div className="divide-y divide-slate-100 text-xs">
               <div className="py-2.5 flex items-center justify-between gap-3">
                 <span className="flex flex-col min-w-0">
-                  <span className="font-semibold text-slate-800">
+                  <span className="text-sm font-semibold text-slate-800">
                     Base Daily Wage (8 hrs)
                   </span>
-                  <span className="text-[10px] italic text-slate-500 mt-0.5">
+                  <span className="mt-0.5 text-xs text-slate-500">
                     {record.holidayClassification
                       ? "Reference rate · Factored into rate below"
                       : "Reference rate · Not added separately"}
@@ -292,10 +292,10 @@ export default function AttendanceDashboard({
               {record.holidayClassification && (
                 <div className="py-2.5 flex items-center justify-between gap-3">
                   <span className="flex flex-col min-w-0">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-sm font-semibold text-slate-800">
                       Holiday Pay Total
                     </span>
-                    <span className="text-[10px] text-slate-500 mt-0.5">
+                    <span className="mt-0.5 text-xs text-slate-500">
                       {displayedHolidayPayRateLabel ||
                         "130% total including base wage"}
                     </span>
@@ -316,10 +316,10 @@ export default function AttendanceDashboard({
               {hasAllowance && (
                 <div className="py-2.5 flex items-center justify-between gap-3">
                   <span className="flex flex-col min-w-0">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-sm font-semibold text-slate-800">
                       Co. Allowance
                     </span>
-                    <span className="text-[10px] text-slate-500 mt-0.5">
+                    <span className="mt-0.5 text-xs text-slate-500">
                       Standard daily stipend
                     </span>
                   </span>
@@ -335,7 +335,7 @@ export default function AttendanceDashboard({
               {hasNightDifferential && (
                 <div className="py-2.5 flex items-center justify-between gap-3">
                   <span className="flex flex-col min-w-0">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-sm font-semibold text-slate-800">
                       Night Differential
                     </span>
                   </span>
@@ -351,11 +351,11 @@ export default function AttendanceDashboard({
               {hasOvertime && (
                 <div className="py-2.5 flex items-center justify-between gap-3">
                   <span className="flex flex-col min-w-0">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-sm font-semibold text-slate-800">
                       Overtime
                     </span>
                     {!salaryDataPrivate && overtimeCalculation && (
-                      <span className="text-[10px] text-slate-500 mt-0.5">
+                      <span className="mt-0.5 text-xs text-slate-500">
                         {overtimeCalculation}
                       </span>
                     )}
@@ -374,10 +374,10 @@ export default function AttendanceDashboard({
                   className="py-2.5 flex items-center justify-between gap-3"
                 >
                   <span className="flex min-w-0 flex-col">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-sm font-semibold text-slate-800">
                       Incentives
                     </span>
-                    <span className="mt-0.5 flex flex-col text-xs text-slate-400">
+                    <span className="mt-0.5 flex flex-col text-xs text-slate-500">
                       {selectedDateIncentives.map((incentive) => (
                         <span key={incentive.id}>
                           {`${incentive.name} (+₱${Number(incentive.amount).toFixed(2)})`}
