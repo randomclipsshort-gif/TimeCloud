@@ -375,22 +375,19 @@ export default function AttendanceDashboard({
                     <span className="text-sm font-semibold text-slate-800">
                       Incentives
                     </span>
-                    <span className="shrink-0 font-semibold text-emerald-700 tabular-nums">
+                    <span className="shrink-0 text-sm font-semibold text-teal-600 tabular-nums">
                       {salaryDataPrivate
                         ? "Private"
                         : `+₱${selectedDateIncentiveTotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                     </span>
                   </div>
-                  <div className="space-y-0.5 pl-3 text-[11px] text-slate-500">
-                    {selectedDateIncentives.map((incentive) => (
-                      <div key={incentive.id}>
-                        {incentive.name}{" "}
-                        <span className="tabular-nums">
-                          {`+₱${Number(incentive.amount).toFixed(2)}`}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                    <ul className="list-disc space-y-0.5 pl-3 text-xs italic text-slate-400">
+                      {selectedDateIncentives.map((incentive) => (
+                        <li key={incentive.id}>
+                          {`${incentive.name} (₱${Number(incentive.amount).toFixed(2)})`}
+                        </li>
+                      ))}
+                    </ul>
                 </div>
               )}
 
