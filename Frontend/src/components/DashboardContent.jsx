@@ -65,7 +65,7 @@ export default function DashboardContent(props) {
     onDeleteHistoricalPayslip,
   } = props;
   return (
-    <main className="dashboard-scroll min-h-0 flex-1 overflow-y-auto max-w-[1600px] w-full mx-auto p-6 flex flex-col gap-6">
+    <main className="flex-1 max-w-[1600px] w-full mx-auto p-6 flex flex-col gap-6">
       <nav
         className="flex justify-center"
         aria-label="Dashboard pages"
@@ -101,11 +101,14 @@ export default function DashboardContent(props) {
           </button>
         </div>
       </nav>
-      <div className="relative w-full overflow-x-clip">
+      <div className="relative w-full overflow-x-clip overflow-y-clip">
         <div
           id="sliderTrack"
-          className="flex transition-transform duration-500 ease-in-out w-full"
-          style={{ transform: `translateX(-${page * 100}%)` }}
+          className={`w-full transition-transform duration-500 ease-in-out ${
+            page === 0
+              ? "relative translate-x-0"
+              : "absolute left-0 top-0 -translate-x-full"
+          }`}
         >
           <AttendanceDashboard
             record={record}
@@ -136,6 +139,14 @@ export default function DashboardContent(props) {
             monthLabel={monthLabel}
             year={year}
           />
+        </div>
+        <div
+          className={`w-full transition-transform duration-500 ease-in-out ${
+            page === 1
+              ? "relative translate-x-0"
+              : "absolute left-0 top-0 translate-x-full"
+          }`}
+        >
           <FinancialDashboard
             monthExpenses={monthExpenses}
             expenses={expenses}
