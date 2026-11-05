@@ -8,7 +8,7 @@ export default function AttendanceDashboard({
   salaryVaultStatus,
   holidayPayEstimate,
   estimatedEarnings,
-  selectedDateIncentives,
+  selectedDateIncentives = [],
   dailyAllowance,
   nightDifferentialPay,
   overtimePay,
@@ -27,6 +27,10 @@ export default function AttendanceDashboard({
   const [isPayComponentsExpanded, setIsPayComponentsExpanded] = useState(false);
   const [isTimeAttendanceExpanded, setIsTimeAttendanceExpanded] = useState(false);
   const salaryDataPrivate = salaryVaultStatus !== "unlocked";
+  const selectedDateIncentiveTotal = selectedDateIncentives.reduce(
+    (total, incentive) => total + Number(incentive.amount),
+    0,
+  );
   const holidayTextColors = {
     "Regular Holiday": "text-rose-700",
     "Special Non-Working Day": "text-indigo-700",
@@ -365,21 +369,29 @@ export default function AttendanceDashboard({
                 </div>
               )}
 
-              {selectedDateIncentives.map((incentive) => (
+              {selectedDateIncentives.length > 0 && (
                 <div
-                  key={incentive.id}
                   className="py-2.5 flex items-center justify-between gap-3"
                 >
-                  <span className="font-semibold text-slate-800">
-                    {incentive.name}
+                  <span className="flex min-w-0 flex-col">
+                    <span className="font-semibold text-slate-800">
+                      Incentives
+                    </span>
+                    <span className="mt-0.5 flex flex-col text-xs text-slate-400">
+                      {selectedDateIncentives.map((incentive) => (
+                        <span key={incentive.id}>
+                          {`${incentive.name} (+₱${Number(incentive.amount).toFixed(2)})`}
+                        </span>
+                      ))}
+                    </span>
                   </span>
                   <span className="shrink-0 font-semibold text-emerald-700 tabular-nums">
                     {salaryDataPrivate
                       ? "Private"
-                      : `+₱${Number(incentive.amount).toFixed(2)}`}
+                      : `+₱${selectedDateIncentiveTotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                   </span>
                 </div>
-              ))}
+              )}
 
               {/* Total Daily Earnings Summary Row */}
               <div className="pt-3 pb-1 flex items-center justify-between gap-3 mt-1">
