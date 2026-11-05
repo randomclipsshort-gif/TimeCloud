@@ -370,26 +370,24 @@ export default function AttendanceDashboard({
               )}
 
               {selectedDateIncentives.length > 0 && (
-                <div
-                  className="py-2.5 flex items-center justify-between gap-3"
-                >
-                  <span className="flex min-w-0 flex-col">
+                <div className="py-2.5">
+                  <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-semibold text-slate-800">
                       Incentives
                     </span>
-                    <span className="mt-0.5 flex flex-col text-xs text-slate-500">
-                      {selectedDateIncentives.map((incentive) => (
-                        <span key={incentive.id}>
-                          {`${incentive.name} (+₱${Number(incentive.amount).toFixed(2)})`}
-                        </span>
-                      ))}
+                    <span className="shrink-0 font-semibold text-emerald-700 tabular-nums">
+                      {salaryDataPrivate
+                        ? "Private"
+                        : `+₱${selectedDateIncentiveTotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                     </span>
-                  </span>
-                  <span className="shrink-0 font-semibold text-emerald-700 tabular-nums">
-                    {salaryDataPrivate
-                      ? "Private"
-                      : `+₱${selectedDateIncentiveTotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                  </span>
+                  </div>
+                  <div className="space-y-0.5 pl-3 text-xs text-slate-500">
+                    {selectedDateIncentives.map((incentive) => (
+                      <div key={incentive.id}>
+                        {`${incentive.name}: +₱${Number(incentive.amount).toFixed(2)}`}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
