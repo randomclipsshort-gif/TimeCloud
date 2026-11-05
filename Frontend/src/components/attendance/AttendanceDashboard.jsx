@@ -456,7 +456,6 @@ export default function AttendanceDashboard({
                           onChange={(event) =>
                             setNewIncentiveName(event.target.value)
                           }
-                          placeholder="e.g., CBC"
                           maxLength={80}
                           required
                           className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
