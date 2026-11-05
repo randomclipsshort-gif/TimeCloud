@@ -241,9 +241,9 @@ export default function PayslipModal({
           </div>
 
           {/* Breakdown Sections - Clean List Layout (No Nested Boxes) */}
-          <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="mb-6 flex flex-col gap-6">
             {/* Gross Earnings Breakdown */}
-            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
+            <section className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
               <div className="flex items-center gap-3 border-b border-teal-100 bg-teal-50/70 px-4 py-3">
                 <h4 className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wider text-teal-900">
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-teal-700 shadow-2xs">
@@ -308,7 +308,7 @@ export default function PayslipModal({
             </section>
 
             {/* Deductions & Contributions */}
-            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
+            <section className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
               <div className="flex items-center gap-3 border-b border-rose-100 bg-rose-50/70 px-4 py-3">
                 <h4 className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wider text-rose-900">
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-rose-600 shadow-2xs">
