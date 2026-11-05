@@ -12,6 +12,7 @@
 
 html {
   min-width: 320px;
+  scrollbar-gutter: stable;
 }
 
 body {
