@@ -2549,28 +2549,29 @@ export default function App() {
     showToast("Expense record added successfully.", "success");
   };
 
-  const addEmployeeIncentive = () => {
+  const addEmployeeIncentive = (quickIncentive) => {
     if (salaryVaultStatus !== "unlocked") {
       showToast("Unlock the salary vault before adding an employee incentive.", "warning");
-      return;
+      return false;
     }
-    const name = incentiveName.trim();
-    const amount = Number(incentiveAmount);
+    const name = (quickIncentive?.name ?? incentiveName).trim();
+    const amount = Number(quickIncentive?.amount ?? incentiveAmount);
+    const date = quickIncentive?.date ?? incentiveDate;
     if (!name) {
       showToast("Please provide an incentive description.", "warning");
-      return;
+      return false;
     }
     if (name.length > 80) {
       showToast("Incentive descriptions must be 80 characters or fewer.", "warning");
-      return;
+      return false;
     }
-    if (!getExpenseDate({ date: incentiveDate })) {
+    if (!getExpenseDate({ date })) {
       showToast("Please select a valid incentive date.", "warning");
-      return;
+      return false;
     }
     if (!Number.isFinite(amount) || amount <= 0) {
       showToast("Please enter a valid incentive amount greater than 0.", "warning");
-      return;
+      return false;
     }
     const incentive = {
       id:
@@ -2578,7 +2579,7 @@ export default function App() {
         `incentive-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       name,
       amount,
-      date: incentiveDate,
+      date,
     };
     setSalaryVaultExtraSettings((current) => ({
       ...current,
@@ -2589,15 +2590,18 @@ export default function App() {
           : []),
       ],
     }));
-    const [incentiveYear, incentiveMonth, incentiveDay] = incentiveDate
+    const [incentiveYear, incentiveMonth, incentiveDay] = date
       .split("-")
       .map(Number);
     setYear(incentiveYear);
     setMonthIndex(incentiveMonth - 1);
     setSelectedDay(incentiveDay);
-    setIncentiveName("");
-    setIncentiveAmount("");
+    if (!quickIncentive) {
+      setIncentiveName("");
+      setIncentiveAmount("");
+    }
     showToast("Employee incentive added.", "success");
+    return true;
   };
 
   const deleteEmployeeIncentive = (id) => {

@@ -126,6 +126,7 @@ export default function DashboardContent(props) {
             holidayPayEstimate={holidayPayEstimate}
             estimatedEarnings={estimatedEarnings}
             selectedDateIncentives={selectedDateIncentives}
+            onAddIncentive={onAddIncentive}
             dailyAllowance={dailyAllowance}
             holidayWorkedHours={holidayWorkedHours}
             nightDifferentialPay={nightDifferentialPay}

@@ -10,6 +10,7 @@ export default function AttendanceDashboard({
   holidayPayEstimate,
   estimatedEarnings,
   selectedDateIncentives = [],
+  onAddIncentive,
   dailyAllowance,
   nightDifferentialPay,
   overtimePay,
@@ -27,6 +28,9 @@ export default function AttendanceDashboard({
   const [isYearPickerOpen, setIsYearPickerOpen] = useState(false);
   const [isPayComponentsExpanded, setIsPayComponentsExpanded] = useState(false);
   const [isTimeAttendanceExpanded, setIsTimeAttendanceExpanded] = useState(false);
+  const [isIncentiveFormOpen, setIsIncentiveFormOpen] = useState(false);
+  const [newIncentiveName, setNewIncentiveName] = useState("");
+  const [newIncentiveAmount, setNewIncentiveAmount] = useState("");
   const salaryDataPrivate = salaryVaultStatus !== "unlocked";
   const selectedDateIncentiveTotal = selectedDateIncentives.reduce(
     (total, incentive) => total + Number(incentive.amount),
@@ -399,6 +403,99 @@ export default function AttendanceDashboard({
                     </ul>
                 </div>
               )}
+
+              <div className="py-2">
+                <button
+                  type="button"
+                  disabled={salaryDataPrivate}
+                  onClick={() =>
+                    setIsIncentiveFormOpen((isOpen) => !isOpen)
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-teal-700 transition hover:bg-teal-50 disabled:cursor-not-allowed disabled:text-slate-400"
+                  title={
+                    salaryDataPrivate
+                      ? "Unlock the salary vault to add incentives"
+                      : undefined
+                  }
+                  aria-expanded={isIncentiveFormOpen}
+                >
+                  <i
+                    className={`fa-solid ${isIncentiveFormOpen ? "fa-minus" : "fa-plus"} text-[10px]`}
+                    aria-hidden="true"
+                  ></i>
+                  {salaryDataPrivate
+                    ? "Unlock vault to add incentive"
+                    : "Add incentive"}
+                </button>
+                {isIncentiveFormOpen && (
+                  <form
+                    className="mt-2 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const added = onAddIncentive({
+                        name: newIncentiveName,
+                        amount: newIncentiveAmount,
+                        date: selectedDate,
+                      });
+                      if (added) {
+                        setNewIncentiveName("");
+                        setNewIncentiveAmount("");
+                        setIsIncentiveFormOpen(false);
+                      }
+                    }}
+                  >
+                    <p className="text-[10px] text-slate-500">
+                      This incentive will be recorded for {selectedDate}.
+                    </p>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <label className="text-[10px] font-semibold text-slate-600">
+                        Description
+                        <input
+                          type="text"
+                          value={newIncentiveName}
+                          onChange={(event) =>
+                            setNewIncentiveName(event.target.value)
+                          }
+                          placeholder="e.g., CBC"
+                          maxLength={80}
+                          required
+                          className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                        />
+                      </label>
+                      <label className="text-[10px] font-semibold text-slate-600">
+                        Amount (₱)
+                        <input
+                          type="number"
+                          value={newIncentiveAmount}
+                          onChange={(event) =>
+                            setNewIncentiveAmount(event.target.value)
+                          }
+                          placeholder="0.00"
+                          min="0.01"
+                          step="0.01"
+                          required
+                          className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                        />
+                      </label>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsIncentiveFormOpen(false)}
+                        className="rounded-lg px-3 py-1.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-200"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="rounded-lg bg-teal-600 px-3 py-1.5 text-[10px] font-semibold text-white hover:bg-teal-700"
+                      >
+                        Save incentive
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
 
               {/* Total Daily Earnings Summary Row */}
               <div className="pt-3 pb-1 flex items-center justify-between gap-3 mt-1">
