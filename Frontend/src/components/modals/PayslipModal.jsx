@@ -262,7 +262,7 @@ export default function PayslipModal({
                         {item.label}
                       </span>
                       {item.id === "incentives" && (
-                        <div className="mt-0.5 space-y-0.5 pl-3 text-xs italic text-slate-400">
+                        <div className="mt-0.5 space-y-0.5 pl-3 text-[10px] text-slate-400">
                           {item.incentiveItems.map((incentive) => (
                             <div key={incentive.id}>
                               {`${incentive.label}${incentive.count > 1 ? ` (×${incentive.count})` : ""}  ${formatCurrency(incentive.total)}`}
