@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getExpenseDate } from "../../utils/expenseTracker.js";
 import EmployeeIncentives from "./EmployeeIncentives.jsx";
+import TravelBudgetPlanner from "./TravelBudgetPlanner.jsx";
 import { formatPayrollPeriod } from "../../utils/payrollPeriods.js";
 
 export default function FinancialDashboard({
@@ -41,6 +42,14 @@ export default function FinancialDashboard({
   onViewCurrentPayslip,
   onViewHistoricalPayslip,
   onDeleteHistoricalPayslip,
+  travelPlans,
+  today,
+  onCreateTravelPlan,
+  onUpdateTravelPlan,
+  onCompleteTravelPlan,
+  onAddTravelExpense,
+  onUpdateTravelExpense,
+  onDeleteTravelExpense,
 }) {
   const [activeTab, setActiveTab] = useState("expenses");
   const [expenseFilterMode, setExpenseFilterMode] = useState("month");
@@ -203,9 +212,10 @@ export default function FinancialDashboard({
             </div>
           </div>
         </div>
-        <div className="mb-6 flex gap-2 border-b border-slate-100 pb-3" role="tablist" aria-label="Financial history sections">
+        <div className="mb-6 flex gap-2 overflow-x-auto border-b border-slate-100 pb-3" role="tablist" aria-label="Financial history sections">
           {[
             { id: "expenses", label: "Expenses", icon: "fa-receipt" },
+            { id: "travel", label: "Travel budgets", icon: "fa-suitcase-rolling" },
             { id: "incentives", label: "Incentives", icon: "fa-gift" },
             { id: "payslips", label: "Payslips", icon: "fa-file-invoice-dollar" },
           ].map((tab) => (
@@ -215,7 +225,7 @@ export default function FinancialDashboard({
               role="tab"
               aria-selected={activeTab === tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${
+              className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold ${
                 activeTab === tab.id
                   ? "bg-teal-50 text-teal-800"
                   : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
@@ -621,6 +631,21 @@ export default function FinancialDashboard({
             salaryVaultStatus={salaryVaultStatus}
             salaryVaultError={salaryVaultError}
             formatCurrency={formatCurrency}
+          />
+        ) : activeTab === "travel" ? (
+          <TravelBudgetPlanner
+            travelPlans={travelPlans}
+            today={today}
+            workspaceLoading={workspaceLoading}
+            workspaceError={workspaceError}
+            workspaceSaveError={workspaceSaveError}
+            requestConfirmation={requestConfirmation}
+            onCreatePlan={onCreateTravelPlan}
+            onUpdatePlan={onUpdateTravelPlan}
+            onCompletePlan={onCompleteTravelPlan}
+            onAddExpense={onAddTravelExpense}
+            onUpdateExpense={onUpdateTravelExpense}
+            onDeleteExpense={onDeleteTravelExpense}
           />
         ) : (
           <div className="space-y-5">

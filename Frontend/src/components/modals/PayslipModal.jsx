@@ -10,6 +10,9 @@ export default function PayslipModal({
   onPayrollPeriodModeChange,
   payrollPeriod,
   payrollPeriodSummary,
+  monthlyPayslipRange,
+  monthlyPayslipGross,
+  monthlyPayslipNet,
   payrollEarningsBreakdown,
   cutoffPayrollDeductions,
   payrollPeriodNetPay,
@@ -63,11 +66,40 @@ export default function PayslipModal({
   const earningsLabel = earningsAvailable
     ? formatCurrency(activeSummary.recordedEarnings)
     : "Private — unlock salary vault";
+  const monthlyNetLabel = payrollPeriodEarningsAvailable
+    ? formatCurrency(monthlyPayslipNet)
+    : "Private — unlock salary vault";
+  const monthlyGrossLabel = payrollPeriodEarningsAvailable
+    ? formatCurrency(monthlyPayslipGross)
+    : "Private — unlock salary vault";
+  const monthlyRangeStart = new Date(`${monthlyPayslipRange.startDate}T00:00:00Z`);
+  const monthlyRangeEnd = new Date(`${monthlyPayslipRange.endDate}T00:00:00Z`);
+  const startYear = monthlyRangeStart.getUTCFullYear();
+  const endYear = monthlyRangeEnd.getUTCFullYear();
+  const formatRangeDate = (date, includeYear) =>
+    new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      ...(includeYear ? { year: "numeric" } : {}),
+      timeZone: "UTC",
+    }).format(date);
+  const monthlyDateRangeLabel = `${formatRangeDate(
+    monthlyRangeStart,
+    startYear !== endYear,
+  )} - ${formatRangeDate(monthlyRangeEnd, true)}`;
+  const monthlyRangeDays =
+    Math.round(
+      (monthlyRangeEnd.getTime() - monthlyRangeStart.getTime()) /
+        (24 * 60 * 60 * 1000),
+    ) + 1;
   const netPayLabel = earningsAvailable
     ? formatCurrency(activeNetPay)
     : "Private — unlock salary vault";
   const recordedHours =
     activeSummary.regularHours + activeSummary.overtimeHours;
+  const recordedWorkdays = Number.isFinite(activeSummary.eligibleWorkdays)
+    ? `${activeSummary.eligibleWorkdays} worked day${activeSummary.eligibleWorkdays === 1 ? "" : "s"} · `
+    : "";
   const formatUnits = (units) =>
     Number.isInteger(units)
       ? String(units)
@@ -153,7 +185,6 @@ export default function PayslipModal({
                 {[
                   { value: "first", label: "1st cutoff" },
                   { value: "second", label: "2nd cutoff" },
-                  { value: "month", label: "Whole month" },
                 ].map((option) => (
                   <button
                     key={option.value}
@@ -191,7 +222,11 @@ export default function PayslipModal({
                     : "Not set",
                 "fa-coins",
               ],
-              ["Recorded hours", `${recordedHours.toFixed(2)} hrs`, "fa-clock"],
+              [
+                "Recorded hours",
+                `${recordedWorkdays}${recordedHours.toFixed(2)} hrs`,
+                "fa-clock",
+              ],
             ].map(([label, value, icon]) => (
               <div
                 key={label}
@@ -215,7 +250,11 @@ export default function PayslipModal({
           </div>
 
           {/* Earnings & Net Pay Hero Cards */}
-          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div
+            className={`mb-6 grid grid-cols-1 gap-3 ${
+              historicalPayslip ? "sm:grid-cols-2" : "sm:grid-cols-3"
+            }`}
+          >
             <div className="rounded-2xl bg-gradient-to-br from-teal-700 to-teal-600 p-5 text-white shadow-sm">
               <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-teal-100">
                 Gross earnings estimate
@@ -238,6 +277,19 @@ export default function PayslipModal({
                 Take-Home Pay
               </span>
             </div>
+            {!historicalPayslip && (
+              <div className="rounded-2xl border border-sky-100 bg-sky-50 p-5 shadow-sm">
+                <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-sky-800">
+                  Monthly take-home
+                </span>
+                <span className="mt-2 block break-words text-3xl font-extrabold tracking-tight text-sky-700">
+                  {monthlyNetLabel}
+                </span>
+                <span className="mt-1 block text-[10px] text-sky-700">
+                  Gross {monthlyGrossLabel} · {monthlyDateRangeLabel} ({monthlyRangeDays} days)
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Breakdown Sections - Clean List Layout (No Nested Boxes) */}

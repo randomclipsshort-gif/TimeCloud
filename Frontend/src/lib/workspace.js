@@ -5,6 +5,7 @@ import {
   serializeWorkspaceForCloud,
 } from "./privateFinancialData.js";
 import { normalizeExpenseRecords } from "../utils/expenseTracker.js";
+import { normalizeTravelPlans } from "../utils/travelPlanner.js";
 
 export const emptyWorkspace = {
   attendance: {},
@@ -13,6 +14,7 @@ export const emptyWorkspace = {
   selectedLocality: "",
   holidayEligibilityConfirmed: false,
   expenses: [],
+  travelPlans: [],
   shiftTemplates: null,
   leaveBalances: { VL: 0, SL: 0, EL: 0 },
   settingsBalances: { VL: "0", SL: "0", EL: "0" },
@@ -30,6 +32,7 @@ export function normalizeWorkspace(data) {
     attendance: isObject(source.attendance) ? source.attendance : {},
     activeTimeEntry: isObject(source.activeTimeEntry) ? source.activeTimeEntry : null,
     expenses: normalizeExpenseRecords(source.expenses),
+    travelPlans: normalizeTravelPlans(source.travelPlans),
     shiftTemplates: Array.isArray(source.shiftTemplates) ? source.shiftTemplates : null,
     holidays: Array.isArray(source.holidays) ? source.holidays : null,
     leaveBalances: isObject(source.leaveBalances)

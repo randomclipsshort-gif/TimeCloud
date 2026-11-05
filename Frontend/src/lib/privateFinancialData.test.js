@@ -61,6 +61,38 @@ test("cloud workspace serialization excludes salary and earnings fields", () => 
   }]);
 });
 
+test("travel plans and their separate expense history remain in cloud workspace data", () => {
+  const travelPlans = [{
+    id: "trip-1",
+    name: "Japan Trip",
+    destination: "Japan",
+    startDate: "2026-11-01",
+    endDate: "2026-11-05",
+    budget: 25000,
+    currency: "PHP",
+    completedAt: null,
+    expenses: [{
+      id: "trip-expense-1",
+      name: "Flight",
+      category: "Flights",
+      date: "2026-11-01",
+      amount: 8000,
+      paidBy: "John",
+      forPeople: ["John", "Mary", "Alex"],
+      method: "Credit card",
+    }],
+  }];
+  const workspace = serializeWorkspaceForCloud({
+    expenses: [{ id: "regular-1", name: "Groceries", amount: 500 }],
+    travelPlans,
+  });
+
+  assert.deepEqual(workspace.travelPlans, travelPlans);
+  assert.deepEqual(workspace.expenses, [
+    { id: "regular-1", name: "Groceries", amount: 500 },
+  ]);
+});
+
 test("payroll deduction settings stay private for encrypted vault sync", () => {
   const payrollSettings = {
     payrollDeductionMode: "manual",

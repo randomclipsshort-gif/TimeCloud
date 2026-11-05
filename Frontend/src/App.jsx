@@ -48,6 +48,14 @@ import {
   getExpensesForPeriod,
 } from "./utils/expenseTracker.js";
 import {
+  appendTravelExpense,
+  getTravelPlanStatus,
+  removeTravelExpense,
+  replaceTravelExpense,
+  validateTravelExpense,
+  validateTravelPlan,
+} from "./utils/travelPlanner.js";
+import {
   getCalendarPayrollPeriod,
   formatPayrollPeriod,
   getPayrollPeriodForDate,
@@ -828,6 +836,7 @@ export default function App() {
   );
   const [salaryVaultExtraSettings, setSalaryVaultExtraSettings] = useState({});
   const [expenses, setExpenses] = useState([]);
+  const [travelPlans, setTravelPlans] = useState([]);
   const [expenseName, setExpenseName] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
   const [expenseDate, setExpenseDate] = useState(
@@ -1152,9 +1161,6 @@ export default function App() {
     payrollPeriodSummary.recordedEarnings - cutoffPayrollDeductions.total;
   const payslipMonth = payrollPeriod.endDate.slice(0, 7);
   const selectedPayslipPeriod = useMemo(() => {
-    if (payslipPeriodMode === "month") {
-      return getCalendarPayrollPeriod(payslipMonth);
-    }
     return getPayrollPeriodForMonth(
       payslipMonth,
       payslipPeriodMode === "first" ? 10 : 25,
@@ -1169,6 +1175,50 @@ export default function App() {
     ),
     [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, selectedPayslipPeriod],
   );
+  const monthlyPayslipPeriods = useMemo(
+    () => [10, 25].map((cutoffDay) =>
+      getPayrollPeriodForMonth(payslipMonth, cutoffDay),
+    ),
+    [payslipMonth],
+  );
+  const monthlyPayslipRange = {
+    startDate: monthlyPayslipPeriods[0].startDate,
+    endDate: monthlyPayslipPeriods[monthlyPayslipPeriods.length - 1].endDate,
+  };
+  const monthlyPayslipGross = useMemo(
+    () => monthlyPayslipPeriods.reduce(
+      (total, period) =>
+        total +
+        summarizePayrollPeriod(
+          attendance,
+          period,
+          getPayrollRecordEarnings,
+          availableEmployeeIncentives,
+        ).recordedEarnings,
+      0,
+    ),
+    [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, monthlyPayslipPeriods],
+  );
+  const monthlyPayslipDeductions = useMemo(
+    () => sumCutoffPayrollDeductions(
+      ...monthlyPayslipPeriods.map((period) =>
+        calculateCutoffPayrollDeductions({
+          period,
+          mode: payrollDeductionSettings.payrollDeductionMode,
+          monthlyGrossPay: monthlyPayslipGross,
+          manualPerPaycheck: {
+            sss: payrollDeductionSettings.manualSssPerPaycheck,
+            philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
+            pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
+          },
+          settings: payrollDeductionSettings,
+        }),
+      ),
+    ),
+    [monthlyPayslipGross, monthlyPayslipPeriods, payrollDeductionSettings],
+  );
+  const monthlyPayslipNet =
+    monthlyPayslipGross - monthlyPayslipDeductions.total;
   const selectedPayslipBreakdown = useMemo(
     () => summarizePayrollEarningsBreakdown(
       attendance,
@@ -1178,41 +1228,21 @@ export default function App() {
     ),
     [attendance, availableEmployeeIncentives, getPayrollRecordBreakdown, selectedPayslipPeriod],
   );
-  const calendarMonthGross = useMemo(
-    () => summarizePayrollPeriod(
-      attendance,
-      getCalendarPayrollPeriod(payslipMonth),
-      getPayrollRecordEarnings,
-      availableEmployeeIncentives,
-    ).recordedEarnings,
-    [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, payslipMonth],
-  );
   const selectedPayslipDeductions = useMemo(() => {
-    const calculateDeductions = (period, monthlyGrossPay) =>
-      calculateCutoffPayrollDeductions({
-        period,
-        mode: payrollDeductionSettings.payrollDeductionMode,
-        monthlyGrossPay,
-        manualPerPaycheck: {
-          sss: payrollDeductionSettings.manualSssPerPaycheck,
-          philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
-          pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
-        },
-        settings: payrollDeductionSettings,
-      });
-    if (payslipPeriodMode === "month") {
-      return sumCutoffPayrollDeductions(
-        calculateDeductions(getPayrollPeriodForMonth(payslipMonth, 10), calendarMonthGross),
-        calculateDeductions(getPayrollPeriodForMonth(payslipMonth, 25), calendarMonthGross),
-      );
-    }
-    return calculateDeductions(selectedPayslipPeriod, payrollPeriodMonthGross);
+    return calculateCutoffPayrollDeductions({
+      period: selectedPayslipPeriod,
+      mode: payrollDeductionSettings.payrollDeductionMode,
+      monthlyGrossPay: payrollPeriodMonthGross,
+      manualPerPaycheck: {
+        sss: payrollDeductionSettings.manualSssPerPaycheck,
+        philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
+        pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
+      },
+      settings: payrollDeductionSettings,
+    });
   }, [
-    calendarMonthGross,
     payrollDeductionSettings,
     payrollPeriodMonthGross,
-    payslipMonth,
-    payslipPeriodMode,
     selectedPayslipPeriod,
   ]);
   const selectedPayslipNetPay =
@@ -1526,6 +1556,7 @@ export default function App() {
       selectedLocality,
       holidayEligibilityConfirmed,
       expenses,
+      travelPlans,
       shiftTemplates,
       leaveBalances,
       settingsBalances,
@@ -1537,6 +1568,7 @@ export default function App() {
       selectedLocality,
       holidayEligibilityConfirmed,
       expenses,
+      travelPlans,
       shiftTemplates,
       leaveBalances,
       settingsBalances,
@@ -2193,6 +2225,7 @@ export default function App() {
       setDailyAllowance(localPrivateFinancialDefaults.dailyAllowance);
       setOvertimeMultiplier(localPrivateFinancialDefaults.overtimeMultiplier);
       setExpenses([]);
+      setTravelPlans([]);
       setShiftTemplates(defaultShiftTemplates);
       setSelectedShiftTemplate("rest-day");
       setLeaveBalances(emptyWorkspace.leaveBalances);
@@ -2207,6 +2240,7 @@ export default function App() {
     let active = true;
     userRef.current = user.id;
     workspaceLoadedRef.current = false;
+    setTravelPlans([]);
     setWorkspaceLoadedForUser(null);
     setWorkspaceLoading(true);
     setWorkspaceError("");
@@ -2303,6 +2337,7 @@ export default function App() {
               : localPrivateData.settings.overtimeMultiplier,
           );
           setExpenses(workspace.expenses);
+          setTravelPlans(workspace.travelPlans);
           setShiftTemplates(workspace.shiftTemplates || defaultShiftTemplates);
           setLeaveBalances(workspace.leaveBalances);
           setSettingsBalances(workspace.settingsBalances);
@@ -2643,6 +2678,195 @@ export default function App() {
   const deleteExpense = (id) => {
     setExpenses((current) => current.filter((item) => item.id !== id));
     showToast("Expense item removed.", "success");
+  };
+
+  const createTravelPlan = (draft) => {
+    if (!userRef.current || !workspaceLoadedRef.current) {
+      showToast("Wait for your travel data to load before making changes.", "warning");
+      return false;
+    }
+    const error = validateTravelPlan(draft);
+    if (error) {
+      showToast(error, "warning");
+      return false;
+    }
+    const id =
+      globalThis.crypto?.randomUUID?.() ||
+      `travel-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setTravelPlans((current) => [
+      {
+        id,
+        name: draft.name.trim(),
+        destination: draft.destination.trim(),
+        startDate: draft.startDate,
+        endDate: draft.endDate,
+        budget: Number(draft.budget),
+        currency: draft.currency,
+        notes: draft.notes.trim(),
+        completedAt: null,
+        expenses: [],
+      },
+      ...current,
+    ]);
+    showToast("Travel plan created.", "success");
+    return id;
+  };
+
+  const updateTravelPlan = (id, draft) => {
+    if (!userRef.current || !workspaceLoadedRef.current) {
+      showToast("Wait for your travel data to load before making changes.", "warning");
+      return false;
+    }
+    const error = validateTravelPlan(draft);
+    if (error) {
+      showToast(error, "warning");
+      return false;
+    }
+    const existing = travelPlans.find((plan) => plan.id === id);
+    if (!existing) {
+      showToast("The travel plan could not be found.", "error");
+      return false;
+    }
+    if (getTravelPlanStatus(existing, manilaNow.date) === "Completed") {
+      showToast("Completed trips are read-only to preserve their final history.", "warning");
+      return false;
+    }
+    if (existing.expenses.length > 0 && existing.currency !== draft.currency) {
+      showToast("Currency cannot be changed after trip expenses have been recorded.", "warning");
+      return false;
+    }
+    setTravelPlans((current) => current.map((plan) =>
+      plan.id === id
+        ? {
+            ...plan,
+            name: draft.name.trim(),
+            destination: draft.destination.trim(),
+            startDate: draft.startDate,
+            endDate: draft.endDate,
+            budget: Number(draft.budget),
+            currency: draft.currency,
+            notes: draft.notes.trim(),
+          }
+        : plan,
+    ));
+    showToast("Travel plan updated.", "success");
+    return true;
+  };
+
+  const completeTravelPlan = (id) => {
+    if (!userRef.current || !workspaceLoadedRef.current) {
+      showToast("Wait for your travel data to load before making changes.", "warning");
+      return false;
+    }
+    const existing = travelPlans.find((plan) => plan.id === id);
+    if (!existing) {
+      showToast("The travel plan could not be found.", "error");
+      return false;
+    }
+    if (getTravelPlanStatus(existing, manilaNow.date) === "Completed") return false;
+    setTravelPlans((current) => current.map((plan) =>
+      plan.id === id ? { ...plan, completedAt: new Date().toISOString() } : plan,
+    ));
+    showToast("Trip completed and saved to travel history.", "success");
+    return true;
+  };
+
+  const addTravelExpense = (tripId, draft) => {
+    if (!userRef.current || !workspaceLoadedRef.current) {
+      showToast("Wait for your travel data to load before making changes.", "warning");
+      return false;
+    }
+    const error = validateTravelExpense(draft);
+    if (error) {
+      showToast(error, "warning");
+      return false;
+    }
+    const trip = travelPlans.find((plan) => plan.id === tripId);
+    if (!trip) {
+      showToast("The travel plan could not be found.", "error");
+      return false;
+    }
+    if (getTravelPlanStatus(trip, manilaNow.date) === "Completed") {
+      showToast("Completed trips are read-only to preserve their final history.", "warning");
+      return false;
+    }
+    const expense = {
+      id:
+        globalThis.crypto?.randomUUID?.() ||
+        `travel-expense-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name: draft.name.trim(),
+      category: draft.category.trim(),
+      date: draft.date,
+      amount: Number(draft.amount),
+      paidBy: draft.paidBy.trim(),
+      forPeople: draft.forPeople,
+      splitEqually: draft.splitEqually === true,
+      method: draft.method,
+      notes: draft.notes.trim(),
+    };
+    setTravelPlans((current) => appendTravelExpense(current, tripId, expense));
+    showToast("Travel expense added.", "success");
+    return true;
+  };
+
+  const updateTravelExpense = (tripId, expenseId, draft) => {
+    if (!userRef.current || !workspaceLoadedRef.current) {
+      showToast("Wait for your travel data to load before making changes.", "warning");
+      return false;
+    }
+    const error = validateTravelExpense(draft);
+    if (error) {
+      showToast(error, "warning");
+      return false;
+    }
+    const trip = travelPlans.find((plan) => plan.id === tripId);
+    if (!trip) {
+      showToast("The travel plan could not be found.", "error");
+      return false;
+    }
+    if (getTravelPlanStatus(trip, manilaNow.date) === "Completed") {
+      showToast("Completed trips are read-only to preserve their final history.", "warning");
+      return false;
+    }
+    if (!trip.expenses.some((expense) => expense.id === expenseId)) {
+      showToast("The travel expense could not be found.", "error");
+      return false;
+    }
+    const updatedExpense = {
+      name: draft.name.trim(),
+      category: draft.category.trim(),
+      date: draft.date,
+      amount: Number(draft.amount),
+      paidBy: draft.paidBy.trim(),
+      forPeople: draft.forPeople,
+      splitEqually: draft.splitEqually === true,
+      method: draft.method,
+      notes: draft.notes.trim(),
+    };
+    setTravelPlans((current) =>
+      replaceTravelExpense(current, tripId, expenseId, updatedExpense),
+    );
+    showToast("Travel expense updated.", "success");
+    return true;
+  };
+
+  const deleteTravelExpense = (tripId, expenseId) => {
+    if (!userRef.current || !workspaceLoadedRef.current) {
+      showToast("Wait for your travel data to load before making changes.", "warning");
+      return false;
+    }
+    const trip = travelPlans.find((plan) => plan.id === tripId);
+    if (!trip || getTravelPlanStatus(trip, manilaNow.date) === "Completed") {
+      showToast("The travel expense cannot be changed for this trip.", "warning");
+      return false;
+    }
+    if (!trip.expenses.some((expense) => expense.id === expenseId)) {
+      showToast("The travel expense could not be found.", "error");
+      return false;
+    }
+    setTravelPlans((current) => removeTravelExpense(current, tripId, expenseId));
+    showToast("Travel expense removed.", "success");
+    return true;
   };
 
   const savePayslipToHistory = async () => {
@@ -4035,6 +4259,14 @@ export default function App() {
               }}
               onViewHistoricalPayslip={viewHistoricalPayslip}
               onDeleteHistoricalPayslip={deleteHistoricalPayslip}
+              travelPlans={travelPlans}
+              today={manilaNow.date}
+              onCreateTravelPlan={createTravelPlan}
+              onUpdateTravelPlan={updateTravelPlan}
+              onCompleteTravelPlan={completeTravelPlan}
+              onAddTravelExpense={addTravelExpense}
+              onUpdateTravelExpense={updateTravelExpense}
+              onDeleteTravelExpense={deleteTravelExpense}
             />
             <ManualEntryModal
               key={`manual-${selectedDate}`}
@@ -4078,6 +4310,9 @@ export default function App() {
               onPayrollPeriodModeChange={setPayslipPeriodMode}
               payrollPeriod={selectedPayslipPeriod}
               payrollPeriodSummary={selectedPayslipSummary}
+              monthlyPayslipRange={monthlyPayslipRange}
+              monthlyPayslipGross={monthlyPayslipGross}
+              monthlyPayslipNet={monthlyPayslipNet}
               payrollEarningsBreakdown={selectedPayslipBreakdown}
               cutoffPayrollDeductions={selectedPayslipDeductions}
               payrollPeriodNetPay={selectedPayslipNetPay}

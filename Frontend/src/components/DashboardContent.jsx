@@ -64,6 +64,14 @@ export default function DashboardContent(props) {
     onViewCurrentPayslip,
     onViewHistoricalPayslip,
     onDeleteHistoricalPayslip,
+    travelPlans,
+    today,
+    onCreateTravelPlan,
+    onUpdateTravelPlan,
+    onCompleteTravelPlan,
+    onAddTravelExpense,
+    onUpdateTravelExpense,
+    onDeleteTravelExpense,
   } = props;
   return (
     <main className="flex-1 max-w-[1600px] w-full mx-auto p-6 flex flex-col gap-6">
@@ -183,6 +191,14 @@ export default function DashboardContent(props) {
             onViewCurrentPayslip={onViewCurrentPayslip}
             onViewHistoricalPayslip={onViewHistoricalPayslip}
             onDeleteHistoricalPayslip={onDeleteHistoricalPayslip}
+            travelPlans={travelPlans}
+            today={today}
+            onCreateTravelPlan={onCreateTravelPlan}
+            onUpdateTravelPlan={onUpdateTravelPlan}
+            onCompleteTravelPlan={onCompleteTravelPlan}
+            onAddTravelExpense={onAddTravelExpense}
+            onUpdateTravelExpense={onUpdateTravelExpense}
+            onDeleteTravelExpense={onDeleteTravelExpense}
           />
         </div>
       </div>
