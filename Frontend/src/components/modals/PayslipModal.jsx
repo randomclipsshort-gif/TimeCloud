@@ -256,13 +256,7 @@ export default function PayslipModal({
                     }`}
                   >
                     <div className="min-w-0 flex-1">
-                      <span
-                        className={`block ${
-                          item.id === "incentives"
-                            ? "text-sm font-semibold text-slate-800"
-                            : "font-medium text-slate-700"
-                        }`}
-                      >
+                      <span className="block font-medium text-slate-700">
                         {item.label}
                       </span>
                       {item.id === "incentives" && (
