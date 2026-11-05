@@ -36,7 +36,6 @@ export default function FinancialDashboard({
   payslipHistorySaving,
   salaryVaultStatus,
   salaryVaultError,
-  salaryVaultSyncing,
   currentPayrollPeriod,
   onViewCurrentPayslip,
   onViewHistoricalPayslip,
@@ -591,7 +590,6 @@ export default function FinancialDashboard({
             onDeleteIncentive={onDeleteIncentive}
             salaryVaultStatus={salaryVaultStatus}
             salaryVaultError={salaryVaultError}
-            salaryVaultSyncing={salaryVaultSyncing}
             formatCurrency={formatCurrency}
           />
         ) : (

@@ -6,7 +6,6 @@ export default function EmployeeIncentives({
   onDeleteIncentive,
   salaryVaultStatus,
   salaryVaultError,
-  salaryVaultSyncing,
   formatCurrency,
 }) {
   const [deletingIncentiveId, setDeletingIncentiveId] = useState(null);
@@ -65,11 +64,6 @@ export default function EmployeeIncentives({
       {salaryVaultError && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">
           {salaryVaultError}
-        </p>
-      )}
-      {salaryVaultSyncing && (
-        <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500" role="status">
-          Saving encrypted incentive data…
         </p>
       )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -152,7 +146,14 @@ export default function EmployeeIncentives({
                             title="Delete incentive"
                             aria-label={`Delete ${incentive.name}`}
                           >
-                            <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+                            <i
+                              className={`fa-solid ${
+                                deletingIncentiveId === incentive.id
+                                  ? "fa-spinner fa-spin"
+                                  : "fa-trash-can"
+                              }`}
+                              aria-hidden="true"
+                            ></i>
                           </button>
                         </div>
                       </div>

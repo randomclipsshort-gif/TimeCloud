@@ -3990,7 +3990,6 @@ export default function App() {
               employeeIncentives={availableEmployeeIncentives}
               onDeleteIncentive={deleteEmployeeIncentive}
               salaryVaultError={salaryVaultError}
-              salaryVaultSyncing={salaryVaultSyncing}
               workspaceLoading={workspaceLoading}
               workspaceError={workspaceError}
               workspaceSaveError={workspaceSaveError}

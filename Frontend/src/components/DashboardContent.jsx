@@ -54,7 +54,6 @@ export default function DashboardContent(props) {
     onAddIncentive,
     onDeleteIncentive,
     salaryVaultError,
-    salaryVaultSyncing,
     workspaceLoading,
     workspaceError,
     workspaceSaveError,
@@ -178,7 +177,6 @@ export default function DashboardContent(props) {
             payslipHistorySaving={payslipHistorySaving}
             salaryVaultStatus={salaryVaultStatus}
             salaryVaultError={salaryVaultError}
-            salaryVaultSyncing={salaryVaultSyncing}
             currentPayrollPeriod={currentPayrollPeriod}
             onViewCurrentPayslip={onViewCurrentPayslip}
             onViewHistoricalPayslip={onViewHistoricalPayslip}
