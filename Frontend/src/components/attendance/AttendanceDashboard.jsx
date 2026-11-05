@@ -13,7 +13,6 @@ export default function AttendanceDashboard({
   holidayPayEstimate,
   estimatedEarnings,
   dailyAllowance,
-  holidayWorkedHours,
   nightDifferentialPay,
   overtimePay,
   overtimeCalculation,
@@ -216,41 +215,8 @@ export default function AttendanceDashboard({
             )}
           </div>
 
-          {/* New Redesigned Earnings & Pay Components Card Layout */}
+          {/* Earnings and pay components */}
           <div className="mb-4 rounded-2xl border border-teal-100 bg-white p-4 shadow-xs">
-            {/* Estimated Daily Earnings Hero Banner */}
-            <div className="rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50/80 to-emerald-50/80 p-4 mb-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-teal-800">
-                    Estimated Daily Earnings
-                  </span>
-                  <span
-                    id="estEarnings"
-                    className="mt-1 block text-2xl font-extrabold leading-tight tracking-tight text-teal-800"
-                  >
-                    {salaryDataPrivate
-                      ? "Private — unlock salary vault"
-                      : estimatedEarnings != null
-                      ? `₱${estimatedEarnings.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : "Estimate unavailable"}
-                  </span>
-                </div>
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-teal-700 shadow-xs border border-teal-100">
-                  <i
-                    className="fa-solid fa-arrow-trend-up text-sm"
-                    aria-hidden="true"
-                  ></i>
-                </span>
-              </div>
-              {record.holidayClassification && (
-                <div className="mt-2 text-[10px] font-medium text-teal-700 flex items-center gap-1">
-                  <i className="fa-regular fa-circle-check text-xs"></i>
-                  {`${record.holidayClassification} · ${holidayWorkedHours ?? 0} ${holidayWorkedHours === 1 ? "hour" : "hours"} worked`}
-                </div>
-              )}
-            </div>
-
             {/* Reference Rate Line */}
             <div className="mb-4 flex items-center justify-between text-[10px]">
               <span className="text-slate-500 flex items-center gap-1.5">
