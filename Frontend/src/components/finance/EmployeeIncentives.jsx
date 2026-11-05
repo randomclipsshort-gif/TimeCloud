@@ -12,6 +12,19 @@ export default function EmployeeIncentives({
   const sortedIncentives = [...incentives].sort((left, right) =>
     right.date.localeCompare(left.date),
   );
+  const incentivesByDate = Array.from(
+    sortedIncentives.reduce((groups, incentive) => {
+      const group = groups.get(incentive.date) || [];
+      group.push(incentive);
+      groups.set(incentive.date, group);
+      return groups;
+    }, new Map()),
+    ([date, dateIncentives]) => ({
+      date,
+      incentives: dateIncentives,
+      total: getIncentiveTotal(dateIncentives),
+    }),
+  );
 
   if (!isVaultUnlocked) {
     return (
@@ -69,48 +82,63 @@ export default function EmployeeIncentives({
             </span>
           </div>
           <div className="max-h-[360px] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table className="w-full text-left text-xs">
-              <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-slate-600">
-                <tr>
-                  <th className="p-3 font-semibold">Description</th>
-                  <th className="p-3 font-semibold">Date</th>
-                  <th className="p-3 text-right font-semibold">Amount</th>
-                  <th className="p-3 text-center font-semibold">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {sortedIncentives.length === 0 ? (
-                  <tr>
-                    <td colSpan="4" className="p-6 text-center italic text-slate-400">
-                      No incentives have been recorded yet.
-                    </td>
-                  </tr>
-                ) : sortedIncentives.map((incentive) => (
-                  <tr key={incentive.id} className="hover:bg-slate-50">
-                    <td className="p-3 font-medium text-slate-800">{incentive.name}</td>
-                    <td className="p-3 text-slate-500">{incentive.date}</td>
-                    <td className="p-3 text-right font-semibold text-emerald-700">
-                      {formatCurrency(incentive.amount)}
-                    </td>
-                    <td className="p-3 text-center">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm(`Delete "${incentive.name}" dated ${incentive.date}? This also updates estimated payroll earnings.`)) {
-                            onDeleteIncentive(incentive.id);
-                          }
-                        }}
-                        className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                        title="Delete incentive"
-                        aria-label={`Delete ${incentive.name}`}
+          {incentivesByDate.length === 0 ? (
+            <p className="p-6 text-center text-xs italic text-slate-400">
+              No incentives have been recorded yet.
+            </p>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {incentivesByDate.map((group) => (
+                <details key={group.date} className="group">
+                  <summary className="flex cursor-pointer list-none items-center gap-3 p-3 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+                    <i
+                      className="fa-solid fa-chevron-right text-[10px] text-slate-400 transition-transform group-open:rotate-90"
+                      aria-hidden="true"
+                    ></i>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-semibold text-slate-800">
+                        {group.date}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        {`${group.incentives.length} incentive${group.incentives.length === 1 ? "" : "s"}`}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold tabular-nums text-emerald-700">
+                      {formatCurrency(group.total)}
+                    </span>
+                  </summary>
+                  <div className="divide-y divide-slate-100 border-t border-slate-100 bg-slate-50/50 pl-7">
+                    {group.incentives.map((incentive) => (
+                      <div
+                        key={incentive.id}
+                        className="flex items-center gap-3 px-3 py-2"
                       >
-                        <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        <span className="min-w-0 flex-1 text-xs font-medium text-slate-700">
+                          {incentive.name}
+                        </span>
+                        <span className="shrink-0 text-xs tabular-nums text-slate-600">
+                          {formatCurrency(incentive.amount)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Delete "${incentive.name}" dated ${incentive.date}? This also updates estimated payroll earnings.`)) {
+                              onDeleteIncentive(incentive.id);
+                            }
+                          }}
+                          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                          title="Delete incentive"
+                          aria-label={`Delete ${incentive.name}`}
+                        >
+                          <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
