@@ -285,15 +285,13 @@ export default function PayslipModal({
                       className={`shrink-0 font-semibold tabular-nums ${
                         item.informational
                           ? "text-slate-400"
-                          : item.id === "incentives"
-                            ? "text-teal-600"
-                            : "text-slate-900"
+                          : "text-slate-900"
                       }`}
                     >
                       {item.informational
                         ? "Not deducted"
                         : earningsAvailable
-                          ? `${item.id === "incentives" ? "+" : ""}${formatCurrency(item.total)}`
+                          ? formatCurrency(item.total)
                           : "Private"}
                     </span>
                   </div>
