@@ -4,11 +4,7 @@ export default function AttendanceDashboard({
   record,
   selectedDate,
   canClearShift,
-  isTimedIn,
   canRecordAttendance,
-  canTimeIn,
-  canTimeOut,
-  earlyPunchWindowMinutes,
   salaryVaultStatus,
   holidayPayEstimate,
   estimatedEarnings,
@@ -17,7 +13,6 @@ export default function AttendanceDashboard({
   overtimePay,
   overtimeCalculation,
   configuredDailyWage,
-  onTimeClockClick,
   monthTabs,
   monthCarouselOffset,
   onMonthCarouselTransitionEnd,
@@ -152,7 +147,6 @@ export default function AttendanceDashboard({
   ]
     .filter(Boolean)
     .join(" · ");
-  const timeClockDisabled = isTimedIn ? !canTimeOut : !canTimeIn;
   const entryButtonDisabled = !canRecordAttendance;
 
   return (
@@ -493,25 +487,7 @@ export default function AttendanceDashboard({
         </div>
 
         <div className="space-y-3 pt-6 border-t border-slate-100 mt-6">
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={onTimeClockClick}
-              disabled={timeClockDisabled}
-              title={
-                timeClockDisabled
-                  ? isTimedIn
-                    ? "Time Out is available until the assigned shift ends"
-                    : `Time In is available on the scheduled date, from ${earlyPunchWindowMinutes} minutes before the shift until shift end`
-                  : undefined
-              }
-              className={`${isTimedIn ? "bg-amber-600 hover:bg-amber-700" : "bg-teal-600 hover:bg-teal-700"} text-white font-medium py-2.5 px-3 rounded-xl text-xs transition shadow-sm flex items-center justify-center space-x-1.5 cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none disabled:hover:bg-slate-300`}
-            >
-              <i
-                className={`fa-solid ${isTimedIn ? "fa-right-from-bracket" : "fa-right-to-bracket"}`}
-              ></i>
-              <span>{isTimedIn ? "Time Out" : "Time In"}</span>
-            </button>
+          <div className="grid grid-cols-1 gap-2">
             <button
               type="button"
               data-action="openManualEntryModal()"

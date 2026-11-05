@@ -12,11 +12,7 @@ export default function DashboardContent(props) {
     calendarCells,
     selectedDate,
     canClearShift,
-    isTimedIn,
     canRecordAttendance,
-    canTimeIn,
-    canTimeOut,
-    earlyPunchWindowMinutes,
     salaryVaultStatus,
     holidayPayEstimate,
     estimatedEarnings,
@@ -27,7 +23,6 @@ export default function DashboardContent(props) {
     overtimeCalculation,
     configuredDailyWage,
     onOpenHolidayPaySettings,
-    onTimeClockClick,
     monthLabel,
     monthValue,
     year,
@@ -114,11 +109,7 @@ export default function DashboardContent(props) {
             record={record}
             selectedDate={selectedDate}
             canClearShift={canClearShift}
-            isTimedIn={isTimedIn}
             canRecordAttendance={canRecordAttendance}
-            canTimeIn={canTimeIn}
-            canTimeOut={canTimeOut}
-            earlyPunchWindowMinutes={earlyPunchWindowMinutes}
             salaryVaultStatus={salaryVaultStatus}
             holidayPayEstimate={holidayPayEstimate}
             estimatedEarnings={estimatedEarnings}
@@ -129,7 +120,6 @@ export default function DashboardContent(props) {
             overtimeCalculation={overtimeCalculation}
             configuredDailyWage={configuredDailyWage}
             onOpenHolidayPaySettings={onOpenHolidayPaySettings}
-            onTimeClockClick={onTimeClockClick}
             monthTabs={monthTabs}
             monthCarouselOffset={monthCarouselOffset}
             onMonthCarouselTransitionEnd={onMonthCarouselTransitionEnd}
