@@ -260,21 +260,23 @@ export default function AttendanceDashboard({
                     Base Daily Wage (8 hrs)
                   </span>
                   <span className="text-[10px] italic text-slate-500 mt-0.5">
-                    Reference rate · Not added separately
+                    {record.holidayClassification
+                      ? "Reference rate · Factored into rate below"
+                      : "Reference rate · Not added separately"}
                   </span>
                 </span>
                 <span
                   id="baseWage"
-                  className="font-semibold text-slate-500 shrink-0 tabular-nums"
+                  className="shrink-0 text-right font-semibold text-slate-500 tabular-nums"
                 >
-                  {salaryDataPrivate
+                  {record.holidayClassification
+                    ? "Included in Total"
+                    : salaryDataPrivate
                     ? "Private"
-                    : record.holidayClassification || record.type === "Unassigned"
+                    : record.type === "Unassigned"
                     ? Number(configuredDailyWage) > 0
                       ? `₱${Number(configuredDailyWage).toFixed(2)}`
-                      : record.holidayClassification
-                        ? "Required"
-                        : record.base
+                      : record.base
                     : record.base}
                 </span>
               </div>
