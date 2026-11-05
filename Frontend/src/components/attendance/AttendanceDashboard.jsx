@@ -231,16 +231,25 @@ export default function AttendanceDashboard({
                   aria-hidden="true"
                 ></i>
               </button>
-              <button
-                type="button"
-                className="flex items-center gap-1 text-[10px] font-normal normal-case text-teal-700 hover:underline"
-              >
-                <i
-                  className="fa-regular fa-circle-question text-[10px]"
-                  aria-hidden="true"
-                ></i>
-                Calculation Info
-              </button>
+              {isPayComponentsExpanded ? (
+                <span className="shrink-0 text-right text-xs font-extrabold tabular-nums text-teal-800">
+                  {salaryDataPrivate
+                    ? "Private — unlock salary vault"
+                    : estimatedEarnings != null
+                      ? `₱${estimatedEarnings.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : record.holidayClassification
+                        ? "Estimate unavailable"
+                        : record.est}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[10px] font-normal normal-case text-teal-700">
+                  <i
+                    className="fa-regular fa-circle-question text-[10px]"
+                    aria-hidden="true"
+                  ></i>
+                  Calculation Info
+                </span>
+              )}
             </div>
 
             <div
