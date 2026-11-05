@@ -27,6 +27,30 @@ export default function PayslipModal({
   const activeDailyWage = historicalPayslip?.settings?.dailyWage ?? dailyWage;
   const earningsAvailable = Boolean(historicalPayslip) || payrollPeriodEarningsAvailable;
   const activeNetPay = historicalPayslip?.netPay ?? payrollPeriodNetPay;
+  const incentiveItems = activeBreakdown.items.filter((item) =>
+    item.id.startsWith("incentive-"),
+  );
+  const groupedBreakdownItems = activeBreakdown.items.filter(
+    (item) => !item.id.startsWith("incentive-"),
+  );
+  if (incentiveItems.length > 0) {
+    const incentiveGroup = {
+      id: "incentives",
+      label: "Incentives",
+      total: incentiveItems.reduce((total, item) => total + item.total, 0),
+      incentiveItems,
+    };
+    const lateUndertimeIndex = groupedBreakdownItems.findIndex(
+      (item) => item.id === "lateUndertime",
+    );
+    groupedBreakdownItems.splice(
+      lateUndertimeIndex === -1
+        ? groupedBreakdownItems.length
+        : lateUndertimeIndex,
+      0,
+      incentiveGroup,
+    );
+  }
   const periodLabel = formatPayrollPeriod(activePeriod).replace(
     /\s*[–—-]\s*/,
     " - ",
@@ -224,16 +248,34 @@ export default function PayslipModal({
                 </h4>
               </div>
               <div className="divide-y divide-slate-100 px-4">
-                {activeBreakdown.items.map((item) => (
+                {groupedBreakdownItems.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between gap-4 py-3 text-xs"
+                    className={`flex justify-between gap-4 py-3 text-xs ${
+                      item.id === "incentives" ? "items-start" : "items-center"
+                    }`}
                   >
                     <div className="min-w-0 flex-1">
-                      <span className="font-medium text-slate-700 block">
+                      <span
+                        className={`block ${
+                          item.id === "incentives"
+                            ? "text-sm font-semibold text-slate-800"
+                            : "font-medium text-slate-700"
+                        }`}
+                      >
                         {item.label}
                       </span>
+                      {item.id === "incentives" && (
+                        <ul className="list-disc space-y-0.5 pl-3 text-xs italic text-slate-400">
+                          {item.incentiveItems.map((incentive) => (
+                            <li key={incentive.id}>
+                              {`${incentive.label} (${formatCurrency(incentive.total)})`}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                       {earningsAvailable &&
+                        item.id !== "incentives" &&
                         formatEarningsItemCalculation(item) && (
                           <span className="mt-0.5 block text-[10px] text-slate-400">
                             {formatEarningsItemCalculation(item)}
@@ -251,7 +293,7 @@ export default function PayslipModal({
                       {item.informational
                         ? "Not deducted"
                         : earningsAvailable
-                          ? formatCurrency(item.total)
+                          ? `${item.id === "incentives" ? "+" : ""}${formatCurrency(item.total)}`
                           : "Private"}
                     </span>
                   </div>
