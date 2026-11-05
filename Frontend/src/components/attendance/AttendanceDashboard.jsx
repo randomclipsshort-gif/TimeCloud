@@ -397,7 +397,7 @@ export default function AttendanceDashboard({
                     <ul className="mt-0.5 space-y-0.5 pl-3 text-[10px] text-slate-400">
                       {groupedSelectedDateIncentives.map((incentive) => (
                         <li key={incentive.id}>
-                          {`${incentive.label}${incentive.count > 1 ? ` (×${incentive.count})` : ""}  ₱${incentive.total.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                          {`${incentive.label} — ${incentive.count} @ ₱${(incentive.total / incentive.count).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ea (₱${incentive.total.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`}
                         </li>
                       ))}
                     </ul>

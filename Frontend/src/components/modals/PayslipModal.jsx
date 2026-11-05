@@ -265,7 +265,7 @@ export default function PayslipModal({
                         <div className="mt-0.5 space-y-0.5 pl-3 text-[10px] text-slate-400">
                           {item.incentiveItems.map((incentive) => (
                             <div key={incentive.id}>
-                              {`${incentive.label}${incentive.count > 1 ? ` (×${incentive.count})` : ""}  ${formatCurrency(incentive.total)}`}
+                              {`${incentive.label} — ${incentive.count} @ ${formatCurrency(incentive.total / incentive.count)} ea (${formatCurrency(incentive.total)})`}
                             </div>
                           ))}
                         </div>
