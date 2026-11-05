@@ -27,7 +27,8 @@ export default function AttendanceDashboard({
 }) {
   const [isYearPickerOpen, setIsYearPickerOpen] = useState(false);
   const [isPayComponentsExpanded, setIsPayComponentsExpanded] = useState(false);
-  const [isTimeAttendanceExpanded, setIsTimeAttendanceExpanded] = useState(false);
+  const [isTimeAttendanceExpanded, setIsTimeAttendanceExpanded] =
+    useState(false);
   const [isIncentiveFormOpen, setIsIncentiveFormOpen] = useState(false);
   const [newIncentiveName, setNewIncentiveName] = useState("");
   const [newIncentiveAmount, setNewIncentiveAmount] = useState("");
@@ -93,10 +94,9 @@ export default function AttendanceDashboard({
           ? holidayPayEstimate.regularPayRateLabel
           : "200% total including base wage"
       : holidayPayEstimate?.regularPayRateLabel;
-  const displayedHolidayPayRateLabel =
-    salaryDataPrivate
-      ? "Private — unlock salary vault"
-      : record.holidayClassification === "Special Non-Working Day"
+  const displayedHolidayPayRateLabel = salaryDataPrivate
+    ? "Private — unlock salary vault"
+    : record.holidayClassification === "Special Non-Working Day"
       ? record.holidayUnworked || record.type === "Absent"
         ? "0% total including base wage"
         : holidayPayEstimate?.regularPayRateLabel ||
@@ -109,15 +109,22 @@ export default function AttendanceDashboard({
   const shiftTitleColor = record.holidayName
     ? holidayTextColors[record.holidayClassification]
     : "text-textMain";
-  const shiftTitle = record.shift === "Manual Entry Adjustment"
-    ? record.assignedShiftName || "Assigned Shift"
-    : record.shift;
-  const breakdownTitle = record.holidayName ||
+  const shiftTitle =
+    record.shift === "Manual Entry Adjustment"
+      ? record.assignedShiftName || "Assigned Shift"
+      : record.shift;
+  const breakdownTitle =
+    record.holidayName ||
     (record.type === "Regular" ? "Regular Work Day" : shiftTitle);
   const shiftSubtitle = record.holidayName
     ? `${record.holidayDutyLabel === "Holiday Duty" ? record.assignedShiftName || record.shift : record.holidayDutyLabel} · ${record.shift}${record.holidayDescription ? ` · ${record.holidayDescription}` : ""}`
     : record.type === "Regular"
-      ? [record.assignedShiftName || shiftTitle, record.shift !== (record.assignedShiftName || shiftTitle) ? record.shift : null]
+      ? [
+          record.assignedShiftName || shiftTitle,
+          record.shift !== (record.assignedShiftName || shiftTitle)
+            ? record.shift
+            : null,
+        ]
           .filter(Boolean)
           .join(" · ")
       : null;
@@ -126,10 +133,7 @@ export default function AttendanceDashboard({
       id="wageRateText"
       className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-teal-700"
     >
-      <i
-        className="fa-solid fa-percent text-[9px]"
-        aria-hidden="true"
-      ></i>
+      <i className="fa-solid fa-percent text-[9px]" aria-hidden="true"></i>
       {`Wage Rate: ${holidayRateLabel}`}
     </span>
   );
@@ -200,13 +204,13 @@ export default function AttendanceDashboard({
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               {!record.holidayName &&
                 !["Regular", "Unassigned"].includes(record.type) && (
-                <span
-                  id="workdayTypeBadge"
-                  className={`rounded-full bg-white px-2.5 py-1 text-[10px] font-bold tracking-wide ring-1 ring-slate-200 ${workdayBadgeTextColor}`}
-                >
-                  {workdayBadgeLabel}
-                </span>
-              )}
+                  <span
+                    id="workdayTypeBadge"
+                    className={`rounded-full bg-white px-2.5 py-1 text-[10px] font-bold tracking-wide ring-1 ring-slate-200 ${workdayBadgeTextColor}`}
+                  >
+                    {workdayBadgeLabel}
+                  </span>
+                )}
             </div>
             <div className="flex items-start justify-between gap-2">
               <div
@@ -234,8 +238,10 @@ export default function AttendanceDashboard({
                 type="button"
                 aria-expanded={isPayComponentsExpanded}
                 aria-controls="payComponentsDetails"
-                onClick={() => setIsPayComponentsExpanded((expanded) => !expanded)}
-                className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-400"
+                onClick={() =>
+                  setIsPayComponentsExpanded((expanded) => !expanded)
+                }
+                className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500"
               >
                 <span>Pay Components Breakdown</span>
                 <i
@@ -254,7 +260,7 @@ export default function AttendanceDashboard({
                         : record.est}
                 </span>
               ) : (
-                <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <span className="flex items-center gap-1 text-[10px] font-normal normal-case text-teal-700">
                   <i
                     className="fa-regular fa-circle-question text-[10px]"
                     aria-hidden="true"
@@ -272,269 +278,280 @@ export default function AttendanceDashboard({
               }}
               aria-hidden={!isPayComponentsExpanded}
             >
-              <div id="payComponentsDetails" className="min-h-0 overflow-hidden">
-            {/* Pay Components Borderless List */}
-            <div className="divide-y divide-slate-100 text-xs">
-              <div className="py-2.5 flex items-center justify-between gap-3">
-                <span className="flex flex-col min-w-0">
-                  <span className="text-sm font-semibold text-slate-800">
-                    Base Daily Wage (8 hrs)
-                  </span>
-                  <span className="mt-0.5 text-xs text-slate-500">
-                    {record.holidayClassification
-                      ? "Reference rate · Factored into rate below"
-                      : "Reference rate · Not added separately"}
-                  </span>
-                </span>
-                <span
-                  id="baseWage"
-                  className="shrink-0 text-right font-semibold text-slate-500 tabular-nums"
-                >
-                  {record.holidayClassification
-                    ? "Included in Total"
-                    : salaryDataPrivate
-                    ? "Private"
-                    : record.type === "Unassigned"
-                    ? Number(configuredDailyWage) > 0
-                      ? `₱${Number(configuredDailyWage).toFixed(2)}`
-                      : record.base
-                    : record.base}
-                </span>
-              </div>
-
-              {record.holidayClassification && (
-                <div className="py-2.5 flex items-center justify-between gap-3">
-                  <span className="flex flex-col min-w-0">
-                    <span className="text-sm font-semibold text-slate-800">
-                      Holiday Pay Total
-                    </span>
-                    <span className="mt-0.5 text-xs text-slate-500">
-                      {displayedHolidayPayRateLabel ||
-                        "130% total including base wage"}
-                    </span>
-                  </span>
-                  <span
-                    id="holidayPay"
-                    className="font-bold text-slate-800 shrink-0 tabular-nums"
-                  >
-                    {salaryDataPrivate
-                      ? "Private"
-                      : holidayPayEstimate?.regularPay != null
-                      ? `₱${holidayPayEstimate.regularPay.toFixed(2)}`
-                      : "Estimate unavailable"}
-                  </span>
-              </div>
-              )}
-
-              {hasAllowance && (
-                <div className="py-2.5 flex items-center justify-between gap-3">
-                  <span className="flex flex-col min-w-0">
-                    <span className="text-sm font-semibold text-slate-800">
-                      Co. Allowance
-                    </span>
-                    <span className="mt-0.5 text-xs text-slate-500">
-                      Standard daily stipend
-                    </span>
-                  </span>
-                  <span
-                    id="companyAllowance"
-                    className="font-semibold text-slate-800 shrink-0 tabular-nums"
-                  >
-                    {salaryDataPrivate ? "Private" : `+₱${allowanceAmount.toFixed(2)}`}
-                  </span>
-                </div>
-              )}
-
-              {hasNightDifferential && (
-                <div className="py-2.5 flex items-center justify-between gap-3">
-                  <span className="flex flex-col min-w-0">
-                    <span className="text-sm font-semibold text-slate-800">
-                      Night Differential
-                    </span>
-                  </span>
-                  <span
-                    id="nightDifferentialPay"
-                    className="font-semibold text-slate-800 shrink-0 tabular-nums"
-                  >
-                    {salaryDataPrivate ? "Private" : `+₱${nightDifferentialAmount.toFixed(2)}`}
-                  </span>
-                </div>
-              )}
-
-              {hasOvertime && (
-                <div className="py-2.5 flex items-center justify-between gap-3">
-                  <span className="flex flex-col min-w-0">
-                    <span className="text-sm font-semibold text-slate-800">
-                      Overtime
-                    </span>
-                    {!salaryDataPrivate && overtimeCalculation && (
-                      <span className="mt-0.5 text-xs text-slate-500">
-                        {overtimeCalculation}
+              <div
+                id="payComponentsDetails"
+                className="min-h-0 overflow-hidden"
+              >
+                {/* Pay Components Borderless List */}
+                <div className="divide-y divide-slate-100 text-[11px]">
+                  <div className="py-2.5 flex items-center justify-between gap-3">
+                    <span className="flex flex-col min-w-0">
+                      <span className="font-semibold text-slate-800">
+                        Base Daily Wage (8 hrs)
                       </span>
-                    )}
-                  </span>
-                  <span
-                    id="overtimePay"
-                    className="font-semibold text-slate-800 shrink-0 tabular-nums"
-                  >
-                    {salaryDataPrivate ? "Private" : `+₱${overtimeAmount.toFixed(2)}`}
-                  </span>
-                </div>
-              )}
-
-              {selectedDateIncentives.length > 0 && (
-                <div className="py-2.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-slate-800">
-                      Incentives
+                      <span className="text-[10px] italic text-slate-500 mt-0.5">
+                        {record.holidayClassification
+                          ? "Reference rate · Factored into rate below"
+                          : "Reference rate · Not added separately"}
+                      </span>
                     </span>
-                    <span className="shrink-0 text-sm font-semibold text-teal-600 tabular-nums">
-                      {salaryDataPrivate
-                        ? "Private"
-                        : `+₱${selectedDateIncentiveTotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    <span
+                      id="baseWage"
+                      className="shrink-0 text-right font-semibold text-slate-500 tabular-nums"
+                    >
+                      {record.holidayClassification
+                        ? "Included in Total"
+                        : salaryDataPrivate
+                          ? "Private"
+                          : record.type === "Unassigned"
+                            ? Number(configuredDailyWage) > 0
+                              ? `₱${Number(configuredDailyWage).toFixed(2)}`
+                              : record.base
+                            : record.base}
                     </span>
                   </div>
-                    <ul className="mt-0.5 space-y-0.5 pl-3 text-[10px] text-slate-400">
-                      {groupedSelectedDateIncentives.map((incentive) => (
-                        <li key={incentive.id}>
-                          {`${incentive.label} — ${incentive.count} @ ₱${(incentive.total / incentive.count).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ea (₱${incentive.total.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`}
-                        </li>
-                      ))}
-                    </ul>
-                </div>
-              )}
 
-              <div className="py-2">
-                <button
-                  type="button"
-                  disabled={salaryDataPrivate}
-                  onClick={() =>
-                    setIsIncentiveFormOpen((isOpen) => !isOpen)
-                  }
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-teal-700 transition hover:bg-teal-50 disabled:cursor-not-allowed disabled:text-slate-400"
-                  title={
-                    salaryDataPrivate
-                      ? "Unlock the salary vault to add incentives"
-                      : undefined
-                  }
-                  aria-expanded={isIncentiveFormOpen}
-                >
-                  <i
-                    className={`fa-solid ${isIncentiveFormOpen ? "fa-minus" : "fa-plus"} text-[10px]`}
-                    aria-hidden="true"
-                  ></i>
-                  {salaryDataPrivate
-                    ? "Unlock vault to add incentive"
-                    : "Add incentive"}
-                </button>
-                {isIncentiveFormOpen && (
-                  <form
-                    className="mt-2 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      const added = onAddIncentive({
-                        name: newIncentiveName,
-                        amount: newIncentiveAmount,
-                        date: selectedDate,
-                      });
-                      if (added) {
-                        setNewIncentiveName("");
-                        setNewIncentiveAmount("");
-                        setIsIncentiveFormOpen(false);
+                  {record.holidayClassification && (
+                    <div className="py-2.5 flex items-center justify-between gap-3">
+                      <span className="flex flex-col min-w-0">
+                        <span className="font-semibold text-slate-800">
+                          Holiday Pay Total
+                        </span>
+                        <span className="text-[10px] text-slate-500 mt-0.5">
+                          {displayedHolidayPayRateLabel ||
+                            "130% total including base wage"}
+                        </span>
+                      </span>
+                      <span
+                        id="holidayPay"
+                        className="font-bold text-slate-800 shrink-0 tabular-nums"
+                      >
+                        {salaryDataPrivate
+                          ? "Private"
+                          : holidayPayEstimate?.regularPay != null
+                            ? `₱${holidayPayEstimate.regularPay.toFixed(2)}`
+                            : "Estimate unavailable"}
+                      </span>
+                    </div>
+                  )}
+
+                  {hasAllowance && (
+                    <div className="py-2.5 flex items-center justify-between gap-3">
+                      <span className="flex flex-col min-w-0">
+                        <span className="font-semibold text-slate-800">
+                          Co. Allowance
+                        </span>
+                        <span className="text-[10px] text-slate-500 mt-0.5">
+                          Standard daily stipend
+                        </span>
+                      </span>
+                      <span
+                        id="companyAllowance"
+                        className="font-semibold text-teal-600 shrink-0 tabular-nums"
+                      >
+                        {salaryDataPrivate
+                          ? "Private"
+                          : `+₱${allowanceAmount.toFixed(2)}`}
+                      </span>
+                    </div>
+                  )}
+
+                  {hasNightDifferential && (
+                    <div className="py-2.5 flex items-center justify-between gap-3">
+                      <span className="flex flex-col min-w-0">
+                        <span className="font-semibold text-slate-800">
+                          Night Differential
+                        </span>
+                      </span>
+                      <span
+                        id="nightDifferentialPay"
+                        className="font-semibold text-teal-600 shrink-0 tabular-nums"
+                      >
+                        {salaryDataPrivate
+                          ? "Private"
+                          : `+₱${nightDifferentialAmount.toFixed(2)}`}
+                      </span>
+                    </div>
+                  )}
+
+                  {hasOvertime && (
+                    <div className="py-2.5 flex items-center justify-between gap-3">
+                      <span className="flex flex-col min-w-0">
+                        <span className="font-semibold text-slate-800">
+                          Overtime
+                        </span>
+                        {!salaryDataPrivate && overtimeCalculation && (
+                          <span className="text-[10px] text-slate-500 mt-0.5">
+                            {overtimeCalculation}
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        id="overtimePay"
+                        className="font-semibold text-slate-800 shrink-0 tabular-nums"
+                      >
+                        {salaryDataPrivate
+                          ? "Private"
+                          : `+₱${overtimeAmount.toFixed(2)}`}
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedDateIncentives.length > 0 && (
+                    <div className="py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold text-slate-800">
+                          Incentives
+                        </span>
+                        <span className="shrink-0 font-semibold text-teal-600 tabular-nums">
+                          {salaryDataPrivate
+                            ? "Private"
+                            : `+₱${selectedDateIncentiveTotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        </span>
+                      </div>
+                      <ul className="mt-0.5 space-y-0.5 pl-3 text-[10px] text-slate-400">
+                        {groupedSelectedDateIncentives.map((incentive) => (
+                          <li key={incentive.id}>
+                            {`${incentive.label} — ${incentive.count} @ ₱${(incentive.total / incentive.count).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ea (₱${incentive.total.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div className="py-2">
+                    <button
+                      type="button"
+                      disabled={salaryDataPrivate}
+                      onClick={() =>
+                        setIsIncentiveFormOpen((isOpen) => !isOpen)
                       }
-                    }}
-                  >
-                    <p className="text-[10px] text-slate-500">
-                      This incentive will be recorded for {selectedDate}.
-                    </p>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      <label className="text-[10px] font-semibold text-slate-600">
-                        Description
-                        <input
-                          type="text"
-                          value={newIncentiveName}
-                          onChange={(event) =>
-                            setNewIncentiveName(event.target.value)
+                      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-teal-700 transition hover:bg-teal-50 disabled:cursor-not-allowed disabled:text-slate-400"
+                      title={
+                        salaryDataPrivate
+                          ? "Unlock the salary vault to add incentives"
+                          : undefined
+                      }
+                      aria-expanded={isIncentiveFormOpen}
+                    >
+                      <i
+                        className={`fa-solid ${isIncentiveFormOpen ? "fa-minus" : "fa-plus"} text-[10px]`}
+                        aria-hidden="true"
+                      ></i>
+                      {salaryDataPrivate
+                        ? "Unlock vault to add incentive"
+                        : "Add incentive"}
+                    </button>
+                    {isIncentiveFormOpen && (
+                      <form
+                        className="mt-2 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          const added = onAddIncentive({
+                            name: newIncentiveName,
+                            amount: newIncentiveAmount,
+                            date: selectedDate,
+                          });
+                          if (added) {
+                            setNewIncentiveName("");
+                            setNewIncentiveAmount("");
+                            setIsIncentiveFormOpen(false);
                           }
-                          placeholder="e.g., INCENTIVES"
-                          maxLength={80}
-                          required
-                          className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
-                        />
-                      </label>
-                      <label className="text-[10px] font-semibold text-slate-600">
-                        Amount (₱)
-                        <input
-                          type="number"
-                          value={newIncentiveAmount}
-                          onChange={(event) =>
-                            setNewIncentiveAmount(event.target.value)
-                          }
-                          placeholder="0.00"
-                          min="0.01"
-                          step="0.01"
-                          required
-                          className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
-                        />
-                      </label>
-                    </div>
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsIncentiveFormOpen(false)}
-                        className="rounded-lg px-3 py-1.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-200"
+                        }}
                       >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="rounded-lg bg-teal-600 px-3 py-1.5 text-[10px] font-semibold text-white hover:bg-teal-700"
-                      >
-                        Save incentive
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </div>
+                        <p className="text-[10px] text-slate-500">
+                          This incentive will be recorded for {selectedDate}.
+                        </p>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <label className="text-[10px] font-semibold text-slate-600">
+                            Description
+                            <input
+                              type="text"
+                              value={newIncentiveName}
+                              onChange={(event) =>
+                                setNewIncentiveName(event.target.value)
+                              }
+                              placeholder="e.g., INCENTIVES"
+                              maxLength={80}
+                              required
+                              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                            />
+                          </label>
+                          <label className="text-[10px] font-semibold text-slate-600">
+                            Amount (₱)
+                            <input
+                              type="number"
+                              value={newIncentiveAmount}
+                              onChange={(event) =>
+                                setNewIncentiveAmount(event.target.value)
+                              }
+                              placeholder="0.00"
+                              min="0.01"
+                              step="0.01"
+                              required
+                              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                            />
+                          </label>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsIncentiveFormOpen(false)}
+                            className="rounded-lg px-3 py-1.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-200"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="rounded-lg bg-teal-600 px-3 py-1.5 text-[10px] font-semibold text-white hover:bg-teal-700"
+                          >
+                            Save incentive
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
 
-              {/* Total Daily Earnings Summary Row */}
-              <div className="pt-3 pb-1 flex items-center justify-between gap-3 mt-1">
-                <span className="flex items-center gap-1.5 font-bold text-slate-900">
-                  <i
-                    className="fa-regular fa-circle-check text-teal-600 text-xs"
-                    aria-hidden="true"
-                  ></i>
-                  Total Daily Earnings
-                </span>
-                <span className="font-extrabold text-teal-800 text-sm tabular-nums">
-                  {salaryDataPrivate
-                    ? "Private — unlock salary vault"
-                    : estimatedEarnings != null
-                    ? `₱${estimatedEarnings.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : record.holidayClassification
-                      ? "Estimate unavailable"
-                      : record.est}
-                </span>
-              </div>
-            </div>
-
-            {/* Attendance Exceptions */}
-            {hasLateOrUndertime && (
-              <div className="mt-3 border-t border-slate-100 pt-2.5 text-[11px]">
-                <h4 className="mb-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                  Attendance Exceptions
-                </h4>
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-slate-600">{attendanceExceptions}</span>
-                  <span
-                    id="penaltyPay"
-                    className="shrink-0 font-medium text-slate-400 text-[10px]"
-                  >
-                    No deduction
-                  </span>
+                  {/* Total Daily Earnings Summary Row */}
+                  <div className="pt-3 pb-1 flex items-center justify-between gap-3 mt-1">
+                    <span className="flex items-center gap-1.5 font-bold text-slate-900">
+                      <i
+                        className="fa-regular fa-circle-check text-teal-600 text-xs"
+                        aria-hidden="true"
+                      ></i>
+                      Total Daily Earnings
+                    </span>
+                    <span className="font-extrabold text-teal-800 text-sm tabular-nums">
+                      {salaryDataPrivate
+                        ? "Private — unlock salary vault"
+                        : estimatedEarnings != null
+                          ? `₱${estimatedEarnings.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : record.holidayClassification
+                            ? "Estimate unavailable"
+                            : record.est}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )}
+
+                {/* Attendance Exceptions */}
+                {hasLateOrUndertime && (
+                  <div className="mt-3 border-t border-slate-100 pt-2.5 text-[11px]">
+                    <h4 className="mb-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                      Attendance Exceptions
+                    </h4>
+                    <div className="flex justify-between items-center py-1">
+                      <span className="text-slate-600">
+                        {attendanceExceptions}
+                      </span>
+                      <span
+                        id="penaltyPay"
+                        className="shrink-0 font-medium text-slate-400 text-[10px]"
+                      >
+                        No deduction
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -552,7 +569,9 @@ export default function AttendanceDashboard({
                 type="button"
                 aria-expanded={isTimeAttendanceExpanded}
                 aria-controls="timeAttendanceDetails"
-                onClick={() => setIsTimeAttendanceExpanded((expanded) => !expanded)}
+                onClick={() =>
+                  setIsTimeAttendanceExpanded((expanded) => !expanded)
+                }
                 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-700"
               >
                 <span>Time &amp; Attendance</span>

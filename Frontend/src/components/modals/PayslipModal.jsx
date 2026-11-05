@@ -23,10 +23,13 @@ export default function PayslipModal({
 }) {
   const activePeriod = historicalPayslip?.period || payrollPeriod;
   const activeSummary = historicalPayslip?.summary || payrollPeriodSummary;
-  const activeBreakdown = historicalPayslip?.earningsBreakdown || payrollEarningsBreakdown;
-  const activeDeductions = historicalPayslip?.deductions || cutoffPayrollDeductions;
+  const activeBreakdown =
+    historicalPayslip?.earningsBreakdown || payrollEarningsBreakdown;
+  const activeDeductions =
+    historicalPayslip?.deductions || cutoffPayrollDeductions;
   const activeDailyWage = historicalPayslip?.settings?.dailyWage ?? dailyWage;
-  const earningsAvailable = Boolean(historicalPayslip) || payrollPeriodEarningsAvailable;
+  const earningsAvailable =
+    Boolean(historicalPayslip) || payrollPeriodEarningsAvailable;
   const activeNetPay = historicalPayslip?.netPay ?? payrollPeriodNetPay;
   const incentiveItems = activeBreakdown.items.filter((item) =>
     item.id.startsWith("incentive-"),
@@ -78,10 +81,10 @@ export default function PayslipModal({
       const baseWage = Number(activeDailyWage);
       if (!Number.isFinite(baseWage) || baseWage <= 0) return null;
       const basePay = baseWage * item.units;
-      const premiumAmount = Math.round((item.total - basePay + Number.EPSILON) * 100) / 100;
-      const premiumRate = basePay > 0
-        ? Math.round((premiumAmount / basePay) * 10000) / 100
-        : 0;
+      const premiumAmount =
+        Math.round((item.total - basePay + Number.EPSILON) * 100) / 100;
+      const premiumRate =
+        basePay > 0 ? Math.round((premiumAmount / basePay) * 10000) / 100 : 0;
       const dayLabel = item.units === 1 ? "day" : "days";
       const basePayCalculation = `${formatUnits(item.units)} ${dayLabel} × ${formatCurrency(baseWage)}`;
       return premiumAmount > 0
@@ -89,9 +92,8 @@ export default function PayslipModal({
         : `${basePayCalculation} base wage (${formatUnits(Math.round((item.rate / baseWage) * 10000) / 100)}% holiday rate)`;
     }
     const rateUnit = item.unit === "hours" ? "hour" : item.unit.slice(0, -1);
-    const unitLabel = item.unit === "days" && item.units === 1
-      ? "day"
-      : item.unit;
+    const unitLabel =
+      item.unit === "days" && item.units === 1 ? "day" : item.unit;
     return `${formatUnits(item.units)} ${unitLabel} × ${formatCurrency(item.rate)}/${rateUnit}`;
   };
 
@@ -174,7 +176,11 @@ export default function PayslipModal({
           {/* Employee Meta Grid */}
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
-              ["Employee", historicalPayslip?.employeeName || userName, "fa-user"],
+              [
+                "Employee",
+                historicalPayslip?.employeeName || userName,
+                "fa-user",
+              ],
               ["Pay Period", periodLabel, "fa-calendar"],
               [
                 "Daily wage",
@@ -356,7 +362,9 @@ export default function PayslipModal({
         {/* Modal Footer */}
         <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-7">
           <span className="text-[10px] text-slate-400">
-            {historicalPayslip ? "Encrypted historical snapshot" : "Personal payroll estimate"}
+            {historicalPayslip
+              ? "Encrypted historical snapshot"
+              : "Personal payroll estimate"}
           </span>
           <div className="flex justify-end gap-2">
             <button
@@ -377,14 +385,21 @@ export default function PayslipModal({
             {!historicalPayslip && (
               <button
                 type="button"
-                disabled={!canSavePayslip || payslipAlreadySaved || payslipHistorySaving}
+                disabled={
+                  !canSavePayslip || payslipAlreadySaved || payslipHistorySaving
+                }
                 onClick={onSavePayslipToHistory}
                 className="inline-flex items-center gap-2 rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
-                title={!canSavePayslip
-                  ? "Unlock the salary vault to save an encrypted payslip snapshot"
-                  : undefined}
+                title={
+                  !canSavePayslip
+                    ? "Unlock the salary vault to save an encrypted payslip snapshot"
+                    : undefined
+                }
               >
-                <i className={`fa-solid ${payslipHistorySaving ? "fa-spinner fa-spin" : payslipAlreadySaved ? "fa-check" : "fa-box-archive"}`} aria-hidden="true"></i>
+                <i
+                  className={`fa-solid ${payslipHistorySaving ? "fa-spinner fa-spin" : payslipAlreadySaved ? "fa-check" : "fa-box-archive"}`}
+                  aria-hidden="true"
+                ></i>
                 {payslipHistorySaving
                   ? "Saving…"
                   : payslipAlreadySaved
