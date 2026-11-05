@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { groupIncentiveEarningsItems } from "../../utils/payrollEarningsBreakdown.js";
 
 export default function AttendanceDashboard({
   record,
@@ -30,6 +31,14 @@ export default function AttendanceDashboard({
   const selectedDateIncentiveTotal = selectedDateIncentives.reduce(
     (total, incentive) => total + Number(incentive.amount),
     0,
+  );
+  const groupedSelectedDateIncentives = groupIncentiveEarningsItems(
+    selectedDateIncentives.map((incentive) => ({
+      id: incentive.id,
+      label: incentive.name,
+      date: selectedDate,
+      total: Number(incentive.amount),
+    })),
   );
   const holidayTextColors = {
     "Regular Holiday": "text-rose-700",
@@ -382,9 +391,9 @@ export default function AttendanceDashboard({
                     </span>
                   </div>
                     <ul className="list-disc space-y-0.5 pl-3 text-xs italic text-slate-400">
-                      {selectedDateIncentives.map((incentive) => (
+                      {groupedSelectedDateIncentives.map((incentive) => (
                         <li key={incentive.id}>
-                          {`${incentive.name} (₱${Number(incentive.amount).toFixed(2)})`}
+                          {`${incentive.label}${incentive.count > 1 ? ` (×${incentive.count})` : ""}  ₱${incentive.total.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                         </li>
                       ))}
                     </ul>
