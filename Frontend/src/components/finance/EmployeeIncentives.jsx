@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { getIncentiveTotal } from "../../utils/incentiveTracker.js";
 
 export default function EmployeeIncentives({
@@ -8,6 +9,8 @@ export default function EmployeeIncentives({
   salaryVaultSyncing,
   formatCurrency,
 }) {
+  const [deletingIncentiveId, setDeletingIncentiveId] = useState(null);
+  const onDeleteIncentiveRef = useRef(onDeleteIncentive);
   const isVaultUnlocked = salaryVaultStatus === "unlocked";
   const sortedIncentives = [...incentives].sort((left, right) =>
     right.date.localeCompare(left.date),
@@ -25,6 +28,19 @@ export default function EmployeeIncentives({
       total: getIncentiveTotal(dateIncentives),
     }),
   );
+
+  useEffect(() => {
+    onDeleteIncentiveRef.current = onDeleteIncentive;
+  }, [onDeleteIncentive]);
+
+  useEffect(() => {
+    if (!deletingIncentiveId) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      onDeleteIncentiveRef.current(deletingIncentiveId);
+      setDeletingIncentiveId(null);
+    }, 220);
+    return () => window.clearTimeout(timeoutId);
+  }, [deletingIncentiveId]);
 
   if (!isVaultUnlocked) {
     return (
@@ -111,27 +127,34 @@ export default function EmployeeIncentives({
                     {group.incentives.map((incentive) => (
                       <div
                         key={incentive.id}
-                        className="flex items-center gap-3 px-3 py-2"
+                        className={`grid transition-[grid-template-rows,opacity] duration-200 ease-in-out ${
+                          deletingIncentiveId === incentive.id
+                            ? "grid-rows-[0fr] opacity-0"
+                            : "grid-rows-[1fr] opacity-100"
+                        }`}
                       >
-                        <span className="min-w-0 flex-1 text-xs font-medium text-slate-700">
-                          {incentive.name}
-                        </span>
-                        <span className="shrink-0 text-xs tabular-nums text-slate-600">
-                          {formatCurrency(incentive.amount)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (window.confirm(`Delete "${incentive.name}" dated ${incentive.date}? This also updates estimated payroll earnings.`)) {
-                              onDeleteIncentive(incentive.id);
-                            }
-                          }}
-                          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                          title="Delete incentive"
-                          aria-label={`Delete ${incentive.name}`}
-                        >
-                          <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                        </button>
+                        <div className="flex min-h-0 items-center gap-3 overflow-hidden px-3 py-2">
+                          <span className="min-w-0 flex-1 text-xs font-medium text-slate-700">
+                            {incentive.name}
+                          </span>
+                          <span className="shrink-0 text-xs tabular-nums text-slate-600">
+                            {formatCurrency(incentive.amount)}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={deletingIncentiveId === incentive.id}
+                            onClick={() => {
+                              if (window.confirm(`Delete "${incentive.name}" dated ${incentive.date}? This also updates estimated payroll earnings.`)) {
+                                setDeletingIncentiveId(incentive.id);
+                              }
+                            }}
+                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed"
+                            title="Delete incentive"
+                            aria-label={`Delete ${incentive.name}`}
+                          >
+                            <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
