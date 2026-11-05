@@ -390,7 +390,7 @@ export default function AttendanceDashboard({
                         : `+₱${selectedDateIncentiveTotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                     </span>
                   </div>
-                    <ul className="list-disc space-y-0.5 pl-3 text-xs italic text-slate-400">
+                    <ul className="mt-0.5 space-y-0.5 pl-3 text-[10px] text-slate-400">
                       {groupedSelectedDateIncentives.map((incentive) => (
                         <li key={incentive.id}>
                           {`${incentive.label}${incentive.count > 1 ? ` (×${incentive.count})` : ""}  ₱${incentive.total.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
