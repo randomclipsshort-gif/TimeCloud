@@ -266,13 +266,13 @@ export default function PayslipModal({
                         {item.label}
                       </span>
                       {item.id === "incentives" && (
-                        <ul className="list-disc space-y-0.5 pl-3 text-xs italic text-slate-400">
+                        <div className="mt-0.5 space-y-0.5 pl-3 text-[10px] text-slate-500">
                           {item.incentiveItems.map((incentive) => (
-                            <li key={incentive.id}>
+                            <div key={incentive.id}>
                               {`${incentive.label} (${formatCurrency(incentive.total)})`}
-                            </li>
+                            </div>
                           ))}
-                        </ul>
+                        </div>
                       )}
                       {earningsAvailable &&
                         item.id !== "incentives" &&
@@ -288,7 +288,13 @@ export default function PayslipModal({
                       )}
                     </div>
                     <span
-                      className={`shrink-0 font-semibold tabular-nums ${item.informational ? "text-slate-400" : "text-slate-900"}`}
+                      className={`shrink-0 font-semibold tabular-nums ${
+                        item.informational
+                          ? "text-slate-400"
+                          : item.id === "incentives"
+                            ? "text-teal-600"
+                            : "text-slate-900"
+                      }`}
                     >
                       {item.informational
                         ? "Not deducted"
