@@ -231,7 +231,7 @@ export default function AttendanceDashboard({
                   aria-hidden="true"
                 ></i>
               </button>
-              {isPayComponentsExpanded ? (
+              {!isPayComponentsExpanded ? (
                 <span className="shrink-0 text-right text-xs font-extrabold tabular-nums text-teal-800">
                   {salaryDataPrivate
                     ? "Private — unlock salary vault"
