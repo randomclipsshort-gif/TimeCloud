@@ -1,3 +1,8 @@
+import {
+  getIncentiveTotal,
+  getIncentivesForPeriod,
+} from "./incentiveTracker.js";
+
 const DAY_MINUTES = 24 * 60;
 const DAY_MILLISECONDS = 24 * 60 * 60 * 1000;
 const MONTH_NAMES = [
@@ -153,6 +158,7 @@ export function summarizePayrollPeriod(
   attendance,
   period,
   getEarningsForRecord = (record) => getAmount(record.est),
+  incentives = [],
 ) {
   const parsedStart = period && parseDateKey(period.startDate);
   const parsedEnd = period && parseDateKey(period.endDate);
@@ -205,6 +211,7 @@ export function summarizePayrollPeriod(
     eligibleWorkdays += 1;
     recordedEarnings += getAmount(getEarningsForRecord(record, dateKey));
   }
+  recordedEarnings += getIncentiveTotal(getIncentivesForPeriod(incentives, period));
 
   return {
     eligibleWorkdays,

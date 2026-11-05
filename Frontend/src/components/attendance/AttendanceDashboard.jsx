@@ -8,6 +8,7 @@ export default function AttendanceDashboard({
   salaryVaultStatus,
   holidayPayEstimate,
   estimatedEarnings,
+  selectedDateIncentives,
   dailyAllowance,
   nightDifferentialPay,
   overtimePay,
@@ -363,6 +364,22 @@ export default function AttendanceDashboard({
                   </span>
                 </div>
               )}
+
+              {selectedDateIncentives.map((incentive) => (
+                <div
+                  key={incentive.id}
+                  className="py-2.5 flex items-center justify-between gap-3"
+                >
+                  <span className="font-semibold text-slate-800">
+                    {incentive.name}
+                  </span>
+                  <span className="shrink-0 font-semibold text-emerald-700 tabular-nums">
+                    {salaryDataPrivate
+                      ? "Private"
+                      : `+₱${Number(incentive.amount).toFixed(2)}`}
+                  </span>
+                </div>
+              ))}
 
               {/* Total Daily Earnings Summary Row */}
               <div className="pt-3 pb-1 flex items-center justify-between gap-3 mt-1">

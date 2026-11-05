@@ -130,3 +130,23 @@ test("assigns overnight earnings to the cutoff containing the shift start date",
     [800, 1],
   );
 });
+
+test("lists dated incentives as separately named earnings lines", () => {
+  const breakdown = summarizePayrollEarningsBreakdown(
+    {},
+    { startDate: "2026-10-01", endDate: "2026-10-10" },
+    () => null,
+    [
+      { id: "i1", name: "Performance bonus", amount: 250, date: "2026-10-10" },
+      { id: "i2", name: "Referral", amount: 150, date: "2026-10-11" },
+    ],
+  );
+  assert.deepEqual(breakdown.items, [{
+    id: "incentive-i1",
+    label: "Performance bonus",
+    unit: "item",
+    units: 1,
+    rate: 250,
+    total: 250,
+  }]);
+});

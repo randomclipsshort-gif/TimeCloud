@@ -19,6 +19,9 @@ test("cloud workspace serialization excludes salary and earnings fields", () => 
     overtimeMultiplier: "1.5",
     nightDifferential: "10",
     annualBonus: "5000",
+    employeeIncentives: [
+      { id: "incentive-1", name: "Performance bonus", amount: 500, date: "2026-10-10" },
+    ],
     leaveBalances: { VL: 4 },
     shiftTemplates: [{ id: "morning", startTime: "06:00", hourlyRate: 42 }],
     attendance: {
@@ -45,6 +48,7 @@ test("cloud workspace serialization excludes salary and earnings fields", () => 
     "leaveBalances",
     "shiftTemplates",
   ]);
+  assert.equal(cloudWorkspace.employeeIncentives, undefined);
   assert.deepEqual(cloudWorkspace.attendance["2026-10-28"], {
     type: "Regular",
     shift: "Morning",
@@ -83,6 +87,20 @@ test("payroll deduction settings stay private for encrypted vault sync", () => {
     ...payrollSettings,
   });
   assert.deepEqual(workspaceData, {});
+});
+
+test("employee incentive records are retained in private vault settings", () => {
+  const employeeIncentives = [
+    { id: "incentive-1", name: "Performance bonus", amount: 500, date: "2026-10-10" },
+  ];
+  assert.deepEqual(
+    extractPrivateFinancialSettings({ employeeIncentives }).employeeIncentives,
+    employeeIncentives,
+  );
+  assert.equal(
+    serializeWorkspaceForCloud({ employeeIncentives }).employeeIncentives,
+    undefined,
+  );
 });
 
 test("private settings provide defaults for older salary vaults", () => {

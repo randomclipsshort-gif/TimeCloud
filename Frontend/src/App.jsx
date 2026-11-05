@@ -30,6 +30,11 @@ import {
 } from "./utils/payrollDeductions.js";
 import { summarizePayrollEarningsBreakdown } from "./utils/payrollEarningsBreakdown.js";
 import {
+  getIncentiveTotal,
+  getIncentivesForDate,
+  getIncentivesForPeriod,
+} from "./utils/incentiveTracker.js";
+import {
   appendPayslipSnapshot,
   createPayslipSnapshot,
   findPayslipSnapshot,
@@ -812,6 +817,11 @@ export default function App() {
     localPrivateFinancialDefaults.overtimeMultiplier,
   );
   const [salaryVaultExtraSettings, setSalaryVaultExtraSettings] = useState({});
+  const [incentiveName, setIncentiveName] = useState("");
+  const [incentiveAmount, setIncentiveAmount] = useState("");
+  const [incentiveDate, setIncentiveDate] = useState(
+    () => getManilaDateTime().date,
+  );
   const [expenses, setExpenses] = useState([]);
   const [expenseName, setExpenseName] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
@@ -864,6 +874,13 @@ export default function App() {
   const preserveLegacyLocalRef = useRef(false);
   const salaryVaultSyncTimerRef = useRef(null);
 
+  const employeeIncentives = Array.isArray(
+    salaryVaultExtraSettings.employeeIncentives,
+  )
+    ? salaryVaultExtraSettings.employeeIncentives
+    : [];
+  const availableEmployeeIncentives =
+    salaryVaultStatus === "unlocked" ? employeeIncentives : [];
   const selectedDate = formatDate(year, monthIndex, selectedDay);
   const monthLabel = `${months[monthIndex]} ${year}`;
   const calendarPayrollMonth = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
@@ -1060,8 +1077,9 @@ export default function App() {
         attendance,
         payrollPeriod,
         getPayrollRecordEarnings,
+        availableEmployeeIncentives,
       ),
-    [attendance, getPayrollRecordEarnings, payrollPeriod],
+    [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, payrollPeriod],
   );
   const payrollEarningsBreakdown = useMemo(
     () =>
@@ -1069,8 +1087,9 @@ export default function App() {
         attendance,
         payrollPeriod,
         getPayrollRecordBreakdown,
+        availableEmployeeIncentives,
       ),
-    [attendance, getPayrollRecordBreakdown, payrollPeriod],
+    [attendance, availableEmployeeIncentives, getPayrollRecordBreakdown, payrollPeriod],
   );
   const payrollDeductionSettings = useMemo(
     () => getPayrollDeductionSettingsDefaults(salaryVaultExtraSettings),
@@ -1082,11 +1101,16 @@ export default function App() {
       const period = getPayrollPeriodForMonth(payrollMonth, cutoffDay);
       return (
         sum +
-        summarizePayrollPeriod(attendance, period, getPayrollRecordEarnings)
+        summarizePayrollPeriod(
+          attendance,
+          period,
+          getPayrollRecordEarnings,
+          availableEmployeeIncentives,
+        )
           .recordedEarnings
       );
     }, 0);
-  }, [attendance, getPayrollRecordEarnings, payrollPeriod]);
+  }, [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, payrollPeriod]);
   const cutoffPayrollDeductions = useMemo(
     () =>
       calculateCutoffPayrollDeductions({
@@ -1119,24 +1143,27 @@ export default function App() {
       attendance,
       selectedPayslipPeriod,
       getPayrollRecordEarnings,
+      availableEmployeeIncentives,
     ),
-    [attendance, getPayrollRecordEarnings, selectedPayslipPeriod],
+    [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, selectedPayslipPeriod],
   );
   const selectedPayslipBreakdown = useMemo(
     () => summarizePayrollEarningsBreakdown(
       attendance,
       selectedPayslipPeriod,
       getPayrollRecordBreakdown,
+      availableEmployeeIncentives,
     ),
-    [attendance, getPayrollRecordBreakdown, selectedPayslipPeriod],
+    [attendance, availableEmployeeIncentives, getPayrollRecordBreakdown, selectedPayslipPeriod],
   );
   const calendarMonthGross = useMemo(
     () => summarizePayrollPeriod(
       attendance,
       getCalendarPayrollPeriod(payslipMonth),
       getPayrollRecordEarnings,
+      availableEmployeeIncentives,
     ).recordedEarnings,
-    [attendance, getPayrollRecordEarnings, payslipMonth],
+    [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, payslipMonth],
   );
   const selectedPayslipDeductions = useMemo(() => {
     const calculateDeductions = (period, monthlyGrossPay) =>
@@ -1269,7 +1296,14 @@ export default function App() {
       selectedAttendanceRecord.shiftEndTime,
     );
   const isSelectedDateAbsent = selectedRecord.type === "Absent";
-  const selectedEstimatedEarnings = selectedHoliday
+  const selectedDateIncentives = getIncentivesForDate(
+    availableEmployeeIncentives,
+    selectedDate,
+  );
+  const selectedDailyIncentiveTotal = getIncentiveTotal(
+    selectedDateIncentives,
+  );
+  const selectedBaseEstimatedEarnings = selectedHoliday
     ? hasAssignedShift &&
       selectedHolidayPay?.amount != null &&
       hasDailyAllowance
@@ -1288,6 +1322,12 @@ export default function App() {
         allowanceAmount +
         (selectedNightDifferentialPay || 0)
       : null;
+  const selectedEstimatedEarnings =
+    selectedBaseEstimatedEarnings === null
+      ? selectedDailyIncentiveTotal > 0
+        ? selectedDailyIncentiveTotal
+        : null
+      : selectedBaseEstimatedEarnings + selectedDailyIncentiveTotal;
   const canRecordAttendance =
     selectedAttendanceRecord.hasAssignedShift === true ||
     Boolean(
@@ -1343,12 +1383,20 @@ export default function App() {
         ? sum + getAmount(record.est)
         : sum;
     }, 0);
+  const grossPayWithIncentives =
+    grossPay +
+    getIncentiveTotal(
+      getIncentivesForPeriod(
+        availableEmployeeIncentives,
+        getCalendarPayrollPeriod(calendarPayrollMonth),
+      ),
+    );
   const payrollDeductions = sumCutoffPayrollDeductions(
     ...[10, 25].map((cutoffDay) =>
       calculateCutoffPayrollDeductions({
         period: getPayrollPeriodForMonth(calendarPayrollMonth, cutoffDay),
         mode: payrollDeductionSettings.payrollDeductionMode,
-        monthlyGrossPay: grossPay,
+        monthlyGrossPay: grossPayWithIncentives,
         manualPerPaycheck: {
           sss: payrollDeductionSettings.manualSssPerPaycheck,
           philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
@@ -1358,7 +1406,7 @@ export default function App() {
       }),
     ),
   );
-  const netPay = Math.max(0, grossPay - payrollDeductions.total);
+  const netPay = Math.max(0, grossPayWithIncentives - payrollDeductions.total);
   const totalHours = Object.entries(attendance)
     .filter(([date]) => date.startsWith(currentMonthPrefix))
     .reduce(
@@ -1383,9 +1431,14 @@ export default function App() {
   const financeCutoffSummaries = useMemo(
     () =>
       financeCutoffPeriods.map((period) =>
-        summarizePayrollPeriod(attendance, period, getPayrollRecordEarnings),
+        summarizePayrollPeriod(
+          attendance,
+          period,
+          getPayrollRecordEarnings,
+          availableEmployeeIncentives,
+        ),
       ),
-    [attendance, financeCutoffPeriods, getPayrollRecordEarnings],
+    [attendance, availableEmployeeIncentives, financeCutoffPeriods, getPayrollRecordEarnings],
   );
   const financeCutoffMonthlyGross = financeCutoffSummaries.reduce(
     (sum, summary) => sum + summary.recordedEarnings,
@@ -1422,7 +1475,7 @@ export default function App() {
   );
   const financeGrossPay =
     financeTrackingScope === "month"
-      ? grossPay
+      ? grossPayWithIncentives
       : financeCutoffSummaries[selectedFinanceCutoffIndex].recordedEarnings;
   const financePayrollDeductions =
     financeTrackingScope === "month"
@@ -2494,6 +2547,68 @@ export default function App() {
     );
     pendingExpenseClearRef.current = true;
     showToast("Expense record added successfully.", "success");
+  };
+
+  const addEmployeeIncentive = () => {
+    if (salaryVaultStatus !== "unlocked") {
+      showToast("Unlock the salary vault before adding an employee incentive.", "warning");
+      return;
+    }
+    const name = incentiveName.trim();
+    const amount = Number(incentiveAmount);
+    if (!name) {
+      showToast("Please provide an incentive description.", "warning");
+      return;
+    }
+    if (name.length > 80) {
+      showToast("Incentive descriptions must be 80 characters or fewer.", "warning");
+      return;
+    }
+    if (!getExpenseDate({ date: incentiveDate })) {
+      showToast("Please select a valid incentive date.", "warning");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast("Please enter a valid incentive amount greater than 0.", "warning");
+      return;
+    }
+    const incentive = {
+      id:
+        globalThis.crypto?.randomUUID?.() ||
+        `incentive-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name,
+      amount,
+      date: incentiveDate,
+    };
+    setSalaryVaultExtraSettings((current) => ({
+      ...current,
+      employeeIncentives: [
+        incentive,
+        ...(Array.isArray(current.employeeIncentives)
+          ? current.employeeIncentives
+          : []),
+      ],
+    }));
+    const [incentiveYear, incentiveMonth, incentiveDay] = incentiveDate
+      .split("-")
+      .map(Number);
+    setYear(incentiveYear);
+    setMonthIndex(incentiveMonth - 1);
+    setSelectedDay(incentiveDay);
+    setIncentiveName("");
+    setIncentiveAmount("");
+    showToast("Employee incentive added.", "success");
+  };
+
+  const deleteEmployeeIncentive = (id) => {
+    setSalaryVaultExtraSettings((current) => ({
+      ...current,
+      employeeIncentives: (Array.isArray(current.employeeIncentives)
+        ? current.employeeIncentives
+        : []
+      ).filter((incentive) => incentive.id !== id),
+    }));
+    showToast("Employee incentive removed.", "success");
   };
 
   const deleteExpense = (id) => {
@@ -3825,6 +3940,7 @@ export default function App() {
               earlyPunchWindowMinutes={earlyPunchWindowMinutes}
               holidayPayEstimate={selectedHolidayPay}
               estimatedEarnings={selectedEstimatedEarnings}
+              selectedDateIncentives={selectedDateIncentives}
               dailyAllowance={dailyAllowance}
               holidayWorkedHours={selectedWorkedHours}
               nightDifferentialPay={selectedNightDifferentialPay}
@@ -3859,6 +3975,17 @@ export default function App() {
               expenseCategory={expenseCategory}
               setExpenseCategory={setExpenseCategory}
               onDeleteExpense={deleteExpense}
+              employeeIncentives={availableEmployeeIncentives}
+              incentiveName={incentiveName}
+              setIncentiveName={setIncentiveName}
+              incentiveAmount={incentiveAmount}
+              setIncentiveAmount={setIncentiveAmount}
+              incentiveDate={incentiveDate}
+              setIncentiveDate={setIncentiveDate}
+              onAddIncentive={addEmployeeIncentive}
+              onDeleteIncentive={deleteEmployeeIncentive}
+              salaryVaultError={salaryVaultError}
+              salaryVaultSyncing={salaryVaultSyncing}
               workspaceLoading={workspaceLoading}
               workspaceError={workspaceError}
               workspaceSaveError={workspaceSaveError}

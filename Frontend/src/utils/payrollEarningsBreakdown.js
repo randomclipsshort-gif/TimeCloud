@@ -1,3 +1,5 @@
+import { getIncentivesForPeriod } from "./incentiveTracker.js";
+
 const DAY_MINUTES = 24 * 60;
 const DAY_MILLISECONDS = 24 * 60 * 60 * 1000;
 
@@ -70,6 +72,7 @@ export function summarizePayrollEarningsBreakdown(
   attendance,
   period,
   getRecordBreakdown,
+  incentives = [],
 ) {
   const startOrdinal = period && parseDateKey(period.startDate);
   const endOrdinal = period && parseDateKey(period.endDate);
@@ -151,6 +154,18 @@ export function summarizePayrollEarningsBreakdown(
       };
     })
     .filter((item) => item.total > 0);
+
+  for (const incentive of getIncentivesForPeriod(incentives, period)) {
+    const total = Math.round((Number(incentive.amount) + Number.EPSILON) * 100) / 100;
+    items.push({
+      id: `incentive-${incentive.id}`,
+      label: incentive.name.trim(),
+      unit: "item",
+      units: 1,
+      rate: total,
+      total,
+    });
+  }
 
   if (lateMinutes > 0 || undertimeMinutes > 0) {
     items.push({

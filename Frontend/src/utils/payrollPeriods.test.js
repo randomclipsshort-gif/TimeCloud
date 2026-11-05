@@ -182,3 +182,24 @@ test("includes a cutoff-date night shift in full even when it ends the next day"
     },
   );
 });
+
+test("adds dated incentives to only the payroll period containing the incentive date", () => {
+  const incentives = [
+    { id: "i1", name: "Performance bonus", amount: 250, date: "2026-10-10" },
+    { id: "i2", name: "Referral", amount: 150, date: "2026-10-11" },
+  ];
+  const firstCutoff = summarizePayrollPeriod(
+    {},
+    getPayrollPeriodForDate("2026-10-10"),
+    undefined,
+    incentives,
+  );
+  const secondCutoff = summarizePayrollPeriod(
+    {},
+    getPayrollPeriodForDate("2026-10-11"),
+    undefined,
+    incentives,
+  );
+  assert.equal(firstCutoff.recordedEarnings, 250);
+  assert.equal(secondCutoff.recordedEarnings, 150);
+});

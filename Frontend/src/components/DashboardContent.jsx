@@ -16,6 +16,7 @@ export default function DashboardContent(props) {
     salaryVaultStatus,
     holidayPayEstimate,
     estimatedEarnings,
+    selectedDateIncentives,
     dailyAllowance,
     holidayWorkedHours,
     nightDifferentialPay,
@@ -49,6 +50,17 @@ export default function DashboardContent(props) {
     expenseCategory,
     setExpenseCategory,
     onDeleteExpense,
+    employeeIncentives,
+    incentiveName,
+    setIncentiveName,
+    incentiveAmount,
+    setIncentiveAmount,
+    incentiveDate,
+    setIncentiveDate,
+    onAddIncentive,
+    onDeleteIncentive,
+    salaryVaultError,
+    salaryVaultSyncing,
     workspaceLoading,
     workspaceError,
     workspaceSaveError,
@@ -113,6 +125,7 @@ export default function DashboardContent(props) {
             salaryVaultStatus={salaryVaultStatus}
             holidayPayEstimate={holidayPayEstimate}
             estimatedEarnings={estimatedEarnings}
+            selectedDateIncentives={selectedDateIncentives}
             dailyAllowance={dailyAllowance}
             holidayWorkedHours={holidayWorkedHours}
             nightDifferentialPay={nightDifferentialPay}
@@ -161,12 +174,23 @@ export default function DashboardContent(props) {
             expenseCategory={expenseCategory}
             setExpenseCategory={setExpenseCategory}
             onDeleteExpense={onDeleteExpense}
+            employeeIncentives={employeeIncentives}
+            incentiveName={incentiveName}
+            setIncentiveName={setIncentiveName}
+            incentiveAmount={incentiveAmount}
+            setIncentiveAmount={setIncentiveAmount}
+            incentiveDate={incentiveDate}
+            setIncentiveDate={setIncentiveDate}
+            onAddIncentive={onAddIncentive}
+            onDeleteIncentive={onDeleteIncentive}
             workspaceLoading={workspaceLoading}
             workspaceError={workspaceError}
             workspaceSaveError={workspaceSaveError}
             historicalPayslips={historicalPayslips}
             payslipHistorySaving={payslipHistorySaving}
             salaryVaultStatus={salaryVaultStatus}
+            salaryVaultError={salaryVaultError}
+            salaryVaultSyncing={salaryVaultSyncing}
             currentPayrollPeriod={currentPayrollPeriod}
             onViewCurrentPayslip={onViewCurrentPayslip}
             onViewHistoricalPayslip={onViewHistoricalPayslip}

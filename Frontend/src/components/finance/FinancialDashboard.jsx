@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getExpenseDate } from "../../utils/expenseTracker.js";
+import EmployeeIncentives from "./EmployeeIncentives.jsx";
 import { formatPayrollPeriod } from "../../utils/payrollPeriods.js";
 
 export default function FinancialDashboard({
@@ -26,12 +27,23 @@ export default function FinancialDashboard({
   expenseCategory,
   setExpenseCategory,
   onDeleteExpense,
+  employeeIncentives,
+  incentiveName,
+  setIncentiveName,
+  incentiveAmount,
+  setIncentiveAmount,
+  incentiveDate,
+  setIncentiveDate,
+  onAddIncentive,
+  onDeleteIncentive,
   workspaceLoading,
   workspaceError,
   workspaceSaveError,
   historicalPayslips,
   payslipHistorySaving,
   salaryVaultStatus,
+  salaryVaultError,
+  salaryVaultSyncing,
   currentPayrollPeriod,
   onViewCurrentPayslip,
   onViewHistoricalPayslip,
@@ -205,6 +217,7 @@ export default function FinancialDashboard({
         <div className="mb-6 flex gap-2 border-b border-slate-100 pb-3" role="tablist" aria-label="Financial history sections">
           {[
             { id: "expenses", label: "Expenses", icon: "fa-receipt" },
+            { id: "incentives", label: "Incentives", icon: "fa-gift" },
             { id: "payslips", label: "Payslips", icon: "fa-file-invoice-dollar" },
           ].map((tab) => (
             <button
@@ -579,6 +592,22 @@ export default function FinancialDashboard({
         </div>
           </>
         )
+        ) : activeTab === "incentives" ? (
+          <EmployeeIncentives
+            incentives={employeeIncentives}
+            incentiveName={incentiveName}
+            setIncentiveName={setIncentiveName}
+            incentiveAmount={incentiveAmount}
+            setIncentiveAmount={setIncentiveAmount}
+            incentiveDate={incentiveDate}
+            setIncentiveDate={setIncentiveDate}
+            onAddIncentive={onAddIncentive}
+            onDeleteIncentive={onDeleteIncentive}
+            salaryVaultStatus={salaryVaultStatus}
+            salaryVaultError={salaryVaultError}
+            salaryVaultSyncing={salaryVaultSyncing}
+            formatCurrency={formatCurrency}
+          />
         ) : (
           <div className="space-y-5">
             <div className="flex flex-col gap-3 rounded-xl border border-teal-100 bg-teal-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
