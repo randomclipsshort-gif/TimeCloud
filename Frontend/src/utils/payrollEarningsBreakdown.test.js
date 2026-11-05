@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { summarizePayrollEarningsBreakdown } from "./payrollEarningsBreakdown.js";
+import {
+  groupIncentiveEarningsItems,
+  summarizePayrollEarningsBreakdown,
+} from "./payrollEarningsBreakdown.js";
 
 test("groups cutoff earnings into itemized pay and adjustment lines", () => {
   const attendance = {
@@ -144,9 +147,39 @@ test("lists dated incentives as separately named earnings lines", () => {
   assert.deepEqual(breakdown.items, [{
     id: "incentive-i1",
     label: "Performance bonus",
+    date: "2026-10-10",
     unit: "item",
     units: 1,
     rate: 250,
     total: 250,
   }]);
+});
+
+test("groups same-name incentives on the same date and combines their totals", () => {
+  const grouped = groupIncentiveEarningsItems([
+    { id: "incentive-1", label: "X-ray", date: "2026-10-10", total: 150 },
+    { id: "incentive-2", label: "X-ray", date: "2026-10-10", total: 150 },
+    { id: "incentive-3", label: "X-ray", date: "2026-10-11", total: 75 },
+    { id: "incentive-4", label: "CBC", date: "2026-10-10", total: 300 },
+  ]);
+  assert.deepEqual(grouped, [
+    {
+      id: "2026-10-10\u0000x-ray",
+      label: "X-ray",
+      count: 2,
+      total: 300,
+    },
+    {
+      id: "2026-10-11\u0000x-ray",
+      label: "X-ray",
+      count: 1,
+      total: 75,
+    },
+    {
+      id: "2026-10-10\u0000cbc",
+      label: "CBC",
+      count: 1,
+      total: 300,
+    },
+  ]);
 });

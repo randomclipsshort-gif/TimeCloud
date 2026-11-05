@@ -1,5 +1,6 @@
 import React from "react";
 import { formatPayrollPeriod } from "../../utils/payrollPeriods.js";
+import { groupIncentiveEarningsItems } from "../../utils/payrollEarningsBreakdown.js";
 
 export default function PayslipModal({
   open,
@@ -30,6 +31,7 @@ export default function PayslipModal({
   const incentiveItems = activeBreakdown.items.filter((item) =>
     item.id.startsWith("incentive-"),
   );
+  const groupedIncentiveItems = groupIncentiveEarningsItems(incentiveItems);
   const groupedBreakdownItems = activeBreakdown.items.filter(
     (item) => !item.id.startsWith("incentive-"),
   );
@@ -38,7 +40,7 @@ export default function PayslipModal({
       id: "incentives",
       label: "Incentives",
       total: incentiveItems.reduce((total, item) => total + item.total, 0),
-      incentiveItems,
+      incentiveItems: groupedIncentiveItems,
     };
     const lateUndertimeIndex = groupedBreakdownItems.findIndex(
       (item) => item.id === "lateUndertime",
@@ -260,10 +262,10 @@ export default function PayslipModal({
                         {item.label}
                       </span>
                       {item.id === "incentives" && (
-                        <div className="mt-0.5 space-y-0.5 pl-3 text-[10px] text-slate-500">
+                        <div className="mt-0.5 space-y-0.5 pl-3 text-xs italic text-slate-400">
                           {item.incentiveItems.map((incentive) => (
                             <div key={incentive.id}>
-                              {`${incentive.label} (${formatCurrency(incentive.total)})`}
+                              {`${incentive.label}${incentive.count > 1 ? ` (×${incentive.count})` : ""}  ${formatCurrency(incentive.total)}`}
                             </div>
                           ))}
                         </div>

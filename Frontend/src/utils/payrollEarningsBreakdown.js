@@ -68,6 +68,28 @@ function formatRate(total, units) {
   return units > 0 ? total / units : 0;
 }
 
+export function groupIncentiveEarningsItems(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const label = item.label.trim();
+    const key = `${item.date || item.id}\u0000${label.toLowerCase()}`;
+    const group = groups.get(key);
+    if (group) {
+      group.count += 1;
+      group.total =
+        Math.round((group.total + item.total + Number.EPSILON) * 100) / 100;
+    } else {
+      groups.set(key, {
+        id: key,
+        label,
+        count: 1,
+        total: item.total,
+      });
+    }
+  }
+  return Array.from(groups.values());
+}
+
 export function summarizePayrollEarningsBreakdown(
   attendance,
   period,
@@ -160,6 +182,7 @@ export function summarizePayrollEarningsBreakdown(
     items.push({
       id: `incentive-${incentive.id}`,
       label: incentive.name.trim(),
+      date: incentive.date,
       unit: "item",
       units: 1,
       rate: total,
