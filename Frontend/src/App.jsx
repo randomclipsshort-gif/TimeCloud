@@ -3952,6 +3952,7 @@ export default function App() {
               holidayPayEstimate={selectedHolidayPay}
               estimatedEarnings={selectedEstimatedEarnings}
               selectedDateIncentives={selectedDateIncentives}
+              onAddIncentive={addEmployeeIncentive}
               dailyAllowance={dailyAllowance}
               holidayWorkedHours={selectedWorkedHours}
               nightDifferentialPay={selectedNightDifferentialPay}
