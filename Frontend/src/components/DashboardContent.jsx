@@ -51,12 +51,6 @@ export default function DashboardContent(props) {
     setExpenseCategory,
     onDeleteExpense,
     employeeIncentives,
-    incentiveName,
-    setIncentiveName,
-    incentiveAmount,
-    setIncentiveAmount,
-    incentiveDate,
-    setIncentiveDate,
     onAddIncentive,
     onDeleteIncentive,
     salaryVaultError,
@@ -176,13 +170,6 @@ export default function DashboardContent(props) {
             setExpenseCategory={setExpenseCategory}
             onDeleteExpense={onDeleteExpense}
             employeeIncentives={employeeIncentives}
-            incentiveName={incentiveName}
-            setIncentiveName={setIncentiveName}
-            incentiveAmount={incentiveAmount}
-            setIncentiveAmount={setIncentiveAmount}
-            incentiveDate={incentiveDate}
-            setIncentiveDate={setIncentiveDate}
-            onAddIncentive={onAddIncentive}
             onDeleteIncentive={onDeleteIncentive}
             workspaceLoading={workspaceLoading}
             workspaceError={workspaceError}

@@ -825,11 +825,6 @@ export default function App() {
     localPrivateFinancialDefaults.overtimeMultiplier,
   );
   const [salaryVaultExtraSettings, setSalaryVaultExtraSettings] = useState({});
-  const [incentiveName, setIncentiveName] = useState("");
-  const [incentiveAmount, setIncentiveAmount] = useState("");
-  const [incentiveDate, setIncentiveDate] = useState(
-    () => getManilaDateTime().date,
-  );
   const [expenses, setExpenses] = useState([]);
   const [expenseName, setExpenseName] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
@@ -2557,14 +2552,17 @@ export default function App() {
     showToast("Expense record added successfully.", "success");
   };
 
-  const addEmployeeIncentive = (quickIncentive) => {
+  const addEmployeeIncentive = ({
+    name: incentiveName,
+    amount: incentiveAmount,
+    date,
+  }) => {
     if (salaryVaultStatus !== "unlocked") {
       showToast("Unlock the salary vault before adding an employee incentive.", "warning");
       return false;
     }
-    const name = (quickIncentive?.name ?? incentiveName).trim();
-    const amount = Number(quickIncentive?.amount ?? incentiveAmount);
-    const date = quickIncentive?.date ?? incentiveDate;
+    const name = incentiveName.trim();
+    const amount = Number(incentiveAmount);
     if (!name) {
       showToast("Please provide an incentive description.", "warning");
       return false;
@@ -2604,10 +2602,6 @@ export default function App() {
     setYear(incentiveYear);
     setMonthIndex(incentiveMonth - 1);
     setSelectedDay(incentiveDay);
-    if (!quickIncentive) {
-      setIncentiveName("");
-      setIncentiveAmount("");
-    }
     showToast("Employee incentive added.", "success");
     return true;
   };
@@ -3993,13 +3987,6 @@ export default function App() {
               setExpenseCategory={setExpenseCategory}
               onDeleteExpense={deleteExpense}
               employeeIncentives={availableEmployeeIncentives}
-              incentiveName={incentiveName}
-              setIncentiveName={setIncentiveName}
-              incentiveAmount={incentiveAmount}
-              setIncentiveAmount={setIncentiveAmount}
-              incentiveDate={incentiveDate}
-              setIncentiveDate={setIncentiveDate}
-              onAddIncentive={addEmployeeIncentive}
               onDeleteIncentive={deleteEmployeeIncentive}
               salaryVaultError={salaryVaultError}
               salaryVaultSyncing={salaryVaultSyncing}

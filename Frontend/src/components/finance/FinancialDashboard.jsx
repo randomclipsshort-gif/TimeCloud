@@ -28,13 +28,6 @@ export default function FinancialDashboard({
   setExpenseCategory,
   onDeleteExpense,
   employeeIncentives,
-  incentiveName,
-  setIncentiveName,
-  incentiveAmount,
-  setIncentiveAmount,
-  incentiveDate,
-  setIncentiveDate,
-  onAddIncentive,
   onDeleteIncentive,
   workspaceLoading,
   workspaceError,
@@ -595,13 +588,6 @@ export default function FinancialDashboard({
         ) : activeTab === "incentives" ? (
           <EmployeeIncentives
             incentives={employeeIncentives}
-            incentiveName={incentiveName}
-            setIncentiveName={setIncentiveName}
-            incentiveAmount={incentiveAmount}
-            setIncentiveAmount={setIncentiveAmount}
-            incentiveDate={incentiveDate}
-            setIncentiveDate={setIncentiveDate}
-            onAddIncentive={onAddIncentive}
             onDeleteIncentive={onDeleteIncentive}
             salaryVaultStatus={salaryVaultStatus}
             salaryVaultError={salaryVaultError}

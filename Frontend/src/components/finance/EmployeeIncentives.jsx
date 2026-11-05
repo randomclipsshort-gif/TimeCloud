@@ -2,13 +2,6 @@ import { getIncentiveTotal } from "../../utils/incentiveTracker.js";
 
 export default function EmployeeIncentives({
   incentives,
-  incentiveName,
-  setIncentiveName,
-  incentiveAmount,
-  setIncentiveAmount,
-  incentiveDate,
-  setIncentiveDate,
-  onAddIncentive,
   onDeleteIncentive,
   salaryVaultStatus,
   salaryVaultError,
@@ -65,62 +58,8 @@ export default function EmployeeIncentives({
           </p>
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <form
-          className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm lg:col-span-5"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onAddIncentive();
-          }}
-        >
-          <label className="block text-[11px] font-semibold text-slate-600" htmlFor="incentiveDate">
-            Incentive Date
-            <input
-              type="date"
-              id="incentiveDate"
-              value={incentiveDate}
-              onChange={(event) => setIncentiveDate(event.target.value)}
-              required
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
-            />
-          </label>
-          <label className="block text-[11px] font-semibold text-slate-600" htmlFor="incentiveName">
-            Incentive Description
-            <input
-              type="text"
-              id="incentiveName"
-              value={incentiveName}
-              onChange={(event) => setIncentiveName(event.target.value)}
-              placeholder="e.g., Performance bonus, Referral reward"
-              maxLength={80}
-              required
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
-            />
-          </label>
-          <label className="block text-[11px] font-semibold text-slate-600" htmlFor="incentiveAmount">
-            Amount (₱)
-            <input
-              type="number"
-              id="incentiveAmount"
-              value={incentiveAmount}
-              onChange={(event) => setIncentiveAmount(event.target.value)}
-              placeholder="0.00"
-              min="0.01"
-              step="0.01"
-              required
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
-            />
-          </label>
-          <button
-            type="submit"
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 text-xs font-medium text-white shadow-sm transition hover:bg-emerald-700"
-          >
-            <i className="fa-solid fa-plus" aria-hidden="true"></i>
-            Save Incentive
-          </button>
-        </form>
-        <div className="lg:col-span-7">
-          <div className="mb-2 flex items-center justify-between">
+      <div>
+        <div className="mb-2 flex items-center justify-between">
             <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-800">
               <i className="fa-solid fa-list text-emerald-600" aria-hidden="true"></i>
               Incentive History
@@ -172,7 +111,6 @@ export default function EmployeeIncentives({
                 ))}
               </tbody>
             </table>
-          </div>
         </div>
       </div>
     </div>
