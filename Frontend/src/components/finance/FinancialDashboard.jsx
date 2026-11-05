@@ -260,18 +260,6 @@ export default function FinancialDashboard({
               {financePeriodLabel}
             </span>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-slate-500">Filtered history</span>
-              <i className="fa-solid fa-filter text-slate-300" aria-hidden="true"></i>
-            </div>
-            <span className="mt-2 block text-xl font-extrabold tabular-nums text-slate-800">
-              {formatCurrency(filteredExpenseTotal)}
-            </span>
-            <span className="mt-1 block text-[10px] text-slate-400">
-              {`${filteredExpenses.length} matching · ${validExpenses.length} saved total`}
-            </span>
-          </div>
           <div className={`rounded-2xl border p-4 ${remaining < 0 ? "border-rose-100 bg-rose-50/50" : "border-teal-100 bg-teal-50/60"}`}>
             <div className="flex items-center justify-between">
               <span className={`text-[11px] font-semibold ${remaining < 0 ? "text-rose-700" : "text-teal-800"}`}>
@@ -284,6 +272,18 @@ export default function FinancialDashboard({
             </span>
             <span className="mt-1 block text-[10px] text-slate-500">
               After period expenses
+            </span>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-slate-500">Filtered history</span>
+              <i className="fa-solid fa-filter text-slate-300" aria-hidden="true"></i>
+            </div>
+            <span className="mt-2 block text-xl font-extrabold tabular-nums text-slate-800">
+              {formatCurrency(filteredExpenseTotal)}
+            </span>
+            <span className="mt-1 block text-[10px] text-slate-400">
+              {`${filteredExpenses.length} matching · ${validExpenses.length} saved total`}
             </span>
           </div>
         </div>
