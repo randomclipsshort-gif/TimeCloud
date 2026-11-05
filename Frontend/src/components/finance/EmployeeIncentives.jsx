@@ -73,10 +73,6 @@ export default function EmployeeIncentives({
             onAddIncentive();
           }}
         >
-          <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-800">
-            <i className="fa-solid fa-circle-plus text-emerald-600" aria-hidden="true"></i>
-            Add Employee Incentive
-          </h3>
           <label className="block text-[11px] font-semibold text-slate-600" htmlFor="incentiveDate">
             Incentive Date
             <input
