@@ -45,6 +45,7 @@ export default function FinancialDashboard({
   setExpenseCategory,
   onDeleteExpense,
   employeeIncentives,
+  onAddIncentive,
   onDeleteIncentive,
   workspaceLoading,
   workspaceError,
@@ -807,6 +808,7 @@ export default function FinancialDashboard({
         ) : activeTab === "incentives" ? (
           <EmployeeIncentives
             incentives={employeeIncentives}
+            onAddIncentive={onAddIncentive}
             onDeleteIncentive={onDeleteIncentive}
             requestConfirmation={requestConfirmation}
             salaryVaultStatus={salaryVaultStatus}

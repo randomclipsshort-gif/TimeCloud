@@ -101,7 +101,7 @@ export default function DashboardContent(props) {
           ))}
         </div>
       </nav>
-      <div className="relative isolate w-full overflow-hidden">
+      <div className="relative isolate w-full overflow-x-clip overflow-y-visible">
         <div
           id="sliderTrack"
           className={`w-full transition-transform duration-500 ease-in-out ${
@@ -170,6 +170,7 @@ export default function DashboardContent(props) {
             setExpenseCategory={setExpenseCategory}
             onDeleteExpense={onDeleteExpense}
             employeeIncentives={employeeIncentives}
+            onAddIncentive={onAddIncentive}
             onDeleteIncentive={onDeleteIncentive}
             workspaceLoading={workspaceLoading}
             workspaceError={workspaceError}
