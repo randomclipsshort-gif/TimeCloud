@@ -1,5 +1,6 @@
 import AttendanceDashboard from "./attendance/AttendanceDashboard.jsx";
 import FinancialDashboard from "./finance/FinancialDashboard.jsx";
+import { CalendarDays, Wallet } from "lucide-react";
 
 export default function DashboardContent(props) {
   const {
@@ -75,49 +76,38 @@ export default function DashboardContent(props) {
     onDeleteTravelExpense,
   } = props;
   return (
-    <main className="flex-1 max-w-[1600px] w-full mx-auto p-6 flex flex-col gap-6">
-      <nav
-        className="flex justify-center"
-        aria-label="Dashboard pages"
-      >
-        <div className="flex items-center space-x-3 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
-          <button
-            type="button"
-            data-action="slidePage(0)"
-            id="navDot0"
-            aria-current={page === 0 ? "page" : undefined}
-            className={
-              page === 0
-                ? "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-teal-600 text-white shadow-xs"
-                : "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            }
-          >
-            <i className="fa-solid fa-calendar-days" aria-hidden="true"></i>
-            <span>Time &amp; Calendar Hub</span>
-          </button>
-          <button
-            type="button"
-            data-action="slidePage(1)"
-            id="navDot1"
-            aria-current={page === 1 ? "page" : undefined}
-            className={
-              page === 1
-                ? "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-teal-600 text-white shadow-xs"
-                : "flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            }
-          >
-            <i className="fa-solid fa-wallet" aria-hidden="true"></i>
-            <span>Quick Stats &amp; Finance Hub</span>
-          </button>
+    <main className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-1 flex-col gap-6 p-4 sm:p-6">
+      <nav className="flex justify-center" aria-label="Dashboard pages">
+        <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1">
+          {[
+            { pageIndex: 0, label: "Time & Calendar Hub", Icon: CalendarDays },
+            { pageIndex: 1, label: "Quick Stats & Finance Hub", Icon: Wallet },
+          ].map(({ pageIndex, label, Icon }) => (
+            <button
+              key={pageIndex}
+              type="button"
+              data-action={`slidePage(${pageIndex})`}
+              id={`navDot${pageIndex}`}
+              aria-current={page === pageIndex ? "page" : undefined}
+              className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-[11px] font-semibold transition ${
+                page === pageIndex
+                  ? "bg-teal-600 text-white shadow-xs"
+                  : "text-slate-600 hover:bg-white hover:text-slate-900"
+              }`}
+            >
+              <Icon size={14} aria-hidden="true" />
+              {label}
+            </button>
+          ))}
         </div>
       </nav>
-      <div className="relative w-full overflow-x-clip overflow-y-clip">
+      <div className="relative isolate w-full overflow-hidden">
         <div
           id="sliderTrack"
           className={`w-full transition-transform duration-500 ease-in-out ${
             page === 0
-              ? "relative translate-x-0"
-              : "absolute left-0 top-0 -translate-x-full"
+              ? "relative z-10 translate-x-0 bg-slate-50"
+              : "absolute left-0 top-0 z-0 -translate-x-full"
           }`}
         >
           <AttendanceDashboard
@@ -150,8 +140,8 @@ export default function DashboardContent(props) {
         <div
           className={`w-full transition-transform duration-500 ease-in-out ${
             page === 1
-              ? "relative translate-x-0"
-              : "absolute left-0 top-0 translate-x-full"
+              ? "relative z-10 translate-x-0 bg-slate-50"
+              : "absolute left-0 top-0 z-0 translate-x-full"
           }`}
         >
           <FinancialDashboard

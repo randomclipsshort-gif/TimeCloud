@@ -4069,7 +4069,7 @@ export default function App() {
 
   return (
     <div
-      className="bg-slateBg text-textMain font-sans antialiased min-h-screen flex flex-col selection:bg-teal-500 selection:text-white overflow-x-clip"
+      className="min-h-screen flex flex-col overflow-x-clip bg-slate-50 font-sans text-textMain antialiased selection:bg-teal-500 selection:text-white"
       onClick={handleClick}
       onChange={handleChange}
       onSubmit={handleSubmit}
