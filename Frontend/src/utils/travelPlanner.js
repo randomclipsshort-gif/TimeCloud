@@ -74,6 +74,13 @@ export function normalizeTravelPlans(plans) {
     }));
 }
 
+export function removeTravelPlan(plans, tripId) {
+  if (!Array.isArray(plans) || !plans.some((plan) => plan.id === tripId)) {
+    throw new Error("The travel plan could not be found.");
+  }
+  return plans.filter((plan) => plan.id !== tripId);
+}
+
 export function validateTravelPlan(plan) {
   if (!plan || typeof plan.name !== "string" || !plan.name.trim()) {
     return "Enter a trip name.";

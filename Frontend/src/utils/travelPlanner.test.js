@@ -11,6 +11,7 @@ import {
   getTravelPlanStatus,
   getTravelPlanTotals,
   normalizeTravelPlans,
+  removeTravelPlan,
   removeTravelExpense,
   replaceTravelExpense,
   validateTravelExpense,
@@ -62,6 +63,12 @@ test("travel plans are validated and completed plans stay historical", () => {
   assert.equal(getTravelPlanStatus(plan, "2026-11-03"), "Ongoing");
   assert.equal(getTravelPlanStatus(plan, "2026-11-06"), "Completed");
   assert.equal(getTravelPlanStatus({ ...plan, completedAt: "2026-11-04" }, "2026-11-04"), "Completed");
+});
+
+test("deleting a travel plan removes only that trip and its expenses", () => {
+  const secondPlan = { ...plan, id: "trip-2", name: "Baguio", expenses: [] };
+  assert.deepEqual(removeTravelPlan([plan, secondPlan], plan.id), [secondPlan]);
+  assert.throws(() => removeTravelPlan([secondPlan], plan.id), /could not be found/);
 });
 
 test("travel expense history preserves distinct expenses and validates values", () => {

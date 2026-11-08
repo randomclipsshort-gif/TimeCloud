@@ -50,6 +50,7 @@ import {
 import {
   appendTravelExpense,
   getTravelPlanStatus,
+  removeTravelPlan,
   removeTravelExpense,
   replaceTravelExpense,
   validateTravelExpense,
@@ -2771,6 +2772,20 @@ export default function App() {
     return true;
   };
 
+  const deleteTravelPlan = (id) => {
+    if (!userRef.current || !workspaceLoadedRef.current) {
+      showToast("Wait for your travel data to load before making changes.", "warning");
+      return false;
+    }
+    if (!travelPlans.some((plan) => plan.id === id)) {
+      showToast("The travel plan could not be found.", "error");
+      return false;
+    }
+    setTravelPlans((current) => removeTravelPlan(current, id));
+    showToast("Travel plan and its expenses removed.", "success");
+    return true;
+  };
+
   const addTravelExpense = (tripId, draft) => {
     if (!userRef.current || !workspaceLoadedRef.current) {
       showToast("Wait for your travel data to load before making changes.", "warning");
@@ -4264,6 +4279,7 @@ export default function App() {
               onCreateTravelPlan={createTravelPlan}
               onUpdateTravelPlan={updateTravelPlan}
               onCompleteTravelPlan={completeTravelPlan}
+              onDeleteTravelPlan={deleteTravelPlan}
               onAddTravelExpense={addTravelExpense}
               onUpdateTravelExpense={updateTravelExpense}
               onDeleteTravelExpense={deleteTravelExpense}

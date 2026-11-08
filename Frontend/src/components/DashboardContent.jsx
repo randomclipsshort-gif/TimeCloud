@@ -69,6 +69,7 @@ export default function DashboardContent(props) {
     onCreateTravelPlan,
     onUpdateTravelPlan,
     onCompleteTravelPlan,
+    onDeleteTravelPlan,
     onAddTravelExpense,
     onUpdateTravelExpense,
     onDeleteTravelExpense,
@@ -196,6 +197,7 @@ export default function DashboardContent(props) {
             onCreateTravelPlan={onCreateTravelPlan}
             onUpdateTravelPlan={onUpdateTravelPlan}
             onCompleteTravelPlan={onCompleteTravelPlan}
+            onDeleteTravelPlan={onDeleteTravelPlan}
             onAddTravelExpense={onAddTravelExpense}
             onUpdateTravelExpense={onUpdateTravelExpense}
             onDeleteTravelExpense={onDeleteTravelExpense}

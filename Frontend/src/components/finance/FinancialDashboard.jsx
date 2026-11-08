@@ -47,6 +47,7 @@ export default function FinancialDashboard({
   onCreateTravelPlan,
   onUpdateTravelPlan,
   onCompleteTravelPlan,
+  onDeleteTravelPlan,
   onAddTravelExpense,
   onUpdateTravelExpense,
   onDeleteTravelExpense,
@@ -643,6 +644,7 @@ export default function FinancialDashboard({
             onCreatePlan={onCreateTravelPlan}
             onUpdatePlan={onUpdateTravelPlan}
             onCompletePlan={onCompleteTravelPlan}
+            onDeletePlan={onDeleteTravelPlan}
             onAddExpense={onAddTravelExpense}
             onUpdateExpense={onUpdateTravelExpense}
             onDeleteExpense={onDeleteTravelExpense}

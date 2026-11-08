@@ -2,9 +2,6 @@ import { useMemo, useState } from "react";
 import {
   formatTravelCurrency,
   getTravelBudgetStatus,
-  getTravelCategoryTotals,
-  getTravelExpenseAllocations,
-  getTravelPeopleReport,
   getTravelPlanStatus,
   getTravelPlanTotals,
   normalizeTravelPeople,
@@ -125,6 +122,7 @@ export default function TravelBudgetPlanner({
   onCreatePlan,
   onUpdatePlan,
   onCompletePlan,
+  onDeletePlan,
   onAddExpense,
   onUpdateExpense,
   onDeleteExpense,
@@ -143,8 +141,6 @@ export default function TravelBudgetPlanner({
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sortOrder, setSortOrder] = useState("newest");
-  const [paidByFilter, setPaidByFilter] = useState("all");
-  const [expenseForFilter, setExpenseForFilter] = useState("all");
 
   const plans = Array.isArray(travelPlans) ? travelPlans : [];
   const selectedTrip =
@@ -164,8 +160,6 @@ export default function TravelBudgetPlanner({
     return selectedTrip.expenses
       .filter((expense) => {
         if (categoryFilter !== "all" && expense.category !== categoryFilter) return false;
-        if (paidByFilter !== "all" && expense.paidBy !== paidByFilter) return false;
-        if (expenseForFilter !== "all" && !(expense.forPeople || []).includes(expenseForFilter)) return false;
         if (dateFrom && expense.date < dateFrom) return false;
         if (dateTo && expense.date > dateTo) return false;
         return true;
@@ -175,15 +169,24 @@ export default function TravelBudgetPlanner({
           ? right.date.localeCompare(left.date)
           : left.date.localeCompare(right.date),
       );
-  }, [categoryFilter, dateFrom, dateTo, expenseForFilter, paidByFilter, selectedTrip, sortOrder]);
-  const categoryTotals = getTravelCategoryTotals(selectedTrip?.expenses);
-  const categoryTotal = Object.values(categoryTotals).reduce(
-    (total, amount) => total + amount,
-    0,
-  );
-  const peopleReport = getTravelPeopleReport(selectedTrip?.expenses);
-  const expensePeople = peopleReport.people.map((person) => person.name);
+  }, [categoryFilter, dateFrom, dateTo, selectedTrip, sortOrder]);
   const planIsLocked = selectedStatus === "Completed";
+
+  const deletePlan = async (plan) => {
+    const confirmed = await requestConfirmation({
+      title: "Delete travel plan?",
+      message: `Delete "${plan.name}" and all ${plan.expenses.length} associated expense${plan.expenses.length === 1 ? "" : "s"}? This cannot be undone.`,
+      confirmLabel: "Delete trip",
+      variant: "danger",
+    });
+    if (confirmed && onDeletePlan(plan.id)) {
+      if (selectedTripId === plan.id) {
+        setSelectedTripId("");
+        setShowExpenseForm(false);
+        setEditingExpenseId("");
+      }
+    }
+  };
 
   const beginCreatePlan = () => {
     setPlanDraft(emptyPlanDraft(effectiveToday));
@@ -263,7 +266,7 @@ export default function TravelBudgetPlanner({
       ...expenseDraft,
       name: expenseDraft.name.trim() || expenseDraft.category.trim() || "Expense",
       forPeople,
-      paidBy: editingExpenseId ? expenseDraft.paidBy.trim() : "",
+      paidBy: expenseDraft.paidBy.trim(),
       splitEqually: expenseDraft.splitEqually && forPeople.length > 1,
     };
     const validationError = validateTravelExpense(payload);
@@ -340,10 +343,6 @@ export default function TravelBudgetPlanner({
               End date
               <input className={inputClass} type="date" value={planDraft.endDate} onChange={(event) => setPlanDraft({ ...planDraft, endDate: event.target.value })} required />
             </label>
-            <label className={`${labelClass} sm:col-span-2 lg:col-span-3`}>
-              Notes (optional)
-              <textarea className={inputClass} maxLength="1000" rows="2" value={planDraft.notes} onChange={(event) => setPlanDraft({ ...planDraft, notes: event.target.value })} placeholder="Travel reminders or plans" />
-            </label>
           </div>
           {planError && <p className="text-xs font-medium text-rose-700" role="alert">{planError}</p>}
           <div className="flex justify-end gap-2">
@@ -365,9 +364,12 @@ export default function TravelBudgetPlanner({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-          <section className="flex h-full min-h-[600px] flex-col gap-3 xl:sticky xl:top-4 xl:col-span-4" aria-label="Travel plans">
-            <div className="flex-1 space-y-3">
+        <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-12">
+          <section className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 xl:sticky xl:top-4 xl:col-span-4 xl:self-start" aria-label="Travel plans">
+            <button type="button" disabled={workspaceLoading} onClick={beginCreatePlan} className="w-full rounded-xl bg-teal-700 px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-800 disabled:opacity-50">
+              <i className="fa-solid fa-plus mr-1.5" aria-hidden="true"></i>New trip
+            </button>
+            <div className="space-y-2">
               {plans.map((plan) => {
               const status = getTravelPlanStatus(plan, effectiveToday);
               const totals = getTravelPlanTotals(plan);
@@ -381,10 +383,10 @@ export default function TravelBudgetPlanner({
                     setEditingExpenseId("");
                     setShowExpenseForm(false);
                   }}
-                  className={`w-full rounded-2xl border p-4 text-left transition ${
+                  className={`w-full rounded-xl border p-3 text-left transition ${
                     selectedTrip?.id === plan.id
                       ? "border-teal-400 bg-teal-50/50 shadow-sm"
-                      : "border-slate-200 bg-white hover:border-slate-300"
+                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                   }`}
                 >
                   <span className="flex items-start justify-between gap-2">
@@ -394,7 +396,7 @@ export default function TravelBudgetPlanner({
                     </span>
                     <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-bold ${statusStyles(status)}`}>{status}</span>
                   </span>
-                  <span className="mt-3 flex justify-between gap-2 text-[10px] text-slate-500">
+                  <span className="mt-2 flex justify-between gap-2 text-[10px] text-slate-500">
                     <span>{formatDateRange(plan.startDate, plan.endDate)}</span>
                     <span className={`font-semibold ${style.text}`}>{totals.percentage.toFixed(0)}%</span>
                   </span>
@@ -409,9 +411,6 @@ export default function TravelBudgetPlanner({
               );
               })}
             </div>
-            <button type="button" disabled={workspaceLoading} onClick={beginCreatePlan} className="mt-auto w-full rounded-lg border border-dashed border-teal-300 px-3 py-2.5 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:opacity-50">
-              + New Trip
-            </button>
           </section>
 
           {selectedTrip && selectedTotals && (
@@ -429,6 +428,14 @@ export default function TravelBudgetPlanner({
                   {selectedTrip.notes && <p className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{selectedTrip.notes}</p>}
                 </div>
                 <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => deletePlan(selectedTrip)}
+                    disabled={workspaceLoading}
+                    className="rounded-lg border border-rose-200 px-3 py-2 text-[11px] font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                  >
+                    <i className="fa-solid fa-trash-can mr-1.5" aria-hidden="true"></i>Delete trip
+                  </button>
                   {!planIsLocked && (
                     <>
                       <button type="button" onClick={() => beginEditPlan(selectedTrip)} className="rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">
@@ -472,7 +479,11 @@ export default function TravelBudgetPlanner({
 
               <div className="space-y-4">
                 {!planIsLocked && showExpenseForm && (
-                  <form onSubmit={submitExpense} className="grid grid-cols-1 items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-5">
+                  <form onSubmit={submitExpense} className="grid grid-cols-1 items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-6">
+                      <label className={labelClass}>
+                        Paid by
+                        <input className={inputClass} maxLength="100" value={expenseDraft.paidBy} onChange={(event) => setExpenseDraft({ ...expenseDraft, paidBy: event.target.value })} placeholder="Name" required />
+                      </label>
                       <label className={labelClass}>
                         Category
                         <select className={inputClass} value={expenseDraft.category} onChange={(event) => setExpenseDraft({ ...expenseDraft, category: event.target.value })} required>
@@ -494,33 +505,24 @@ export default function TravelBudgetPlanner({
                           {paymentMethods.map((method) => <option key={method} value={method}>{method}</option>)}
                         </select>
                       </label>
-                    <button type="submit" disabled={workspaceLoading} className="w-full rounded-lg bg-teal-700 px-3 py-2.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50">
-                      {editingExpenseId ? "Save expense changes" : "Add expense"}
-                    </button>
-                    {editingExpenseId && (
-                      <button type="button" onClick={() => { setEditingExpenseId(""); setShowExpenseForm(false); }} className="text-[10px] font-semibold text-slate-500 hover:text-slate-800 lg:col-span-5">Cancel edit</button>
-                    )}
-                    {expenseError && <p className="text-[11px] font-medium text-rose-700 sm:col-span-2 lg:col-span-5" role="alert">{expenseError}</p>}
+                    <div className="flex gap-2">
+                      <button type="submit" disabled={workspaceLoading} className="min-w-0 flex-1 rounded-lg bg-teal-700 px-3 py-2.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50">
+                        {editingExpenseId ? "Save" : "Add expense"}
+                      </button>
+                      <button type="button" onClick={() => { setEditingExpenseId(""); setShowExpenseForm(false); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+                        Cancel
+                      </button>
+                    </div>
+                    {expenseError && <p className="text-[11px] font-medium text-rose-700 sm:col-span-2 lg:col-span-6" role="alert">{expenseError}</p>}
                   </form>
                 )}
 
                 <div className="min-w-0 space-y-3">
                   <div className="flex flex-wrap items-end justify-between gap-2">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-800">Expense history</h4>
-                      <p className="mt-0.5 text-[10px] text-slate-500">
-                        {selectedTrip.expenses.length} expense{selectedTrip.expenses.length === 1 ? "" : "s"} · {formatTravelCurrency(selectedTotals.spent, selectedTrip.currency)}
-                      </p>
-                    </div>
                     <div className="flex flex-wrap gap-2">
                       {!planIsLocked && !showExpenseForm && (
                         <button type="button" onClick={beginAddExpense} className="rounded-lg bg-teal-700 px-3 py-1.5 text-[10px] font-semibold text-white hover:bg-teal-800">
                           Add expense
-                        </button>
-                      )}
-                      {showExpenseForm && !editingExpenseId && (
-                        <button type="button" onClick={() => setShowExpenseForm(false)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50">
-                          Cancel
                         </button>
                       )}
                     </div>
@@ -531,14 +533,6 @@ export default function TravelBudgetPlanner({
                       <select aria-label="Filter travel expenses by category" className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px]" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
                         <option value="all">All categories</option>
                         {expenseCategories.map((category) => <option key={category} value={category}>{category}</option>)}
-                      </select>
-                      <select aria-label="Filter travel expenses by payer" className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px]" value={paidByFilter} onChange={(event) => setPaidByFilter(event.target.value)}>
-                        <option value="all">All payers</option>
-                        {expensePeople.map((person) => <option key={person} value={person}>{person} paid</option>)}
-                      </select>
-                      <select aria-label="Filter travel expenses by beneficiary" className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px]" value={expenseForFilter} onChange={(event) => setExpenseForFilter(event.target.value)}>
-                        <option value="all">All people</option>
-                        {expensePeople.map((person) => <option key={person} value={person}>{person} benefited</option>)}
                       </select>
                       <select aria-label="Sort travel expenses" className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px]" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}>
                         <option value="newest">Newest first</option>
@@ -562,54 +556,44 @@ export default function TravelBudgetPlanner({
                     ) : (
                       <ul className="divide-y divide-slate-100">
                         {filteredExpenses.map((expense) => (
-                          <li key={expense.id} className="flex items-start gap-2 p-3">
+                          <li key={expense.id} className="flex items-start gap-4 p-4">
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-xs font-semibold text-slate-800">{expense.name}</span>
                               <span className="mt-1 block text-[10px] text-slate-500">
                                 {expense.date} · {expense.category}
                                 {expense.method ? ` · ${expense.method}` : ""}
+                                {expense.paidBy ? ` · Paid by ${expense.paidBy}` : ""}
                               </span>
-                              {(expense.paidBy || expense.forPeople?.length > 0) && (
-                                <span className="mt-1 block text-[10px] text-slate-500">
-                                  {expense.paidBy ? `Paid by ${expense.paidBy}` : "Payer not recorded"}
-                                  {expense.forPeople?.length > 0
-                                    ? ` · For ${(expense.forPeople || []).join(", ")}`
-                                    : ""}
-                                </span>
-                              )}
-                              {expense.splitEqually && expense.forPeople?.length > 1 && (
-                                <span className="mt-1 block text-[10px] font-medium text-sky-700">
-                                  Shares: {Object.entries(getTravelExpenseAllocations(expense))
-                                    .map(([person, amount]) => `${person} ${formatTravelCurrency(amount, selectedTrip.currency)}`)
-                                    .join(" · ")}
-                                </span>
-                              )}
-                              {expense.notes && <span className="mt-1 block whitespace-pre-wrap text-[10px] text-slate-400">{expense.notes}</span>}
                             </span>
-                            <span className="shrink-0 text-xs font-bold tabular-nums text-slate-800">{formatTravelCurrency(expense.amount, selectedTrip.currency)}</span>
-                            {!planIsLocked && (
-                              <span className="flex shrink-0">
-                                <button type="button" onClick={() => beginEditExpense(expense)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-teal-700" aria-label={`Edit ${expense.name}`}>
-                                  <i className="fa-solid fa-pen text-[10px]" aria-hidden="true"></i>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    const confirmed = await requestConfirmation({
-                                      title: "Delete travel expense?",
-                                      message: `Delete "${expense.name}" dated ${expense.date}? This cannot be undone.`,
-                                      confirmLabel: "Delete expense",
-                                      variant: "danger",
-                                    });
-                                    if (confirmed) onDeleteExpense(selectedTrip.id, expense.id);
-                                  }}
-                                  className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                                  aria-label={`Delete ${expense.name}`}
-                                >
-                                  <i className="fa-solid fa-trash-can text-[10px]" aria-hidden="true"></i>
-                                </button>
+                            <span className="flex shrink-0 flex-col items-end gap-2">
+                              <span className="text-sm font-bold tabular-nums text-slate-800">
+                                {formatTravelCurrency(expense.amount, selectedTrip.currency)}
                               </span>
-                            )}
+                              {!planIsLocked && (
+                                <span className="flex items-center gap-1">
+                                  <button type="button" onClick={() => beginEditExpense(expense)} className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-teal-700" aria-label={`Edit ${expense.name}`} title="Edit expense">
+                                    <i className="fa-solid fa-pen text-[10px]" aria-hidden="true"></i>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const confirmed = await requestConfirmation({
+                                        title: "Delete travel expense?",
+                                        message: `Delete "${expense.name}" dated ${expense.date}? This cannot be undone.`,
+                                        confirmLabel: "Delete expense",
+                                        variant: "danger",
+                                      });
+                                      if (confirmed) onDeleteExpense(selectedTrip.id, expense.id);
+                                    }}
+                                    className="rounded-md p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                                    aria-label={`Delete ${expense.name}`}
+                                    title="Delete expense"
+                                  >
+                                    <i className="fa-solid fa-trash-can text-[10px]" aria-hidden="true"></i>
+                                  </button>
+                                </span>
+                              )}
+                            </span>
                           </li>
                         ))}
                       </ul>
@@ -618,92 +602,6 @@ export default function TravelBudgetPlanner({
                 </div>
               </div>
 
-              <details className="rounded-xl border border-slate-200 p-4" aria-label="Trip reports">
-                <summary className="cursor-pointer text-xs font-bold text-slate-800">Trip reports</summary>
-                <div className="mt-3 space-y-4">
-              <section aria-label="Travel expense people report">
-                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-800">Paid by &amp; expenses for</h4>
-                    <p className="mt-1 text-[10px] text-slate-500">
-                      Each expense is counted once in trip spending. Allocations only include expenses split equally or assigned to one person.
-                    </p>
-                  </div>
-                  {peopleReport.sharedExpenseCount > 0 && (
-                    <span className="rounded-full bg-sky-50 px-2 py-1 text-[10px] font-semibold text-sky-800">
-                      {peopleReport.sharedExpenseCount} shared expense{peopleReport.sharedExpenseCount === 1 ? "" : "s"}
-                    </span>
-                  )}
-                </div>
-                {peopleReport.people.length === 0 ? (
-                  <p className="text-[11px] text-slate-400">Add payer and Expense For names to see the people report.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[430px] text-left text-[10px]">
-                      <thead className="border-b border-slate-100 text-slate-500">
-                        <tr>
-                          <th className="py-2 pr-2 font-semibold">Person</th>
-                          <th className="px-2 py-2 text-right font-semibold">Paid</th>
-                          <th className="px-2 py-2 text-right font-semibold">For</th>
-                          <th className="pl-2 py-2 text-right font-semibold">Allocated</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {peopleReport.people.map((person) => (
-                          <tr key={person.name}>
-                            <th className="py-2 pr-2 font-semibold text-slate-700">{person.name}</th>
-                            <td className="px-2 py-2 text-right text-slate-700">
-                              {formatTravelCurrency(person.paid, selectedTrip.currency)}
-                              <span className="ml-1 text-slate-400">({person.paidExpenseCount})</span>
-                            </td>
-                            <td className="px-2 py-2 text-right text-slate-700">
-                              {person.forExpenseCount}
-                            </td>
-                            <td className="pl-2 py-2 text-right font-semibold text-teal-700">
-                              {formatTravelCurrency(person.allocated, selectedTrip.currency)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                {peopleReport.unallocatedSharedTotal > 0 && (
-                  <p className="mt-2 text-[10px] text-slate-500">
-                    Shared expenses not split: {formatTravelCurrency(peopleReport.unallocatedSharedTotal, selectedTrip.currency)}
-                  </p>
-                )}
-              </section>
-
-              <section aria-label="Travel expenses by category">
-                <h4 className="mb-3 text-xs font-bold text-slate-800">Spending by category</h4>
-                {Object.keys(categoryTotals).length === 0 ? (
-                  <p className="text-[11px] text-slate-400">Category totals appear after you add expenses.</p>
-                ) : (
-                  <div className="space-y-2.5">
-                    {Object.entries(categoryTotals)
-                      .sort(([, left], [, right]) => right - left)
-                      .map(([category, amount]) => {
-                        const percent = categoryTotal > 0 ? (amount / categoryTotal) * 100 : 0;
-                        return (
-                          <div key={category}>
-                            <div className="mb-1 flex justify-between gap-2 text-[10px]">
-                              <span className="truncate font-medium text-slate-600">{category}</span>
-                              <span className="shrink-0 font-semibold text-slate-700">
-                                {formatTravelCurrency(amount, selectedTrip.currency)} · {percent.toFixed(0)}%
-                              </span>
-                            </div>
-                            <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                              <div className="h-full rounded-full bg-sky-500" style={{ width: `${percent}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
-              </section>
-                </div>
-              </details>
             </section>
           )}
         </div>
