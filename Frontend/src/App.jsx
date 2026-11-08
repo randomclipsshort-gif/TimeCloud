@@ -3196,8 +3196,8 @@ export default function App() {
 
   const handleClick = (event) => {
     const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    if (target.id.endsWith("Modal")) {
+    if (!(target instanceof Element)) return;
+    if (target instanceof HTMLElement && target.id.endsWith("Modal")) {
       setActiveModal(null);
       return;
     }

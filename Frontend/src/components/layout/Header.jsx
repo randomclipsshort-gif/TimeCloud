@@ -58,17 +58,41 @@ export default function Header({ clock, user, onLogout }) {
           </div>
         )}
         <div className="flex items-center space-x-1 border-l border-slate-200 pl-2 sm:pl-3">
-          <button data-action="exportWorkspace()" className="cursor-pointer rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 sm:p-2" title="Export my data" aria-label="Export my data">
+          <button
+            type="button"
+            data-action="exportWorkspace()"
+            className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+            title="Export my data"
+            aria-label="Export my data"
+          >
             <Download size={16} aria-hidden="true" />
           </button>
-          <button data-action="resetCalendar()" className="cursor-pointer rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 sm:p-2" title="Reset View" aria-label="Reset view">
+          <button
+            type="button"
+            data-action="resetCalendar()"
+            className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+            title="Reset View"
+            aria-label="Reset view"
+          >
             <RotateCcw size={16} aria-hidden="true" />
           </button>
-          <button data-action="openModal(&#x27;settingsModal&#x27;)" className="cursor-pointer rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 sm:p-2" title="Settings" aria-label="Settings">
+          <button
+            type="button"
+            data-action="openModal(&#x27;settingsModal&#x27;)"
+            className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+            title="Settings"
+            aria-label="Settings"
+          >
             <Settings size={16} aria-hidden="true" />
           </button>
           {user && (
-            <button type="button" onClick={onLogout} className="cursor-pointer rounded-lg p-1.5 text-slate-500 transition hover:bg-red-50 hover:text-red-600 sm:p-2" title="Sign out" aria-label="Sign out">
+            <button
+              type="button"
+              onClick={onLogout}
+              className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition hover:bg-red-50 hover:text-red-600"
+              title="Sign out"
+              aria-label="Sign out"
+            >
               <LogOut size={16} aria-hidden="true" />
             </button>
           )}
