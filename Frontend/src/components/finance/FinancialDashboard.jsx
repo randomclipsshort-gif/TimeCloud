@@ -81,6 +81,12 @@ export default function FinancialDashboard({
   const [payslipCutoff, setPayslipCutoff] = useState("all");
   const financeTabs = [
     {
+      id: "incentives",
+      label: "Incentives",
+      icon: "fa-award",
+      iconColor: "text-amber-500",
+    },
+    {
       id: "expenses",
       label: "Expenses",
       icon: "fa-receipt",
@@ -91,12 +97,6 @@ export default function FinancialDashboard({
       label: "Travel Budgets",
       icon: "fa-plane",
       iconColor: "text-blue-500",
-    },
-    {
-      id: "incentives",
-      label: "Incentives",
-      icon: "fa-award",
-      iconColor: "text-amber-500",
     },
     {
       id: "payslips",
