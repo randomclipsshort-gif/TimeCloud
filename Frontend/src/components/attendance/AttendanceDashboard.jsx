@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { RotateCcw } from "lucide-react";
 import { groupIncentiveEarningsItems } from "../../utils/payrollEarningsBreakdown.js";
 
 export default function AttendanceDashboard({
@@ -26,6 +27,7 @@ export default function AttendanceDashboard({
   year,
 }) {
   const [isYearPickerOpen, setIsYearPickerOpen] = useState(false);
+  const [resetAnimationKey, setResetAnimationKey] = useState(0);
   const [isPayComponentsExpanded, setIsPayComponentsExpanded] = useState(false);
   const [isTimeAttendanceExpanded, setIsTimeAttendanceExpanded] =
     useState(false);
@@ -754,42 +756,41 @@ export default function AttendanceDashboard({
                 </div>
               )}
             </div>
-            <div
-              id="monthTabsContainer"
-              aria-label="Month navigation"
-              className="relative flex w-[342px] max-w-full shrink-0 items-center overflow-hidden bg-slate-100 p-1 rounded-xl border border-slate-200"
-            >
-              <span aria-hidden="true" className="month-carousel-highlight" />
-              <div className="w-full overflow-hidden">
-                <div
-                  className={`flex w-max shrink-0 gap-1 ${monthCarouselOffset ? "month-carousel-transition" : ""}`}
-                  onTransitionEnd={onMonthCarouselTransitionEnd}
-                  style={{
-                    transform: `translateX(-${(1 + Math.abs(monthCarouselOffset) + monthCarouselOffset) * 48}px)`,
-                  }}
-                >
-                  {monthTabs}
+            <div className="flex items-center gap-1">
+              <div
+                id="monthTabsContainer"
+                aria-label="Month navigation"
+                className="relative flex w-[342px] max-w-full shrink-0 items-center overflow-hidden bg-slate-100 p-1 rounded-xl border border-slate-200"
+              >
+                <span aria-hidden="true" className="month-carousel-highlight" />
+                <div className="w-full overflow-hidden">
+                  <div
+                    className={`flex w-max shrink-0 gap-1 ${monthCarouselOffset ? "month-carousel-transition" : ""}`}
+                    onTransitionEnd={onMonthCarouselTransitionEnd}
+                    style={{
+                      transform: `translateX(-${(1 + Math.abs(monthCarouselOffset) + monthCarouselOffset) * 48}px)`,
+                    }}
+                  >
+                    {monthTabs}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center space-x-1 border-l border-slate-200 pl-2">
               <button
                 type="button"
-                aria-label="Previous month"
-                title="Previous month"
-                data-action="changeMonth(-1)"
-                className="w-7 h-7 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-200 transition cursor-pointer"
+                onClick={() =>
+                  setResetAnimationKey((animationKey) => animationKey + 1)
+                }
+                data-action="resetCalendar()"
+                className="group inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 active:scale-90 motion-reduce:transition-none"
+                title="Reset View"
+                aria-label="Reset view"
               >
-                <i className="fa-solid fa-chevron-left text-xs"></i>
-              </button>
-              <button
-                type="button"
-                aria-label="Next month"
-                title="Next month"
-                data-action="changeMonth(1)"
-                className="w-7 h-7 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-200 transition cursor-pointer"
-              >
-                <i className="fa-solid fa-chevron-right text-xs"></i>
+                <RotateCcw
+                  key={resetAnimationKey}
+                  size={16}
+                  className={`transition-transform transition-colors duration-300 ease-out group-hover:-rotate-45 group-hover:text-emerald-600 motion-reduce:transition-none ${resetAnimationKey ? "reset-view-reverse-spin" : ""}`}
+                  aria-hidden="true"
+                />
               </button>
             </div>
           </div>

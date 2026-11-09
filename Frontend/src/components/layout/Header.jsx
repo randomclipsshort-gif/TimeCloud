@@ -4,7 +4,6 @@ import {
   Download,
   FileText,
   LogOut,
-  RotateCcw,
   Settings,
 } from "lucide-react";
 
@@ -66,15 +65,6 @@ export default function Header({ clock, user, onLogout }) {
             aria-label="Export my data"
           >
             <Download size={16} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            data-action="resetCalendar()"
-            className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
-            title="Reset View"
-            aria-label="Reset view"
-          >
-            <RotateCcw size={16} aria-hidden="true" />
           </button>
           <button
             type="button"

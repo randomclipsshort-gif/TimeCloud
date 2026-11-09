@@ -80,8 +80,22 @@ body {
   transition: transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+@keyframes reset-view-reverse-spin {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.reset-view-reverse-spin {
+  animation: reset-view-reverse-spin 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .month-carousel-transition {
     transition: none;
+  }
+
+  .reset-view-reverse-spin {
+    animation: none;
   }
 }
