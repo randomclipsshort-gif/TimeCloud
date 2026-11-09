@@ -101,7 +101,11 @@ export default function DashboardContent(props) {
           ))}
         </div>
       </nav>
-      <div className="relative isolate w-full overflow-x-clip overflow-y-visible">
+      <div
+        className={`relative isolate w-full overflow-x-clip ${
+          page === 0 ? "overflow-y-visible" : "overflow-y-clip"
+        }`}
+      >
         <div
           id="sliderTrack"
           className={`w-full transition-transform duration-500 ease-in-out ${
