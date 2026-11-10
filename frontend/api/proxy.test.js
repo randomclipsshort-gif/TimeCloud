@@ -21,8 +21,8 @@ function createResponse() {
 
 test("Vercel API proxy forwards same-origin requests and preserves separate auth cookies", async () => {
   const cookies = [
-    "timecloud.session_token=one; Path=/; HttpOnly; Secure; SameSite=Lax",
-    "timecloud.session_data=two; Path=/; HttpOnly; Secure; SameSite=Lax",
+    "timecloud.session_token=one; Path=/; HttpOnly; Secure; SameSite=None",
+    "timecloud.session_data=two; Path=/; HttpOnly; Secure; SameSite=None",
   ];
   const upstreamHeaders = new Headers({
     "content-type": "application/json",

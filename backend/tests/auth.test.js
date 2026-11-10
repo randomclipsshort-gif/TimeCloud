@@ -1,6 +1,42 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { deleteUserAppData } from "../src/services/auth.js";
+import { getServerConfig } from "../src/config/config.js";
+import {
+  deleteUserAppData,
+  getAuthCookieAttributes,
+} from "../src/services/auth.js";
+
+test("auth cookies allow secure cross-site production sessions and keep localhost settings", () => {
+  const sharedEnv = {
+    MONGODB_URI: "mongodb://localhost:27017",
+    MONGODB_DB_NAME: "timecloud",
+    AUTH_SECRET: "a".repeat(32),
+  };
+  const productionConfig = getServerConfig({
+    ...sharedEnv,
+    APP_ORIGIN: "https://time-cloud.vercel.app",
+    API_ORIGIN: "https://timecloud.onrender.com",
+  });
+  assert.deepEqual(getAuthCookieAttributes(productionConfig), {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    path: "/",
+  });
+
+  const localConfig = getServerConfig({
+    ...sharedEnv,
+    APP_ORIGIN: "http://localhost:5173",
+    API_ORIGIN: "http://localhost:10000",
+    NODE_ENV: "development",
+  });
+  assert.deepEqual(getAuthCookieAttributes(localConfig), {
+    httpOnly: true,
+    secure: false,
+    sameSite: "lax",
+    path: "/",
+  });
+});
 
 function createDatabase(initialDocuments = {}) {
   const collections = new Map(

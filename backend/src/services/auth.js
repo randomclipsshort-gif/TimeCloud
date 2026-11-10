@@ -4,6 +4,19 @@ import nodemailer from "nodemailer";
 import { getServerConfig } from "../config/config.js";
 import { getMongoDb } from "../config/mongodb.js";
 
+export function getAuthCookieAttributes(config) {
+  const isProduction = config.isProduction === true;
+  const appHostname = new URL(config.appOrigin).hostname;
+  const apiHostname = new URL(config.apiOrigin).hostname;
+  const requiresCrossSiteCookies = appHostname !== apiHostname;
+  return {
+    httpOnly: true,
+    secure: isProduction || config.apiOrigin.startsWith("https://"),
+    sameSite: isProduction || requiresCrossSiteCookies ? "none" : "lax",
+    path: "/",
+  };
+}
+
 export async function deleteUserAppData(database, userId) {
   if (!database || typeof userId !== "string" || !userId) {
     throw new Error("A MongoDB database and user ID are required for deletion.");
@@ -51,6 +64,7 @@ export function createAuth({
     throw new Error("A MongoDB database is required to initialize authentication.");
   }
   const config = getServerConfig(env);
+  const cookieAttributes = getAuthCookieAttributes(config);
   let emailTransport;
   const sendMail = async ({ to, subject, url, purpose }) => {
     if (!config.smtpUrl || !config.smtpFrom) {
@@ -118,13 +132,8 @@ export function createAuth({
     },
     advanced: {
       cookiePrefix: "timecloud",
-      useSecureCookies: config.apiOrigin.startsWith("https://"),
-      defaultCookieAttributes: {
-        httpOnly: true,
-        secure: config.apiOrigin.startsWith("https://"),
-        sameSite: "lax",
-        path: "/",
-      },
+      useSecureCookies: cookieAttributes.secure,
+      defaultCookieAttributes: cookieAttributes,
     },
   });
 }

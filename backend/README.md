@@ -48,8 +48,8 @@ Set these variables in the Render service:
 | `MONGODB_DB_NAME` | A new, empty database name, such as `timecloud_fresh`. |
 | `AUTH_SECRET` | New random secret of at least 32 bytes. |
 | `APP_ORIGIN` | Exact frontend origin, currently `https://time-cloud.vercel.app`. |
+| `API_ORIGIN` | Public backend origin, currently `https://timecloud.onrender.com`. |
 | `PORT` | Supplied by Render; do not hardcode a production port. |
-| `API_ORIGIN` | Optional. Defaults to `APP_ORIGIN`; if set, use the browser-visible API origin through the Vercel proxy. |
 | `SMTP_URL` | Optional SMTP/SMTPS URL for password-reset email. |
 | `SMTP_FROM` | Optional sender address; configure together with `SMTP_URL`. |
 | `NODE_ENV` | Set to `production`. |
@@ -76,7 +76,25 @@ environment variable:
 
 Do not prefix this variable with `VITE_`. Leave `VITE_API_BASE_URL` empty in
 Vercel so browser calls use the Vercel `/api/*` function. This keeps auth
-cookies same-origin and avoids third-party-cookie requirements.
+cookies same-origin and avoids third-party-cookie requirements. The proxy
+forwards request cookies and preserves each backend `Set-Cookie` header.
+
+Set `API_ORIGIN` to the Render service origin so Better Auth has the correct
+public API base URL. Production Better Auth cookies use
+`SameSite=None; Secure; HttpOnly` when the app and API use different hostnames,
+and in production generally. Local development on `localhost` uses
+`SameSite=Lax`; cookies are Secure only when the configured API origin is
+HTTPS. The frontend auth client includes browser credentials for login,
+signup, session checks, and logout.
+
+`SameSite=None` does not override browser third-party-cookie blocking. Vercel's
+`vercel.app` and Render's `onrender.com` hosts are on different sites, so a
+direct browser-to-Render setup may still fail in browsers or privacy settings
+that block third-party cookies. Prefer the Vercel same-origin `/api/*` proxy
+with `VITE_API_BASE_URL` empty. For a first-party deployment without a proxy,
+use custom domains on the same registrable domain, such as
+`app.example.com` and `api.example.com`, and update `APP_ORIGIN`, `API_ORIGIN`,
+and the frontend API configuration accordingly.
 
 ## API data and security
 

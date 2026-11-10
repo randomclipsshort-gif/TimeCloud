@@ -6,6 +6,7 @@ const configuredApiOrigin = import.meta.env?.VITE_API_BASE_URL
 const authBasePath = `${configuredApiOrigin || ""}/api/auth`;
 const sessionListeners = new Set();
 let sessionRequest;
+let sessionRequestVersion = 0;
 let sessionSnapshot = {
   data: null,
   isPending: true,
@@ -60,31 +61,40 @@ async function request(path, { method = "POST", body } = {}) {
   return { data, error: null };
 }
 
-function refreshSession() {
-  if (!sessionRequest) {
-    sessionRequest = request("/get-session", { method: "GET" })
-      .then((result) => {
+function refreshSession({ force = false } = {}) {
+  if (sessionRequest && !force) return sessionRequest;
+
+  const requestVersion = ++sessionRequestVersion;
+  const pendingRequest = request("/get-session", { method: "GET" })
+    .then((result) => {
+      if (requestVersion === sessionRequestVersion) {
         publishSession({
           data: result.error ? null : result.data,
           isPending: false,
           error: result.error,
         });
-        return result;
-      })
-      .finally(() => {
-        sessionRequest = null;
-      });
-  }
-  return sessionRequest;
+      }
+      return result;
+    })
+    .finally(() => {
+      if (sessionRequest === pendingRequest) sessionRequest = null;
+    });
+  sessionRequest = pendingRequest;
+  return pendingRequest;
 }
 
 async function mutate(path, body) {
   const result = await request(path, { body });
-  if (!result.error && ["/sign-in/email", "/sign-up/email"].includes(path)) {
-    void refreshSession();
-  }
-  if (!result.error && ["/sign-out", "/delete-user"].includes(path)) {
-    void refreshSession();
+  if (
+    !result.error &&
+    [
+      "/sign-in/email",
+      "/sign-up/email",
+      "/sign-out",
+      "/delete-user",
+    ].includes(path)
+  ) {
+    await refreshSession({ force: true });
   }
   return result;
 }

@@ -34,6 +34,10 @@ Set the private, non-`VITE_` environment variable `RENDER_API_URL` to the
 Render service origin so `api/[...path].js` can proxy requests. Keep
 `VITE_API_BASE_URL` empty for the same-origin production API. `RENDER_API_URL`
 is read only by the Vercel function and is not included in the browser bundle.
+This same-origin proxy is important for authentication: direct browser calls
+from `vercel.app` to `onrender.com` use cross-site cookies and may be blocked
+by third-party-cookie restrictions, even when the backend cookie uses
+`SameSite=None; Secure`.
 
 See the root [README](../README.md) and
 [backend deployment guide](../backend/README.md) for the complete setup.
