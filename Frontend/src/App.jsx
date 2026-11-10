@@ -9,6 +9,7 @@ import PayslipModal from "./components/modals/PayslipModal.jsx";
 import SettingsModal from "./components/modals/SettingsModal.jsx";
 import ConfirmationDialog from "./components/ui/ConfirmationDialog.jsx";
 import ToastContainer from "./components/ui/ToastContainer.jsx";
+import FeatureErrorBoundary from "./components/ui/FeatureErrorBoundary.jsx";
 import { holidayCalendarByYear } from "./data/holidayCalendar.js";
 import {
   getHolidayClassification,
@@ -783,6 +784,8 @@ export default function App() {
   const [workspaceLoadedForUser, setWorkspaceLoadedForUser] = useState(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState("");
+  const [attendancePunchError, setAttendancePunchError] = useState("");
+  const [workspaceDataWarning, setWorkspaceDataWarning] = useState("");
   const [workspaceSaveError, setWorkspaceSaveError] = useState("");
   const [salaryVaultStatus, setSalaryVaultStatus] = useState("loading");
   const [salaryVaultError, setSalaryVaultError] = useState("");
@@ -905,6 +908,18 @@ export default function App() {
     setConfirmation(null);
     resolve?.(confirmed);
   }, []);
+  const retryWorkspaceLoad = useCallback(async () => {
+    const confirmed = await requestConfirmation({
+      title: "Reload cloud data?",
+      message:
+        "Retrying reloads workspace data and may discard changes not yet saved to the cloud. Continue?",
+      confirmLabel: "Reload data",
+      variant: "warning",
+    });
+    if (confirmed) {
+      setWorkspaceLoadAttempt((attempt) => attempt + 1);
+    }
+  }, [requestConfirmation]);
 
   const employeeIncentives = Array.isArray(
     salaryVaultExtraSettings.employeeIncentives,
@@ -1407,7 +1422,8 @@ export default function App() {
       (selectedAttendanceRecord.in && selectedAttendanceRecord.in !== "—") ||
       (selectedAttendanceRecord.out && selectedAttendanceRecord.out !== "—"),
   });
-  const { canTimeIn, canTimeOut } = punchAvailability;
+  const canTimeIn = !attendancePunchError && punchAvailability.canTimeIn;
+  const canTimeOut = !attendancePunchError && punchAvailability.canTimeOut;
   const selectedRecordWithNightDifferential = applyNightDifferential(
     selectedRecord,
     nightDifferential,
@@ -1528,11 +1544,11 @@ export default function App() {
   );
   const financeGrossPay =
     financeTrackingScope === "month"
-      ? grossPayWithIncentives
+      ? financeCutoffMonthlyGross
       : financeCutoffSummaries[selectedFinanceCutoffIndex].recordedEarnings;
   const financePayrollDeductions =
     financeTrackingScope === "month"
-      ? payrollDeductions
+      ? sumCutoffPayrollDeductions(...financeCutoffDeductions)
       : financeCutoffDeductions[selectedFinanceCutoffIndex];
   const financeNetPay = Math.max(
     0,
@@ -1540,7 +1556,10 @@ export default function App() {
   );
   const financeTotalHours =
     financeTrackingScope === "month"
-      ? totalHours
+      ? financeCutoffSummaries.reduce(
+          (sum, summary) => sum + summary.regularHours + summary.overtimeHours,
+          0,
+        )
       : financeCutoffSummaries[selectedFinanceCutoffIndex].regularHours +
         financeCutoffSummaries[selectedFinanceCutoffIndex].overtimeHours;
   const financePeriodLabel =
@@ -2005,16 +2024,28 @@ export default function App() {
       if (event === "SIGNED_OUT") setRecoveryMode(false);
     });
 
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (!active) return;
-      if (error)
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error)
+          addToast(
+            "Unable to restore the sign-in session. Please sign in again.",
+            "warning",
+          );
+        setAuthSession(data.session);
+        setAuthLoading(false);
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error("Could not restore the sign-in session:", error);
         addToast(
           "Unable to restore the sign-in session. Please sign in again.",
           "warning",
         );
-      setAuthSession(data.session);
-      setAuthLoading(false);
-    });
+        setAuthSession(null);
+        setAuthLoading(false);
+      });
 
     return () => {
       active = false;
@@ -2210,6 +2241,8 @@ export default function App() {
       setSalaryVaultSyncing(false);
       setWorkspaceLoadedForUser(null);
       setWorkspaceLoading(false);
+      setAttendancePunchError("");
+      setWorkspaceDataWarning("");
       pendingSuccessToasts.current = [];
       pendingExpenseClearRef.current = false;
       setAttendance({});
@@ -2245,6 +2278,8 @@ export default function App() {
     setWorkspaceLoadedForUser(null);
     setWorkspaceLoading(true);
     setWorkspaceError("");
+    setAttendancePunchError("");
+    setWorkspaceDataWarning("");
 
     loadWorkspace(user.id)
       .then(
@@ -2254,6 +2289,9 @@ export default function App() {
           legacyPrivateFinancialData,
           salaryVault,
           salaryVaultTableAvailable,
+          salaryVaultLoadError,
+          attendancePunchLoadError,
+          workspaceDataWarning: loadedWorkspaceDataWarning,
         }) => {
           if (!active) return;
           let localPrivateData;
@@ -2279,15 +2317,25 @@ export default function App() {
           setSalaryVaultStatus(
             !salaryVaultTableAvailable
               ? "unavailable"
-              : salaryVault
-                ? "locked"
-                : "uninitialized",
+              : salaryVaultLoadError
+                ? "error"
+                : salaryVault
+                  ? "locked"
+                  : "uninitialized",
           );
           setSalaryVaultError(
             !salaryVaultTableAvailable
               ? "Apply the pending Supabase migration to enable encrypted salary sync. Other workspace data remains available."
+              : salaryVaultLoadError
+                ? `Encrypted salary-vault data could not be checked. Salary data remains locked until the vault can be loaded. ${getWorkspaceLoadErrorMessage(salaryVaultLoadError)}`
+                : "",
+          );
+          setAttendancePunchError(
+            attendancePunchLoadError
+              ? getWorkspaceLoadErrorMessage(attendancePunchLoadError)
               : "",
           );
+          setWorkspaceDataWarning(loadedWorkspaceDataWarning);
           setSalaryVaultConflict(false);
           const attendance = Object.fromEntries(
             Object.entries(
@@ -2307,10 +2355,12 @@ export default function App() {
                 : record,
             ]),
           );
-          const activePunch = Object.entries(attendance).find(
-            ([, record]) =>
-              record.punchSource === "ordinary" && record.clockedIn,
-          );
+          const activePunch = attendancePunchLoadError
+            ? null
+            : Object.entries(attendance).find(
+                ([, record]) =>
+                  record.punchSource === "ordinary" && record.clockedIn,
+              );
           setAttendance(attendance);
           setActiveTimeEntry(
             activePunch
@@ -3294,6 +3344,14 @@ export default function App() {
   };
 
   const handleTimeClockClick = async () => {
+    if (attendancePunchError) {
+      showToast(
+        "Cloud attendance records could not be loaded. Retry after restoring the connection before recording a punch.",
+        "error",
+      );
+      return;
+    }
+
     if (activeTimeEntry) {
       const { date, time: timeIn } = activeTimeEntry;
       const activeRecord = attendance[date] || defaultAttendance;
@@ -3935,7 +3993,7 @@ export default function App() {
   const monthTabs = useMemo(() => {
     const baseYear = monthCarouselMotion?.year ?? year;
     const baseMonthIndex = monthCarouselMotion?.monthIndex ?? monthIndex;
-    const padding = 4 + Math.abs(monthCarouselMotion?.offset ?? 0);
+    const padding = Math.max(4, Math.abs(monthCarouselMotion?.offset ?? 0));
     return Array.from({ length: padding * 2 + 1 }, (_, position) => {
       const monthOffset = position - padding;
       const tabDate = new Date(baseYear, baseMonthIndex + monthOffset, 1);
@@ -4137,9 +4195,11 @@ export default function App() {
                   <span>
                     {salaryVaultStatus === "locked"
                       ? "Salary vault is locked. Unlock it in Settings to view and sync encrypted salary data."
-                      : salaryVaultStatus === "unavailable"
-                        ? "Apply the pending Supabase migration to enable encrypted salary sync. Other workspace data remains available."
-                        : "Create an encrypted salary vault in Settings to sync salary settings and earnings across devices."}
+                      : salaryVaultStatus === "error"
+                        ? "Encrypted salary vault could not be checked. Salary data remains locked until the vault can be loaded."
+                        : salaryVaultStatus === "unavailable"
+                          ? "Apply the pending Supabase migration to enable encrypted salary sync. Other workspace data remains available."
+                          : "Create an encrypted salary vault in Settings to sync salary settings and earnings across devices."}
                   </span>
                   <button
                     type="button"
@@ -4154,6 +4214,32 @@ export default function App() {
                 </div>
               )}
             </div>
+            {(attendancePunchError || workspaceDataWarning) && (
+              <div
+                className="flex flex-col gap-2 border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between"
+                role="status"
+              >
+                <div className="space-y-1">
+                  {attendancePunchError && (
+                    <p>
+                      Attendance punch records could not be loaded. Time In and
+                      Time Out are unavailable; other workspace features remain
+                      usable. {attendancePunchError}
+                    </p>
+                  )}
+                  {workspaceDataWarning && <p>{workspaceDataWarning}</p>}
+                </div>
+                {attendancePunchError && (
+                  <button
+                    type="button"
+                    onClick={retryWorkspaceLoad}
+                    className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold hover:bg-amber-100"
+                  >
+                    Retry cloud data
+                  </button>
+                )}
+              </div>
+            )}
             {salaryVaultError && (
               <div
                 className="border-b border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800"
@@ -4348,8 +4434,9 @@ export default function App() {
               payslipHistorySaving={payslipHistorySaving}
               onSavePayslipToHistory={savePayslipToHistory}
             />
-            <SettingsModal
-              open={activeModal === "settingsModal"}
+            <FeatureErrorBoundary name="Settings">
+              <SettingsModal
+                open={activeModal === "settingsModal"}
               activeSettingsTab={activeSettingsTab}
               holidays={holidays}
               selectedLocality={selectedLocality}
@@ -4370,11 +4457,12 @@ export default function App() {
               onUnlockSalaryVault={unlockOrCreateSalaryVault}
               onLockSalaryVault={lockSalaryVault}
               onRotateSalaryVault={rotateSalaryVaultPassphrase}
-              onReloadSalaryVault={reloadSalaryVault}
+                onReloadSalaryVault={reloadSalaryVault}
+                onRetryWorkspaceLoad={retryWorkspaceLoad}
               onSettingsValidationError={(message) =>
                 showToast(message, "warning")
               }
-              onSaveSettings={async (draft) => {
+                onSaveSettings={async (draft) => {
                 const currentPayrollSettings =
                   getPayrollDeductionSettingsDefaults(salaryVaultExtraSettings);
                 const financialSettingsChanged =
@@ -4447,8 +4535,9 @@ export default function App() {
                 setActiveModal(null);
                 showToast("Settings saved successfully.", "success");
                 return true;
-              }}
-            />
+                }}
+              />
+            </FeatureErrorBoundary>
           </>
         )}
       <ToastContainer toasts={toasts} dismissToast={dismissToast} />

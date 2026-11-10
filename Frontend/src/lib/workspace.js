@@ -26,15 +26,52 @@ function isObject(value) {
 
 export function normalizeWorkspace(data) {
   const source = isObject(data) ? data : {};
+  const rawAttendance = isObject(source.attendance) ? source.attendance : {};
+  const invalidAttendanceDates = Object.entries(rawAttendance)
+    .filter(([, record]) => !isObject(record))
+    .map(([date]) => date);
+  const rawExpenses = normalizeExpenseRecords(source.expenses);
+  const invalidExpenseCount = rawExpenses.filter((expense) => !isObject(expense)).length;
+  const expenses = rawExpenses.map((expense) =>
+    isObject(expense) ? expense : { invalidStoredValue: expense },
+  );
+  const rawShiftTemplates = Array.isArray(source.shiftTemplates)
+    ? source.shiftTemplates
+    : [];
+  const rawHolidays = Array.isArray(source.holidays) ? source.holidays : [];
+  const shiftTemplates = Array.isArray(source.shiftTemplates)
+    ? rawShiftTemplates.map((template) =>
+        isObject(template) ? template : { invalidStoredValue: template },
+      )
+    : null;
+  const holidays = Array.isArray(source.holidays)
+    ? rawHolidays.map((holiday) =>
+        isObject(holiday) ? holiday : { invalidStoredValue: holiday },
+      )
+    : null;
+  const invalidWorkspaceData =
+    invalidAttendanceDates.length > 0 ||
+    invalidExpenseCount > 0 ||
+    rawShiftTemplates.some((template) => !isObject(template)) ||
+    rawHolidays.some((holiday) => !isObject(holiday));
   return {
     ...emptyWorkspace,
     ...source,
-    attendance: isObject(source.attendance) ? source.attendance : {},
+    workspaceDataWarning: invalidWorkspaceData
+      ? "Some malformed cloud workspace records were isolated for safe rendering and preserved. Review the affected data before relying on totals."
+      : "",
+    attendance: Object.fromEntries(
+      Object.entries(rawAttendance).map(([date, record]) => [
+        date,
+        isObject(record) ? record : { invalidStoredValue: record },
+      ]),
+    ),
+    invalidAttendanceDates,
     activeTimeEntry: isObject(source.activeTimeEntry) ? source.activeTimeEntry : null,
-    expenses: normalizeExpenseRecords(source.expenses),
+    expenses,
     travelPlans: normalizeTravelPlans(source.travelPlans),
-    shiftTemplates: Array.isArray(source.shiftTemplates) ? source.shiftTemplates : null,
-    holidays: Array.isArray(source.holidays) ? source.holidays : null,
+    shiftTemplates,
+    holidays,
     leaveBalances: isObject(source.leaveBalances)
       ? { ...emptyWorkspace.leaveBalances, ...source.leaveBalances }
       : emptyWorkspace.leaveBalances,
@@ -44,55 +81,120 @@ export function normalizeWorkspace(data) {
   };
 }
 
+export function resolveOptionalWorkspaceLoads(
+  punchSettlement,
+  salaryVaultSettlement,
+) {
+  const punchResult =
+    punchSettlement.status === "fulfilled" ? punchSettlement.value : null;
+  const punchError =
+    punchSettlement.status === "rejected"
+      ? punchSettlement.reason
+      : punchResult?.error || null;
+  const rawPunchRows =
+    !punchError && Array.isArray(punchResult?.data) ? punchResult.data : [];
+  const punchRows = rawPunchRows.filter(
+    (row) =>
+      isObject(row) &&
+      typeof row.shift_date === "string" &&
+      isObject(row.attendance_record),
+  );
+  const invalidPunchRows = rawPunchRows.length - punchRows.length;
+  const attendancePunchLoadError =
+    punchError ||
+    (invalidPunchRows
+      ? new Error("Cloud attendance data contains malformed punch records.")
+      : null);
+  const salaryVaultResult =
+    salaryVaultSettlement.status === "fulfilled"
+      ? salaryVaultSettlement.value
+      : null;
+  const salaryVaultLoadError =
+    salaryVaultSettlement.status === "rejected"
+      ? salaryVaultSettlement.reason
+      : salaryVaultResult?.error || null;
+  const salaryVaultTableAvailable = !(
+    salaryVaultLoadError &&
+    (salaryVaultLoadError.code === "PGRST205" ||
+      salaryVaultLoadError.code === "42P01")
+  );
+
+  return {
+    punchRows,
+    attendancePunchLoadError,
+    salaryVault:
+      salaryVaultTableAvailable ? salaryVaultResult?.data ?? null : null,
+    salaryVaultTableAvailable,
+    salaryVaultLoadError: salaryVaultTableAvailable
+      ? salaryVaultLoadError
+      : null,
+  };
+}
+
 export async function loadWorkspace(userId) {
   if (!supabase) throw new Error("Supabase is not configured.");
 
-  const [workspaceResult, punchResult, salaryVaultResult] = await Promise.all([
-    supabase
-      .from("user_workspaces")
-      .select("data, revision")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    supabase
-      .from("attendance_punches")
-      .select("shift_date, attendance_record")
-      .eq("user_id", userId),
-    supabase
-      .from("private_salary_vault")
-      .select("ciphertext, nonce, salt, format_version, key_version, revision, updated_at")
-      .eq("user_id", userId)
-      .maybeSingle(),
-  ]);
+  const [workspaceSettlement, punchSettlement, salaryVaultSettlement] =
+    await Promise.allSettled([
+      supabase
+        .from("user_workspaces")
+        .select("data, revision")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("attendance_punches")
+        .select("shift_date, attendance_record")
+        .eq("user_id", userId),
+      supabase
+        .from("private_salary_vault")
+        .select(
+          "ciphertext, nonce, salt, format_version, key_version, revision, updated_at",
+        )
+        .eq("user_id", userId)
+        .maybeSingle(),
+    ]);
 
-  if (workspaceResult.error) throw workspaceResult.error;
-  if (punchResult.error) throw punchResult.error;
-  const salaryVaultTableAvailable = !(
-    salaryVaultResult.error &&
-    (salaryVaultResult.error.code === "PGRST205" ||
-      salaryVaultResult.error.code === "42P01")
-  );
-  if (salaryVaultResult.error && salaryVaultTableAvailable) {
-    throw salaryVaultResult.error;
+  if (workspaceSettlement.status === "rejected") {
+    throw workspaceSettlement.reason;
   }
+  const workspaceResult = workspaceSettlement.value;
+  if (workspaceResult.error) throw workspaceResult.error;
+  const {
+    punchRows,
+    attendancePunchLoadError,
+    salaryVault,
+    salaryVaultTableAvailable,
+    salaryVaultLoadError,
+  } = resolveOptionalWorkspaceLoads(punchSettlement, salaryVaultSettlement);
   const rawWorkspace = workspaceResult.data?.data;
   const legacyPrivateFinancialData = extractLegacyPrivateFinancialData(
     rawWorkspace,
-    punchResult.data,
+    punchRows,
   );
   const workspace = normalizeWorkspace(serializeWorkspaceForCloud(rawWorkspace));
-  const sanitizedPunches = punchResult.data.map((row) => ({
+  const sanitizedPunches = punchRows.map((row) => ({
     ...row,
     attendance_record: serializeWorkspaceForCloud({
       attendance_record: row.attendance_record,
     }).attendance_record,
   }));
-  const attendance = mergeAttendancePunches(workspace.attendance, sanitizedPunches);
+  const attendance = attendancePunchLoadError
+    ? workspace.attendance
+    : mergeAttendancePunches(workspace.attendance, sanitizedPunches);
+  const { invalidAttendanceDates, workspaceDataWarning, ...normalizedWorkspace } =
+    workspace;
   return {
-    workspace: { ...workspace, attendance },
+    workspace: {
+      ...normalizedWorkspace,
+      attendance,
+    },
     revision: workspaceResult.data?.revision ?? 0,
     legacyPrivateFinancialData,
-    salaryVault: salaryVaultTableAvailable ? salaryVaultResult.data : null,
+    salaryVault,
     salaryVaultTableAvailable,
+    salaryVaultLoadError,
+    attendancePunchLoadError,
+    workspaceDataWarning,
   };
 }
 

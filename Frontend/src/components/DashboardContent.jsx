@@ -1,5 +1,6 @@
 import AttendanceDashboard from "./attendance/AttendanceDashboard.jsx";
 import FinancialDashboard from "./finance/FinancialDashboard.jsx";
+import FeatureErrorBoundary from "./ui/FeatureErrorBoundary.jsx";
 import { CalendarDays, Wallet } from "lucide-react";
 
 export default function DashboardContent(props) {
@@ -114,32 +115,34 @@ export default function DashboardContent(props) {
               : "absolute left-0 top-0 z-0 -translate-x-full"
           }`}
         >
-          <AttendanceDashboard
-            record={record}
-            selectedDate={selectedDate}
-            canClearShift={canClearShift}
-            canRecordAttendance={canRecordAttendance}
-            salaryVaultStatus={salaryVaultStatus}
-            holidayPayEstimate={holidayPayEstimate}
-            estimatedEarnings={estimatedEarnings}
-            selectedDateIncentives={selectedDateIncentives}
-            onAddIncentive={onAddIncentive}
-            dailyAllowance={dailyAllowance}
-            holidayWorkedHours={holidayWorkedHours}
-            nightDifferentialPay={nightDifferentialPay}
-            overtimePay={overtimePay}
-            overtimeCalculation={overtimeCalculation}
-            configuredDailyWage={configuredDailyWage}
-            onOpenHolidayPaySettings={onOpenHolidayPaySettings}
-            monthTabs={monthTabs}
-            monthCarouselOffset={monthCarouselOffset}
-            onMonthCarouselTransitionEnd={onMonthCarouselTransitionEnd}
-            yearOptions={yearOptions}
-            onYearChange={onYearChange}
-            calendarCells={calendarCells}
-            monthLabel={monthLabel}
-            year={year}
-          />
+          <FeatureErrorBoundary name="Attendance">
+            <AttendanceDashboard
+              record={record}
+              selectedDate={selectedDate}
+              canClearShift={canClearShift}
+              canRecordAttendance={canRecordAttendance}
+              salaryVaultStatus={salaryVaultStatus}
+              holidayPayEstimate={holidayPayEstimate}
+              estimatedEarnings={estimatedEarnings}
+              selectedDateIncentives={selectedDateIncentives}
+              onAddIncentive={onAddIncentive}
+              dailyAllowance={dailyAllowance}
+              holidayWorkedHours={holidayWorkedHours}
+              nightDifferentialPay={nightDifferentialPay}
+              overtimePay={overtimePay}
+              overtimeCalculation={overtimeCalculation}
+              configuredDailyWage={configuredDailyWage}
+              onOpenHolidayPaySettings={onOpenHolidayPaySettings}
+              monthTabs={monthTabs}
+              monthCarouselOffset={monthCarouselOffset}
+              onMonthCarouselTransitionEnd={onMonthCarouselTransitionEnd}
+              yearOptions={yearOptions}
+              onYearChange={onYearChange}
+              calendarCells={calendarCells}
+              monthLabel={monthLabel}
+              year={year}
+            />
+          </FeatureErrorBoundary>
         </div>
         <div
           className={`w-full transition-transform duration-500 ease-in-out ${
@@ -148,55 +151,57 @@ export default function DashboardContent(props) {
               : "absolute left-0 top-0 z-0 translate-x-full"
           }`}
         >
-          <FinancialDashboard
-            requestConfirmation={requestConfirmation}
-            monthExpenses={monthExpenses}
-            expenses={expenses}
-            financeTrackingScope={financeTrackingScope}
-            setFinanceTrackingScope={setFinanceTrackingScope}
-            financePeriodLabel={financePeriodLabel}
-            totalExpenses={totalExpenses}
-            remaining={remaining}
-            percentage={percentage}
-            netPay={netPay}
-            grossPay={grossPay}
-            payrollDeductions={payrollDeductions}
-            totalHours={totalHours}
-            monthValue={monthValue}
-            formatCurrency={formatCurrency}
-            expenseName={expenseName}
-            setExpenseName={setExpenseName}
-            expenseAmount={expenseAmount}
-            setExpenseAmount={setExpenseAmount}
-            expenseDate={expenseDate}
-            setExpenseDate={setExpenseDate}
-            expenseCategory={expenseCategory}
-            setExpenseCategory={setExpenseCategory}
-            onDeleteExpense={onDeleteExpense}
-            employeeIncentives={employeeIncentives}
-            onAddIncentive={onAddIncentive}
-            onDeleteIncentive={onDeleteIncentive}
-            workspaceLoading={workspaceLoading}
-            workspaceError={workspaceError}
-            workspaceSaveError={workspaceSaveError}
-            historicalPayslips={historicalPayslips}
-            payslipHistorySaving={payslipHistorySaving}
-            salaryVaultStatus={salaryVaultStatus}
-            salaryVaultError={salaryVaultError}
-            currentPayrollPeriod={currentPayrollPeriod}
-            onViewCurrentPayslip={onViewCurrentPayslip}
-            onViewHistoricalPayslip={onViewHistoricalPayslip}
-            onDeleteHistoricalPayslip={onDeleteHistoricalPayslip}
-            travelPlans={travelPlans}
-            today={today}
-            onCreateTravelPlan={onCreateTravelPlan}
-            onUpdateTravelPlan={onUpdateTravelPlan}
-            onCompleteTravelPlan={onCompleteTravelPlan}
-            onDeleteTravelPlan={onDeleteTravelPlan}
-            onAddTravelExpense={onAddTravelExpense}
-            onUpdateTravelExpense={onUpdateTravelExpense}
-            onDeleteTravelExpense={onDeleteTravelExpense}
-          />
+          <FeatureErrorBoundary name="Finance">
+            <FinancialDashboard
+              requestConfirmation={requestConfirmation}
+              monthExpenses={monthExpenses}
+              expenses={expenses}
+              financeTrackingScope={financeTrackingScope}
+              setFinanceTrackingScope={setFinanceTrackingScope}
+              financePeriodLabel={financePeriodLabel}
+              totalExpenses={totalExpenses}
+              remaining={remaining}
+              percentage={percentage}
+              netPay={netPay}
+              grossPay={grossPay}
+              payrollDeductions={payrollDeductions}
+              totalHours={totalHours}
+              monthValue={monthValue}
+              formatCurrency={formatCurrency}
+              expenseName={expenseName}
+              setExpenseName={setExpenseName}
+              expenseAmount={expenseAmount}
+              setExpenseAmount={setExpenseAmount}
+              expenseDate={expenseDate}
+              setExpenseDate={setExpenseDate}
+              expenseCategory={expenseCategory}
+              setExpenseCategory={setExpenseCategory}
+              onDeleteExpense={onDeleteExpense}
+              employeeIncentives={employeeIncentives}
+              onAddIncentive={onAddIncentive}
+              onDeleteIncentive={onDeleteIncentive}
+              workspaceLoading={workspaceLoading}
+              workspaceError={workspaceError}
+              workspaceSaveError={workspaceSaveError}
+              historicalPayslips={historicalPayslips}
+              payslipHistorySaving={payslipHistorySaving}
+              salaryVaultStatus={salaryVaultStatus}
+              salaryVaultError={salaryVaultError}
+              currentPayrollPeriod={currentPayrollPeriod}
+              onViewCurrentPayslip={onViewCurrentPayslip}
+              onViewHistoricalPayslip={onViewHistoricalPayslip}
+              onDeleteHistoricalPayslip={onDeleteHistoricalPayslip}
+              travelPlans={travelPlans}
+              today={today}
+              onCreateTravelPlan={onCreateTravelPlan}
+              onUpdateTravelPlan={onUpdateTravelPlan}
+              onCompleteTravelPlan={onCompleteTravelPlan}
+              onDeleteTravelPlan={onDeleteTravelPlan}
+              onAddTravelExpense={onAddTravelExpense}
+              onUpdateTravelExpense={onUpdateTravelExpense}
+              onDeleteTravelExpense={onDeleteTravelExpense}
+            />
+          </FeatureErrorBoundary>
         </div>
       </div>
     </main>

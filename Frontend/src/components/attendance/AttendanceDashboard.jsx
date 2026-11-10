@@ -768,7 +768,7 @@ export default function AttendanceDashboard({
                     className={`flex w-max shrink-0 gap-1 ${monthCarouselOffset ? "month-carousel-transition" : ""}`}
                     onTransitionEnd={onMonthCarouselTransitionEnd}
                     style={{
-                      transform: `translateX(-${(1 + Math.abs(monthCarouselOffset) + monthCarouselOffset) * 48}px)`,
+                      transform: `translateX(-${(Math.max(4, Math.abs(monthCarouselOffset)) + monthCarouselOffset - 3) * 48}px)`,
                     }}
                   >
                     {monthTabs}

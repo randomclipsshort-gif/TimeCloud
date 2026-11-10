@@ -29,6 +29,7 @@ export default function SettingsModal({
   onLockSalaryVault,
   onRotateSalaryVault,
   onReloadSalaryVault,
+  onRetryWorkspaceLoad,
   onSettingsValidationError,
 }) {
   const [settingsDraft, setSettingsDraft] = useState(null);
@@ -402,11 +403,13 @@ export default function SettingsModal({
                   <span className="w-fit rounded-full border border-amber-200 bg-white px-3 py-1 text-[10px] font-semibold text-amber-800">
                     {salaryVaultStatus === "loading"
                       ? "Checking vault"
-                      : salaryVaultStatus === "unavailable"
-                        ? "Vault unavailable"
-                        : salaryVaultStatus === "uninitialized"
-                          ? "Vault setup needed"
-                          : "Vault locked"}
+                      : salaryVaultStatus === "error"
+                        ? "Vault check failed"
+                        : salaryVaultStatus === "unavailable"
+                          ? "Vault unavailable"
+                          : salaryVaultStatus === "uninitialized"
+                            ? "Vault setup needed"
+                            : "Vault locked"}
                   </span>
                 )}
               </div>
@@ -416,11 +419,13 @@ export default function SettingsModal({
                   <span>
                     {salaryVaultStatus === "unavailable"
                       ? "Apply the pending Supabase migration to enable encrypted salary settings."
-                      : salaryVaultStatus === "loading"
-                        ? "Checking encrypted salary vault access."
-                        : salaryVaultStatus === "uninitialized"
-                          ? "Create your encrypted salary vault in General Preferences to edit these settings."
-                          : "Unlock your encrypted salary vault in General Preferences to edit these settings."}
+                      : salaryVaultStatus === "error"
+                        ? "The encrypted vault could not be loaded. Salary data remains locked; retry loading cloud data before continuing."
+                        : salaryVaultStatus === "loading"
+                          ? "Checking encrypted salary vault access."
+                          : salaryVaultStatus === "uninitialized"
+                            ? "Create your encrypted salary vault in General Preferences to edit these settings."
+                            : "Unlock your encrypted salary vault in General Preferences to edit these settings."}
                   </span>
                 </div>
               )}
@@ -892,9 +897,20 @@ export default function SettingsModal({
                 "Create a vault to encrypt and sync existing salary settings and earnings."}
               {salaryVaultStatus === "unavailable" &&
                 "The encrypted salary-vault table is not installed yet. Apply the pending Supabase migration before creating a vault."}
+              {salaryVaultStatus === "error" &&
+                "The encrypted salary vault could not be loaded. Its contents are unknown and remain locked."}
               {salaryVaultStatus === "loading" &&
                 "Checking encrypted salary vault..."}
             </p>
+            {salaryVaultStatus === "error" && (
+              <button
+                type="button"
+                onClick={onRetryWorkspaceLoad}
+                className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-50"
+              >
+                Retry cloud data
+              </button>
+            )}
             {salaryVaultStatus === "unlocked" ? (
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
