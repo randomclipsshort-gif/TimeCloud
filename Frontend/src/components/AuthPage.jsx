@@ -84,7 +84,10 @@ export default function AuthPage({ open, recoveryMode = false, onRecoveryComplet
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: name ? { full_name: name } : {} },
+        options: {
+          data: name ? { full_name: name } : {},
+          emailRedirectTo: window.location.origin,
+        },
       });
       if (signUpError) {
         setError(getAuthErrorMessage(signUpError, "Registration failed. Try again."));

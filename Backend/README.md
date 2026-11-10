@@ -68,11 +68,14 @@ each authenticated account to its own workspace document.
    npx supabase@latest migration list --linked
    ```
 5. In Supabase Dashboard → Authentication → URL Configuration, set the Site
-   URL to the local development origin while testing (normally
-   `http://localhost:5173`) and add that origin to Redirect URLs. Before
-   launch, set the Site URL to the actual HTTPS production origin and add
-   both the production origin and required local origin to Redirect URLs.
-   The production origin is not known or configured in this workspace.
+   URL to the actual HTTPS production origin and add that origin to Redirect
+   URLs. Also add the local development origin (normally
+   `http://localhost:5173`) to Redirect URLs when developing locally. Signup
+   confirmation and password recovery links request a redirect to the origin
+   where the user started the flow; the requested origin must be on the
+   Redirect URLs allow-list. The Site URL is the fallback for links without an
+   explicit redirect. The production origin is not known or configured in this
+   workspace.
 6. Configure the same two `VITE_` variables in the frontend hosting provider.
    Never put a service-role key, database password, or other privileged secret
    in a `VITE_` variable.
