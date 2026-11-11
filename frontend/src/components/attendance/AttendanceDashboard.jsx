@@ -1,13 +1,17 @@
 import { useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { groupIncentiveEarningsItems } from "../../utils/payrollEarningsBreakdown.js";
+import {
+  getAttendanceBasePay,
+  getStoredAttendanceBasePay,
+} from "../../utils/attendancePay.js";
 
 export default function AttendanceDashboard({
   record,
   selectedDate,
   canClearShift,
   canRecordAttendance,
-  salaryVaultStatus,
+  privateFinancialDataStatus,
   holidayPayEstimate,
   estimatedEarnings,
   selectedDateIncentives = [],
@@ -34,7 +38,10 @@ export default function AttendanceDashboard({
   const [isIncentiveFormOpen, setIsIncentiveFormOpen] = useState(false);
   const [newIncentiveName, setNewIncentiveName] = useState("");
   const [newIncentiveAmount, setNewIncentiveAmount] = useState("");
-  const salaryDataPrivate = salaryVaultStatus !== "unlocked";
+  const salaryDataPrivate = privateFinancialDataStatus !== "ready";
+  const resolvedBasePay = getAttendanceBasePay(record, configuredDailyWage);
+  const useConfiguredBasePay =
+    getStoredAttendanceBasePay(record) === 0 && resolvedBasePay > 0;
   const selectedDateIncentiveTotal = selectedDateIncentives.reduce(
     (total, incentive) => total + Number(incentive.amount),
     0,
@@ -97,7 +104,7 @@ export default function AttendanceDashboard({
           : "200% total including base wage"
       : holidayPayEstimate?.regularPayRateLabel;
   const displayedHolidayPayRateLabel = salaryDataPrivate
-    ? "Private — unlock salary vault"
+    ? "Private data unavailable"
     : record.holidayClassification === "Special Non-Working Day"
       ? record.holidayUnworked || record.type === "Absent"
         ? "0% total including base wage"
@@ -254,7 +261,7 @@ export default function AttendanceDashboard({
               {!isPayComponentsExpanded ? (
                 <span className="shrink-0 text-right text-xs font-extrabold tabular-nums text-teal-800">
                   {salaryDataPrivate
-                    ? "Private — unlock salary vault"
+                    ? "Private data unavailable"
                     : estimatedEarnings != null
                       ? `₱${estimatedEarnings.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                       : record.holidayClassification
@@ -309,7 +316,9 @@ export default function AttendanceDashboard({
                             ? Number(configuredDailyWage) > 0
                               ? `₱${Number(configuredDailyWage).toFixed(2)}`
                               : record.base
-                            : record.base}
+                            : useConfiguredBasePay
+                              ? `P${resolvedBasePay.toFixed(2)}`
+                              : record.base}
                     </span>
                   </div>
 
@@ -431,7 +440,7 @@ export default function AttendanceDashboard({
                       className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-teal-700 transition hover:bg-teal-50 disabled:cursor-not-allowed disabled:text-slate-400"
                       title={
                         salaryDataPrivate
-                          ? "Unlock the salary vault to add incentives"
+                          ? "Private financial data is not available"
                           : undefined
                       }
                       aria-expanded={isIncentiveFormOpen}
@@ -441,7 +450,7 @@ export default function AttendanceDashboard({
                         aria-hidden="true"
                       ></i>
                       {salaryDataPrivate
-                        ? "Unlock vault to add incentive"
+                        ? "Private data unavailable"
                         : "Add incentive"}
                     </button>
                     {isIncentiveFormOpen && (
@@ -525,7 +534,7 @@ export default function AttendanceDashboard({
                     </span>
                     <span className="font-extrabold text-teal-800 text-sm tabular-nums">
                       {salaryDataPrivate
-                        ? "Private — unlock salary vault"
+                        ? "Private data unavailable"
                         : estimatedEarnings != null
                           ? `₱${estimatedEarnings.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                           : record.holidayClassification

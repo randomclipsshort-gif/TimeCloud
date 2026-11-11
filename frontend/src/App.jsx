@@ -19,6 +19,10 @@ import {
 import { calculateHolidayPay, getAttendanceHours } from "./utils/holidayPay.js";
 import { getAttendancePunchAvailability } from "./utils/attendancePunchRules.js";
 import {
+  getAttendanceBasePay,
+  getStoredAttendanceBasePay,
+} from "./utils/attendancePay.js";
+import {
   AUTH_ACTIVITY_WRITE_INTERVAL_MS,
   AUTH_IDLE_TIMEOUT_MS,
   getAuthActivityStorageKey,
@@ -72,9 +76,9 @@ import {
   clockInForShift,
   clockOutForShift,
   emptyWorkspace,
-  loadPrivateSalaryVault,
   loadWorkspace,
-  savePrivateSalaryVault,
+  migrateLegacyPrivateFinancialData,
+  savePrivateFinancialData,
   saveWorkspace,
 } from "./lib/workspace.js";
 import {
@@ -83,13 +87,10 @@ import {
   localPrivateFinancialDefaults,
   mergeLocalPrivateAttendance,
   mergeLocalPrivateAttendanceRecord,
+  mergePrivateFinancialData,
   serializeWorkspaceForCloud,
 } from "./lib/privateFinancialData.js";
-import {
-  createSalaryVault,
-  encryptSalaryVault,
-  unlockSalaryVault,
-} from "./lib/privateSalaryVault.js";
+import { unlockLegacySalaryVault } from "./lib/legacySalaryVault.js";
 
 const months = [
   "January",
@@ -257,7 +258,7 @@ function getNightShiftMinutes(startTime, endTime) {
   return nightMinutes;
 }
 
-function applyNightDifferential(record, percentage) {
+function applyNightDifferential(record, percentage, configuredDailyWage) {
   if (
     record.type === "Unassigned" ||
     record.type === "Absent" ||
@@ -266,7 +267,11 @@ function applyNightDifferential(record, percentage) {
     record.type === "Company Break"
   )
     return record;
-  const baseAmount = getAmount(record.base);
+  const storedBaseAmount = getAmount(record.base);
+  const baseAmount =
+    storedBaseAmount === 0 && !record.holidayClassification
+      ? getAttendanceBasePay(record, configuredDailyWage)
+      : storedBaseAmount;
   const nightHours =
     getNightShiftMinutes(record.workStartTime, record.workEndTime) / 60;
   const rate = Number(percentage);
@@ -786,11 +791,14 @@ export default function App() {
   const [workspaceDataWarning, setWorkspaceDataWarning] = useState("");
   const [workspaceSaveError, setWorkspaceSaveError] = useState("");
   const [signOutStatus, setSignOutStatus] = useState("");
-  const [salaryVaultStatus, setSalaryVaultStatus] = useState("loading");
-  const [salaryVaultError, setSalaryVaultError] = useState("");
-  const [salaryVaultConflict, setSalaryVaultConflict] = useState(false);
-  const [salaryVaultRecord, setSalaryVaultRecord] = useState(null);
-  const [salaryVaultSyncing, setSalaryVaultSyncing] = useState(false);
+  const [privateFinancialDataStatus, setPrivateFinancialDataStatus] =
+    useState("loading");
+  const [privateFinancialDataError, setPrivateFinancialDataError] = useState("");
+  const [privateFinancialDataConflict, setPrivateFinancialDataConflict] =
+    useState(false);
+  const [legacySalaryVault, setLegacySalaryVault] = useState(null);
+  const [privateFinancialDataSyncing, setPrivateFinancialDataSyncing] =
+    useState(false);
   const [historicalPayslips, setHistoricalPayslips] = useState([]);
   const [activeHistoricalPayslip, setActiveHistoricalPayslip] = useState(null);
   const [payslipHistorySaving, setPayslipHistorySaving] = useState(false);
@@ -846,7 +854,7 @@ export default function App() {
   const [overtimeMultiplier, setOvertimeMultiplier] = useState(
     localPrivateFinancialDefaults.overtimeMultiplier,
   );
-  const [salaryVaultExtraSettings, setSalaryVaultExtraSettings] = useState({});
+  const [privateFinancialSettings, setPrivateFinancialSettings] = useState({});
   const [expenses, setExpenses] = useState([]);
   const [travelPlans, setTravelPlans] = useState([]);
   const [expenseName, setExpenseName] = useState("");
@@ -894,12 +902,17 @@ export default function App() {
   const pendingExpenseClearRef = useRef(false);
   const saveQueueRef = useRef(Promise.resolve());
   const workspaceRevisionRef = useRef(0);
-  const salaryVaultKeyRef = useRef(null);
-  const salaryVaultPayslipsRef = useRef([]);
-  const salaryVaultRevisionRef = useRef(0);
-  const salaryVaultQueueRef = useRef(Promise.resolve());
-  const salaryVaultSkipNextSyncRef = useRef(false);
-  const salaryVaultSyncTimerRef = useRef(null);
+  const privateFinancialDataRevisionRef = useRef(0);
+  const privateFinancialDataQueueRef = useRef(Promise.resolve());
+  const privateFinancialDataSkipNextSyncRef = useRef(false);
+  const privateFinancialDataSyncTimerRef = useRef(null);
+  const privateFinancialDataNeedsInitialSaveRef = useRef(false);
+  const legacyWorkspacePrivateDataRef = useRef({
+    settings: localPrivateFinancialDefaults,
+    attendance: {},
+    payslips: [],
+  });
+  const historicalPayslipsRef = useRef([]);
 
   const requestConfirmation = useCallback(
     (options) =>
@@ -930,12 +943,12 @@ export default function App() {
   }, [requestConfirmation]);
 
   const employeeIncentives = Array.isArray(
-    salaryVaultExtraSettings.employeeIncentives,
+    privateFinancialSettings.employeeIncentives,
   )
-    ? salaryVaultExtraSettings.employeeIncentives
+    ? privateFinancialSettings.employeeIncentives
     : [];
   const availableEmployeeIncentives =
-    salaryVaultStatus === "unlocked" ? employeeIncentives : [];
+    privateFinancialDataStatus === "ready" ? employeeIncentives : [];
   const selectedDate = formatDate(year, monthIndex, selectedDay);
   const monthLabel = `${months[monthIndex]} ${year}`;
   const calendarPayrollMonth = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
@@ -1034,7 +1047,7 @@ export default function App() {
         getNightShiftMinutes(record.workStartTime, record.workEndTime) / 60;
       const applicableDailyWage = holiday
         ? Number(dailyWage)
-        : getAmount(record.base);
+        : getAttendanceBasePay(record, dailyWage);
       const rate = Number(nightDifferential);
       const nightDifferentialPay =
         Number.isFinite(applicableDailyWage) &&
@@ -1104,7 +1117,15 @@ export default function App() {
 
       return {
         ...timingValues,
-        basicPay: Math.max(0, getAmount(record.est) - overtimeAmount),
+        basicPay: Math.max(
+          0,
+          getAmount(record.est) - overtimeAmount !== 0
+            ? getAmount(record.est) - overtimeAmount
+            : getStoredAttendanceBasePay(record) === 0
+              ? getAttendanceBasePay(record, dailyWage) +
+                getAmount(record.penalty)
+              : 0,
+        ),
         allowance: allowanceAmount,
         shiftDifferentials: nightDifferentialPay,
         overtime: overtimeAmount,
@@ -1157,8 +1178,8 @@ export default function App() {
     [attendance, availableEmployeeIncentives, getPayrollRecordBreakdown, payrollPeriod],
   );
   const payrollDeductionSettings = useMemo(
-    () => getPayrollDeductionSettingsDefaults(salaryVaultExtraSettings),
-    [salaryVaultExtraSettings],
+    () => getPayrollDeductionSettingsDefaults(privateFinancialSettings),
+    [privateFinancialSettings],
   );
   const payrollPeriodMonthGross = useMemo(() => {
     const payrollMonth = payrollPeriod.endDate.slice(0, 7);
@@ -1319,7 +1340,7 @@ export default function App() {
   const selectedNightDifferentialPay = (() => {
     const applicableDailyWage = selectedHoliday
       ? Number(dailyWage)
-      : getAmount(selectedAttendanceRecord.base);
+      : getAttendanceBasePay(selectedAttendanceRecord, dailyWage);
     const rate = Number(nightDifferential);
     const nightHours =
       getNightShiftMinutes(
@@ -1361,7 +1382,8 @@ export default function App() {
         shiftEndOfDay <= shiftStart ? shiftEndOfDay + 1440 : shiftEndOfDay;
       const scheduledHours = (shiftEnd - shiftStart) / 60;
       const hourlyRate =
-        getAmount(selectedAttendanceRecord.base) / scheduledHours;
+        getAttendanceBasePay(selectedAttendanceRecord, dailyWage) /
+        scheduledHours;
       return `${formatDuration(selectedAttendanceRecord.overtimeMinutes)} × ₱${hourlyRate.toFixed(2)}/hr × ${multiplier}x`;
     }
     if (selectedHolidayPay?.overtimeHours > 0) {
@@ -1404,7 +1426,12 @@ export default function App() {
           selectedAttendanceRecord.type,
         ) &&
         hasDailyAllowance
-      ? getAmount(selectedAttendanceRecord.est) +
+      ? (getAmount(selectedAttendanceRecord.est) !== 0
+          ? getAmount(selectedAttendanceRecord.est)
+          : getStoredAttendanceBasePay(selectedAttendanceRecord) === 0
+            ? getAttendanceBasePay(selectedAttendanceRecord, dailyWage) +
+              getAmount(selectedAttendanceRecord.penalty)
+            : 0) +
         allowanceAmount +
         (selectedNightDifferentialPay || 0)
       : null;
@@ -1445,6 +1472,7 @@ export default function App() {
   const selectedRecordWithNightDifferential = applyNightDifferential(
     selectedRecord,
     nightDifferential,
+    dailyWage,
   );
   const yearOptions = useMemo(
     () => Array.from({ length: 11 }, (_, index) => year - 5 + index),
@@ -1467,7 +1495,13 @@ export default function App() {
       if (record.clockedIn) return sum;
       if (record.type === "Leave") return sum + getAmount(record.est);
       return hasValidAttendanceRecord(record)
-        ? sum + getAmount(record.est)
+        ? sum +
+            (getAmount(record.est) !== 0
+              ? getAmount(record.est)
+              : getStoredAttendanceBasePay(record) === 0
+                ? getAttendanceBasePay(record, dailyWage) +
+                  getAmount(record.penalty)
+                : 0)
         : sum;
     }, 0);
   const grossPayWithIncentives =
@@ -1662,304 +1696,130 @@ export default function App() {
     [addToast],
   );
 
-  const persistPrivateSalaryVault = useCallback(
-    (payload) => {
-      const vaultKey = salaryVaultKeyRef.current;
-      if (!user?.id || !vaultKey) {
+  const applyPrivateFinancialData = useCallback((payload) => {
+    const settings = extractPrivateFinancialSettings(payload?.settings);
+    const payslips = Array.isArray(payload?.payslips) ? payload.payslips : [];
+    historicalPayslipsRef.current = payslips;
+    setHistoricalPayslips(payslips);
+    setActiveHistoricalPayslip(null);
+    setDailyWage(settings.dailyWage);
+    setDailyAllowance(settings.dailyAllowance);
+    setOvertimeMultiplier(settings.overtimeMultiplier);
+    setNightDifferential(settings.nightDifferential);
+    setPrivateFinancialSettings(settings);
+    setAttendance((current) =>
+      mergeLocalPrivateAttendance(current, payload?.attendance),
+    );
+    privateFinancialDataSkipNextSyncRef.current = true;
+  }, []);
+
+  const createPrivateFinancialPayload = useCallback(
+    (payslips = historicalPayslipsRef.current) => ({
+      settings: {
+        ...privateFinancialSettings,
+        dailyWage,
+        dailyAllowance,
+        overtimeMultiplier,
+        nightDifferential,
+      },
+      attendance: extractPrivateFinancialAttendance(attendance),
+      payslips,
+    }),
+    [
+      privateFinancialSettings,
+      dailyWage,
+      dailyAllowance,
+      overtimeMultiplier,
+      nightDifferential,
+      attendance,
+    ],
+  );
+
+  const persistPrivateFinancialData = useCallback(
+    (payload = createPrivateFinancialPayload()) => {
+      if (!user?.id || privateFinancialDataStatus !== "ready") {
         return Promise.reject(
-          new Error(
-            "Unlock the encrypted salary vault before syncing salary data.",
-          ),
+          new Error("Private financial data is not ready to sync."),
         );
       }
-
-      const operation = salaryVaultQueueRef.current.then(async () => {
+      const operation = privateFinancialDataQueueRef.current.then(async () => {
         if (userRef.current !== user.id) {
           throw new Error(
-            "The signed-in account changed before the encrypted salary vault could be saved.",
+            "The signed-in account changed before private financial data could be saved.",
           );
         }
-        const encryptedRecord = await encryptSalaryVault(
-          {
-            ...payload,
-            payslips: payload.payslips ?? salaryVaultPayslipsRef.current,
-          },
-          vaultKey.key,
-          vaultKey.salt,
-        );
-        if (userRef.current !== user.id) {
-          throw new Error(
-            "The signed-in account changed before the encrypted salary vault could be saved.",
-          );
-        }
-        const revision = await savePrivateSalaryVault(
-          encryptedRecord,
-          salaryVaultRevisionRef.current,
+        const revision = await savePrivateFinancialData(
+          payload,
+          privateFinancialDataRevisionRef.current,
           user.id,
         );
-        if (userRef.current === user.id) {
-          salaryVaultRevisionRef.current = revision;
-          setSalaryVaultRecord({
-            ...encryptedRecord,
-            revision,
-            updated_at: new Date().toISOString(),
-          });
-          setSalaryVaultError("");
-          setSalaryVaultConflict(false);
+        if (userRef.current !== user.id) {
+          throw new Error(
+            "The signed-in account changed before private financial data could be saved.",
+          );
+        }
+        privateFinancialDataRevisionRef.current = revision;
+        setPrivateFinancialDataError("");
+        setPrivateFinancialDataConflict(false);
+        const shouldResumeWorkspaceSaves =
+          privateFinancialDataNeedsInitialSaveRef.current;
+        privateFinancialDataNeedsInitialSaveRef.current = false;
+        if (shouldResumeWorkspaceSaves) {
+          setSaveRequest((request) => request + 1);
         }
         return revision;
       });
-      salaryVaultQueueRef.current = operation.catch((error) => {
-        if (userRef.current === user.id && error?.code === "40001") {
-          setSalaryVaultConflict(true);
+      privateFinancialDataQueueRef.current = operation.catch((error) => {
+        if (
+          userRef.current === user.id &&
+          error?.code === "REVISION_CONFLICT"
+        ) {
+          setPrivateFinancialDataConflict(true);
         }
       });
       return operation;
     },
-    [user?.id],
+    [user?.id, privateFinancialDataStatus, createPrivateFinancialPayload],
   );
 
-  const unlockOrCreateSalaryVault = useCallback(
-    async (passphrase, confirmation) => {
-      if (!user?.id)
-        throw new Error("Sign in before unlocking the salary vault.");
-
-      if (!salaryVaultRecord) {
-        if (passphrase !== confirmation) {
-          throw new Error("The vault passphrases do not match.");
-        }
-        const payload = {
-          settings: {
-            ...salaryVaultExtraSettings,
-            dailyWage,
-            dailyAllowance,
-            overtimeMultiplier,
-            nightDifferential,
-          },
-          attendance: extractPrivateFinancialAttendance(attendance),
-          payslips: [],
-        };
-        const { record, key } = await createSalaryVault(payload, passphrase);
-        const revision = await savePrivateSalaryVault(record, 0, user.id);
-        salaryVaultKeyRef.current = {
-          key,
-          salt: Uint8Array.from(atob(record.salt), (character) =>
-            character.charCodeAt(0),
-          ),
-        };
-        salaryVaultRevisionRef.current = revision;
-        salaryVaultPayslipsRef.current = [];
-        setHistoricalPayslips([]);
-        setSalaryVaultRecord({
-          ...record,
-          revision,
-          updated_at: new Date().toISOString(),
-        });
-        salaryVaultSkipNextSyncRef.current = true;
-        setSalaryVaultStatus("unlocked");
-        setSalaryVaultError("");
-        setSalaryVaultConflict(false);
-        return { settings: payload.settings };
+  const migrateLegacySalaryVault = useCallback(
+    async (passphrase) => {
+      if (!user?.id || !legacySalaryVault) {
+        throw new Error("No legacy encrypted financial data is available to migrate.");
       }
-
-      const unlocked = await unlockSalaryVault(salaryVaultRecord, passphrase);
-      const payload = unlocked.payload;
-      const revision = salaryVaultRecord.revision;
-
-      salaryVaultKeyRef.current = { key: unlocked.key, salt: unlocked.salt };
-      salaryVaultRevisionRef.current = revision;
-      salaryVaultPayslipsRef.current = payload.payslips || [];
-      setHistoricalPayslips(payload.payslips || []);
-      setActiveHistoricalPayslip(null);
-      setDailyWage(payload.settings.dailyWage);
-      setDailyAllowance(payload.settings.dailyAllowance);
-      setOvertimeMultiplier(payload.settings.overtimeMultiplier);
-      setNightDifferential(payload.settings.nightDifferential);
-      setSalaryVaultExtraSettings(
-        extractPrivateFinancialSettings(payload.settings),
+      const legacyPayload = await unlockLegacySalaryVault(
+        legacySalaryVault,
+        passphrase,
       );
-      setAttendance((current) =>
-        mergeLocalPrivateAttendance(current, payload.attendance),
+      const mergedPayload = mergePrivateFinancialData(
+        legacyWorkspacePrivateDataRef.current,
+        legacyPayload,
       );
-      salaryVaultSkipNextSyncRef.current = true;
-      setSalaryVaultStatus("unlocked");
-      setSalaryVaultError("");
-      setSalaryVaultConflict(false);
-      return { settings: payload.settings };
-    },
-    [
-      user?.id,
-      salaryVaultRecord,
-      dailyWage,
-      dailyAllowance,
-      overtimeMultiplier,
-      nightDifferential,
-      salaryVaultExtraSettings,
-      attendance,
-    ],
-  );
-
-  const rotateSalaryVaultPassphrase = useCallback(
-    async (nextPassphrase, confirmation) => {
-      if (nextPassphrase !== confirmation) {
-        throw new Error("The new vault passphrases do not match.");
-      }
-      if (
-        salaryVaultStatus !== "unlocked" ||
-        !salaryVaultRecord ||
-        !salaryVaultKeyRef.current
-      ) {
-        throw new Error(
-          "Unlock the salary vault before changing its passphrase.",
-        );
-      }
       const payload = {
-        settings: {
-          ...salaryVaultExtraSettings,
-          dailyWage,
-          dailyAllowance,
-          overtimeMultiplier,
-          nightDifferential,
-        },
-        attendance: extractPrivateFinancialAttendance(attendance),
-        payslips: salaryVaultPayslipsRef.current,
+        settings: extractPrivateFinancialSettings(mergedPayload.settings),
+        attendance: extractPrivateFinancialAttendance(mergedPayload.attendance),
+        payslips: mergedPayload.payslips,
       };
-      await persistPrivateSalaryVault(payload);
-      const nextVersion = salaryVaultRecord.key_version + 1;
-      const { record, key } = await createSalaryVault(
+      const revision = await migrateLegacyPrivateFinancialData(
         payload,
-        nextPassphrase,
-        nextVersion,
-      );
-      const revision = await savePrivateSalaryVault(
-        record,
-        salaryVaultRevisionRef.current,
+        legacySalaryVault.revision,
         user.id,
       );
-      salaryVaultKeyRef.current = {
-        key,
-        salt: Uint8Array.from(atob(record.salt), (character) =>
-          character.charCodeAt(0),
-        ),
+      privateFinancialDataRevisionRef.current = revision;
+      privateFinancialDataNeedsInitialSaveRef.current = false;
+      applyPrivateFinancialData(payload);
+      setLegacySalaryVault(null);
+      setPrivateFinancialDataStatus("ready");
+      setPrivateFinancialDataError("");
+      setPrivateFinancialDataConflict(false);
+      legacyWorkspacePrivateDataRef.current = {
+        settings: localPrivateFinancialDefaults,
+        attendance: {},
+        payslips: [],
       };
-      salaryVaultRevisionRef.current = revision;
-      setSalaryVaultRecord({
-        ...record,
-        revision,
-        updated_at: new Date().toISOString(),
-      });
-      setSalaryVaultError("");
     },
-    [
-      salaryVaultStatus,
-      salaryVaultRecord,
-      dailyWage,
-      dailyAllowance,
-      overtimeMultiplier,
-      nightDifferential,
-      salaryVaultExtraSettings,
-      attendance,
-      persistPrivateSalaryVault,
-      user?.id,
-    ],
+    [user?.id, legacySalaryVault, applyPrivateFinancialData],
   );
-
-  const reloadSalaryVault = useCallback(async () => {
-    if (!user?.id) return;
-    const confirmed = await requestConfirmation({
-      title: "Reload encrypted vault?",
-      message:
-        "Any salary changes in this browser that were not saved will be discarded. Export them first if you need to keep them.",
-      confirmLabel: "Reload vault",
-      variant: "warning",
-    });
-    if (!confirmed) return;
-    setSalaryVaultSyncing(true);
-    try {
-      const latestVault = await loadPrivateSalaryVault(user.id);
-      if (!latestVault) {
-        throw new Error(
-          "No encrypted salary vault was found for this account.",
-        );
-      }
-      salaryVaultKeyRef.current = null;
-      salaryVaultPayslipsRef.current = [];
-      setHistoricalPayslips([]);
-      setActiveHistoricalPayslip(null);
-      salaryVaultRevisionRef.current = latestVault.revision;
-      setSalaryVaultRecord(latestVault);
-      setSalaryVaultStatus("locked");
-      setDailyWage("");
-      setDailyAllowance(localPrivateFinancialDefaults.dailyAllowance);
-      setOvertimeMultiplier(localPrivateFinancialDefaults.overtimeMultiplier);
-      setNightDifferential(localPrivateFinancialDefaults.nightDifferential);
-      setSalaryVaultExtraSettings({});
-      setAttendance(
-        (current) =>
-          serializeWorkspaceForCloud({ attendance: current }).attendance,
-      );
-      setSalaryVaultConflict(false);
-      setSalaryVaultError("");
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to reload the encrypted salary vault.";
-      setSalaryVaultError(message);
-      addToast(message, "error");
-    } finally {
-      setSalaryVaultSyncing(false);
-    }
-  }, [user?.id, addToast, requestConfirmation]);
-
-  const lockSalaryVault = useCallback(async () => {
-    window.clearTimeout(salaryVaultSyncTimerRef.current);
-    try {
-      await persistPrivateSalaryVault({
-        settings: {
-          ...salaryVaultExtraSettings,
-          dailyWage,
-          dailyAllowance,
-          overtimeMultiplier,
-          nightDifferential,
-        },
-        attendance: extractPrivateFinancialAttendance(attendance),
-      });
-    } catch (error) {
-      const message =
-        error?.code === "40001"
-          ? "Encrypted salary data changed on another device. Reload the vault before locking."
-          : "Encrypted salary data could not be saved. The vault remains unlocked so you can retry.";
-      setSalaryVaultError(message);
-      addToast(message, "error");
-      return false;
-    }
-    salaryVaultKeyRef.current = null;
-    salaryVaultPayslipsRef.current = [];
-    setHistoricalPayslips([]);
-    setActiveHistoricalPayslip(null);
-    setSalaryVaultStatus(salaryVaultRecord ? "locked" : "uninitialized");
-    setDailyWage("");
-    setDailyAllowance(localPrivateFinancialDefaults.dailyAllowance);
-    setOvertimeMultiplier(localPrivateFinancialDefaults.overtimeMultiplier);
-    setNightDifferential(localPrivateFinancialDefaults.nightDifferential);
-    setSalaryVaultExtraSettings({});
-    setAttendance(
-      (current) =>
-        serializeWorkspaceForCloud({ attendance: current }).attendance,
-    );
-    return true;
-  }, [
-    salaryVaultRecord,
-    dailyWage,
-    dailyAllowance,
-    overtimeMultiplier,
-    nightDifferential,
-    salaryVaultExtraSettings,
-    attendance,
-    persistPrivateSalaryVault,
-    addToast,
-  ]);
 
   const dismissToast = useCallback((id) => {
     window.clearTimeout(timers.current.get(id));
@@ -2131,17 +1991,22 @@ export default function App() {
       userRef.current = null;
       workspaceLoadedRef.current = false;
       workspaceRevisionRef.current = 0;
-      salaryVaultKeyRef.current = null;
-      salaryVaultPayslipsRef.current = [];
+      historicalPayslipsRef.current = [];
       setHistoricalPayslips([]);
       setActiveHistoricalPayslip(null);
-      salaryVaultRevisionRef.current = 0;
-      salaryVaultSkipNextSyncRef.current = false;
-      setSalaryVaultStatus("loading");
-      setSalaryVaultRecord(null);
-      setSalaryVaultError("");
-      setSalaryVaultConflict(false);
-      setSalaryVaultSyncing(false);
+      privateFinancialDataRevisionRef.current = 0;
+      privateFinancialDataSkipNextSyncRef.current = false;
+      privateFinancialDataNeedsInitialSaveRef.current = false;
+      legacyWorkspacePrivateDataRef.current = {
+        settings: localPrivateFinancialDefaults,
+        attendance: {},
+        payslips: [],
+      };
+      setPrivateFinancialDataStatus("loading");
+      setLegacySalaryVault(null);
+      setPrivateFinancialDataError("");
+      setPrivateFinancialDataConflict(false);
+      setPrivateFinancialDataSyncing(false);
       setWorkspaceLoadedForUser(null);
       setWorkspaceLoading(false);
       setAttendancePunchError("");
@@ -2183,45 +2048,65 @@ export default function App() {
     setWorkspaceError("");
     setAttendancePunchError("");
     setWorkspaceDataWarning("");
+    setPrivateFinancialDataStatus("loading");
+    setPrivateFinancialDataError("");
+    setPrivateFinancialDataConflict(false);
+    setPrivateFinancialDataSyncing(false);
+    setLegacySalaryVault(null);
 
     loadWorkspace(user.id)
       .then(
         ({
           workspace,
           revision,
-          salaryVault,
-          salaryVaultTableAvailable,
-          salaryVaultLoadError,
+          privateFinancialData,
+          privateFinancialDataLoadError,
+          legacyWorkspacePrivateData,
           attendancePunchLoadError,
           workspaceDataWarning: loadedWorkspaceDataWarning,
         }) => {
           if (!active) return;
-          salaryVaultKeyRef.current = null;
-          salaryVaultRevisionRef.current = salaryVault?.revision ?? 0;
-          setSalaryVaultRecord(salaryVault);
-          setSalaryVaultStatus(
-            !salaryVaultTableAvailable
-              ? "unavailable"
-              : salaryVaultLoadError
-                ? "error"
-                : salaryVault
-                  ? "locked"
-                  : "uninitialized",
-          );
-          setSalaryVaultError(
-            !salaryVaultTableAvailable
-              ? "Encrypted salary sync is unavailable on this server. Other workspace data remains available."
-              : salaryVaultLoadError
-                ? `Encrypted salary-vault data could not be checked. Salary data remains locked until the vault can be loaded. ${getWorkspaceLoadErrorMessage(salaryVaultLoadError)}`
-                : "",
-          );
+          privateFinancialDataRevisionRef.current =
+            privateFinancialData?.revision ?? 0;
+          legacyWorkspacePrivateDataRef.current =
+            legacyWorkspacePrivateData?.data ?? {
+              settings: localPrivateFinancialDefaults,
+              attendance: {},
+              payslips: [],
+            };
+          const hasLegacyWorkspaceData =
+            legacyWorkspacePrivateData?.hasData === true;
+          privateFinancialDataNeedsInitialSaveRef.current =
+            hasLegacyWorkspaceData;
+          setLegacySalaryVault(privateFinancialData?.legacyVault ?? null);
+          if (privateFinancialDataLoadError) {
+            const unavailable =
+              privateFinancialDataLoadError.code === "PRIVATE_DATA_UNAVAILABLE";
+            setPrivateFinancialDataStatus(
+              unavailable ? "unavailable" : "error",
+            );
+            setPrivateFinancialDataError(
+              unavailable
+                ? "Private financial storage is not configured on this server."
+                : `Private financial data could not be loaded. ${getWorkspaceLoadErrorMessage(privateFinancialDataLoadError)}`,
+            );
+          } else if (privateFinancialData?.legacyVault) {
+            setPrivateFinancialDataStatus("migration-required");
+            setPrivateFinancialDataError("");
+          } else {
+            if (hasLegacyWorkspaceData) {
+              privateFinancialDataSkipNextSyncRef.current = false;
+            }
+            setPrivateFinancialDataStatus("ready");
+            setPrivateFinancialDataError("");
+          }
           setAttendancePunchError(
             attendancePunchLoadError
               ? getWorkspaceLoadErrorMessage(attendancePunchLoadError)
               : "",
           );
           setWorkspaceDataWarning(loadedWorkspaceDataWarning);
-          setSalaryVaultConflict(false);
+          setPrivateFinancialDataConflict(false);
           const attendance = Object.fromEntries(
             Object.entries(workspace.attendance).map(([date, record]) => [
               date,
@@ -2265,7 +2150,33 @@ export default function App() {
           setLeaveBalances(workspace.leaveBalances);
           setSettingsBalances(workspace.settingsBalances);
           setNightDifferential(localPrivateFinancialDefaults.nightDifferential);
-          setSalaryVaultExtraSettings(extractPrivateFinancialSettings({}));
+          if (
+            !privateFinancialDataLoadError &&
+            !privateFinancialData?.legacyVault
+          ) {
+            const legacyWorkspaceData =
+              legacyWorkspacePrivateData?.data ?? {
+                settings: localPrivateFinancialDefaults,
+                attendance: {},
+                payslips: [],
+              };
+            const loadedPrivateFinancialData = privateFinancialData?.data
+              ? mergePrivateFinancialData(
+                  legacyWorkspaceData,
+                  privateFinancialData.data,
+                )
+              : legacyWorkspaceData;
+            applyPrivateFinancialData(loadedPrivateFinancialData);
+            if (legacyWorkspacePrivateData?.hasData) {
+              privateFinancialDataSkipNextSyncRef.current = false;
+            }
+          } else {
+            setPrivateFinancialSettings(
+              extractPrivateFinancialSettings({}),
+            );
+            setHistoricalPayslips([]);
+            historicalPayslipsRef.current = [];
+          }
           workspaceRevisionRef.current = revision;
           setWorkspaceLoadedForUser(user.id);
           workspaceLoadedRef.current = true;
@@ -2282,63 +2193,54 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [user?.id, workspaceLoadAttempt]);
+  }, [user?.id, workspaceLoadAttempt, applyPrivateFinancialData]);
 
   useEffect(() => {
     if (
       !user?.id ||
       workspaceLoadedForUser !== user.id ||
       !workspaceLoadedRef.current ||
-      salaryVaultStatus !== "unlocked" ||
-      !salaryVaultKeyRef.current
+      privateFinancialDataStatus !== "ready"
     )
       return;
-    if (salaryVaultSkipNextSyncRef.current) {
-      salaryVaultSkipNextSyncRef.current = false;
+    if (privateFinancialDataSkipNextSyncRef.current) {
+      privateFinancialDataSkipNextSyncRef.current = false;
       return;
     }
-    const payload = {
-      settings: {
-        ...salaryVaultExtraSettings,
-        dailyWage,
-        dailyAllowance,
-        overtimeMultiplier,
-        nightDifferential,
-      },
-      attendance: extractPrivateFinancialAttendance(attendance),
-    };
-    salaryVaultSyncTimerRef.current = window.setTimeout(() => {
-      salaryVaultSyncTimerRef.current = null;
-      setSalaryVaultSyncing(true);
-      persistPrivateSalaryVault(payload)
+    const payload = createPrivateFinancialPayload();
+    privateFinancialDataSyncTimerRef.current = window.setTimeout(() => {
+      privateFinancialDataSyncTimerRef.current = null;
+      setPrivateFinancialDataSyncing(true);
+      persistPrivateFinancialData(payload)
         .then(() => {
-          setSalaryVaultSyncing(false);
+          setPrivateFinancialDataSyncing(false);
         })
         .catch((error) => {
-          setSalaryVaultSyncing(false);
-          const conflict = error?.code === "40001";
+          setPrivateFinancialDataSyncing(false);
+          const conflict = error?.code === "REVISION_CONFLICT";
           const message = conflict
-            ? "Encrypted salary data changed on another device. Lock and unlock the vault again before retrying."
-            : "Encrypted salary data could not be saved to the server. Your changes remain in memory; retry after checking your connection.";
-          setSalaryVaultError(message);
+            ? "Private financial data changed on another device. Reload before retrying."
+            : "Private financial data could not be saved. Your changes remain in memory; retry after checking your connection.";
+          setPrivateFinancialDataError(message);
           addToast(message, "error");
         });
     }, 500);
     return () => {
-      window.clearTimeout(salaryVaultSyncTimerRef.current);
-      salaryVaultSyncTimerRef.current = null;
+      window.clearTimeout(privateFinancialDataSyncTimerRef.current);
+      privateFinancialDataSyncTimerRef.current = null;
     };
   }, [
     user?.id,
     workspaceLoadedForUser,
-    salaryVaultStatus,
+    privateFinancialDataStatus,
     dailyWage,
     dailyAllowance,
     overtimeMultiplier,
     nightDifferential,
-    salaryVaultExtraSettings,
+    privateFinancialSettings,
     attendance,
-    persistPrivateSalaryVault,
+    createPrivateFinancialPayload,
+    persistPrivateFinancialData,
     addToast,
   ]);
 
@@ -2346,7 +2248,8 @@ export default function App() {
     if (
       !user?.id ||
       workspaceLoadedForUser !== user.id ||
-      !workspaceLoadedRef.current
+      !workspaceLoadedRef.current ||
+      privateFinancialDataNeedsInitialSaveRef.current
     )
       return undefined;
 
@@ -2384,6 +2287,7 @@ export default function App() {
   }, [
     user?.id,
     workspaceLoadedForUser,
+    privateFinancialDataStatus,
     workspaceData,
     saveRequest,
     addToast,
@@ -2530,8 +2434,8 @@ export default function App() {
     amount: incentiveAmount,
     date,
   }) => {
-    if (salaryVaultStatus !== "unlocked") {
-      showToast("Unlock the salary vault before adding an employee incentive.", "warning");
+    if (privateFinancialDataStatus !== "ready") {
+      showToast("Private financial data is not ready yet.", "warning");
       return false;
     }
     const name = incentiveName.trim();
@@ -2560,7 +2464,7 @@ export default function App() {
       amount,
       date,
     };
-    setSalaryVaultExtraSettings((current) => ({
+    setPrivateFinancialSettings((current) => ({
       ...current,
       employeeIncentives: [
         incentive,
@@ -2580,7 +2484,7 @@ export default function App() {
   };
 
   const deleteEmployeeIncentive = (id) => {
-    setSalaryVaultExtraSettings((current) => ({
+    setPrivateFinancialSettings((current) => ({
       ...current,
       employeeIncentives: (Array.isArray(current.employeeIncentives)
         ? current.employeeIncentives
@@ -2800,12 +2704,11 @@ export default function App() {
 
   const savePayslipToHistory = async () => {
     if (
-      salaryVaultStatus !== "unlocked" ||
-      !salaryVaultKeyRef.current ||
+      privateFinancialDataStatus !== "ready" ||
       !user?.id
     ) {
       showToast(
-        "Unlock the salary vault before saving a payslip snapshot.",
+        "Private financial data is not ready to save a payslip snapshot.",
         "warning",
       );
       return false;
@@ -2833,7 +2736,7 @@ export default function App() {
         },
       });
       nextHistory = appendPayslipSnapshot(
-        salaryVaultPayslipsRef.current,
+        historicalPayslipsRef.current,
         snapshot,
       );
     } catch (error) {
@@ -2846,37 +2749,28 @@ export default function App() {
       return false;
     }
 
-    window.clearTimeout(salaryVaultSyncTimerRef.current);
-    salaryVaultSyncTimerRef.current = null;
+    window.clearTimeout(privateFinancialDataSyncTimerRef.current);
+    privateFinancialDataSyncTimerRef.current = null;
     setPayslipHistorySaving(true);
-    setSalaryVaultSyncing(true);
+    setPrivateFinancialDataSyncing(true);
     try {
-      await persistPrivateSalaryVault({
-        settings: {
-          ...salaryVaultExtraSettings,
-          dailyWage,
-          dailyAllowance,
-          overtimeMultiplier,
-          nightDifferential,
-        },
-        attendance: extractPrivateFinancialAttendance(attendance),
-        payslips: nextHistory,
-      });
-      salaryVaultPayslipsRef.current = nextHistory;
+      await persistPrivateFinancialData(createPrivateFinancialPayload(nextHistory));
+      historicalPayslipsRef.current = nextHistory;
       setHistoricalPayslips(nextHistory);
-      addToast("Payslip estimate saved to encrypted history.", "success");
+      privateFinancialDataSkipNextSyncRef.current = true;
+      addToast("Payslip estimate saved to history.", "success");
       return true;
     } catch (error) {
       const detail = error instanceof Error ? ` ${error.message}` : "";
       const message =
-        error?.code === "40001"
-          ? "Encrypted salary data changed on another device. Reload and unlock the vault before saving this payslip."
+        error?.code === "REVISION_CONFLICT"
+          ? "Private financial data changed on another device. Reload before saving this payslip."
           : `Payslip history could not be saved. No success was recorded.${detail}`;
-      setSalaryVaultError(message);
+      setPrivateFinancialDataError(message);
       addToast(message, "error");
       return false;
     } finally {
-      setSalaryVaultSyncing(false);
+      setPrivateFinancialDataSyncing(false);
       setPayslipHistorySaving(false);
     }
   };
@@ -2889,12 +2783,11 @@ export default function App() {
   const deleteHistoricalPayslip = async (snapshot) => {
     if (payslipHistorySaving) return false;
     if (
-      salaryVaultStatus !== "unlocked" ||
-      !salaryVaultKeyRef.current ||
+      privateFinancialDataStatus !== "ready" ||
       !user?.id
     ) {
       showToast(
-        "Unlock the salary vault before deleting a saved payslip.",
+        "Private financial data is not ready to delete a saved payslip.",
         "warning",
       );
       return false;
@@ -2903,7 +2796,7 @@ export default function App() {
     let nextHistory;
     try {
       nextHistory = removePayslipSnapshot(
-        salaryVaultPayslipsRef.current,
+        historicalPayslipsRef.current,
         snapshot.id,
       );
     } catch (error) {
@@ -2916,46 +2809,43 @@ export default function App() {
       return false;
     }
 
-    window.clearTimeout(salaryVaultSyncTimerRef.current);
-    salaryVaultSyncTimerRef.current = null;
+    window.clearTimeout(privateFinancialDataSyncTimerRef.current);
+    privateFinancialDataSyncTimerRef.current = null;
     setPayslipHistorySaving(true);
-    setSalaryVaultSyncing(true);
+    setPrivateFinancialDataSyncing(true);
     try {
-      await persistPrivateSalaryVault({
-        settings: {
-          ...salaryVaultExtraSettings,
-          dailyWage,
-          dailyAllowance,
-          overtimeMultiplier,
-          nightDifferential,
-        },
-        attendance: extractPrivateFinancialAttendance(attendance),
-        payslips: nextHistory,
-      });
-      salaryVaultPayslipsRef.current = nextHistory;
+      await persistPrivateFinancialData(createPrivateFinancialPayload(nextHistory));
+      historicalPayslipsRef.current = nextHistory;
       setHistoricalPayslips(nextHistory);
       if (activeHistoricalPayslip?.id === snapshot.id) {
         setActiveHistoricalPayslip(null);
       }
+      privateFinancialDataSkipNextSyncRef.current = true;
       addToast("Saved payslip deleted.", "success");
       return true;
     } catch (error) {
       const detail = error instanceof Error ? ` ${error.message}` : "";
       const message =
-        error?.code === "40001"
-          ? "Encrypted salary data changed on another device. Reload and unlock the vault before deleting this payslip."
+        error?.code === "REVISION_CONFLICT"
+          ? "Private financial data changed on another device. Reload before deleting this payslip."
           : `Saved payslip could not be deleted. No deletion was recorded.${detail}`;
-      setSalaryVaultError(message);
+      setPrivateFinancialDataError(message);
       addToast(message, "error");
       return false;
     } finally {
-      setSalaryVaultSyncing(false);
+      setPrivateFinancialDataSyncing(false);
       setPayslipHistorySaving(false);
     }
   };
 
   const flushWorkspace = async () => {
     if (!user?.id || !workspaceLoadedRef.current) return true;
+    if (privateFinancialDataNeedsInitialSaveRef.current) {
+      setWorkspaceSaveError(
+        "Workspace changes will not be saved until legacy private financial data has been preserved.",
+      );
+      return false;
+    }
     const operation = queueWorkspaceSave(user.id, workspaceData);
     try {
       await operation;
@@ -2981,41 +2871,41 @@ export default function App() {
     }
   };
 
-  const flushSalaryVault = async () => {
-    if (salaryVaultStatus !== "unlocked") return true;
-    window.clearTimeout(salaryVaultSyncTimerRef.current);
-    salaryVaultSyncTimerRef.current = null;
-    setSalaryVaultSyncing(true);
+  const flushPrivateFinancialData = async () => {
+    if (privateFinancialDataStatus !== "ready") return true;
+    window.clearTimeout(privateFinancialDataSyncTimerRef.current);
+    privateFinancialDataSyncTimerRef.current = null;
+    setPrivateFinancialDataSyncing(true);
     try {
-      await persistPrivateSalaryVault({
-        settings: {
-          ...salaryVaultExtraSettings,
-          dailyWage,
-          dailyAllowance,
-          overtimeMultiplier,
-          nightDifferential,
-        },
-        attendance: extractPrivateFinancialAttendance(attendance),
-      });
-      setSalaryVaultSyncing(false);
+      await persistPrivateFinancialData(createPrivateFinancialPayload());
+      setPrivateFinancialDataSyncing(false);
       return true;
     } catch (error) {
-      setSalaryVaultSyncing(false);
+      setPrivateFinancialDataSyncing(false);
       const message =
-        error?.code === "40001"
-          ? "Encrypted salary data changed on another device. Unlock the vault again before signing out."
-          : "Encrypted salary data could not be saved. Stay signed in and retry before signing out.";
-      setSalaryVaultError(message);
+        error?.code === "REVISION_CONFLICT"
+          ? "Private financial data changed on another device. Reload before signing out."
+          : "Private financial data could not be saved. Stay signed in and retry before signing out.";
+      setPrivateFinancialDataError(message);
       addToast(message, "error");
       return false;
     }
   };
 
   const exportWorkspace = async () => {
+    if (privateFinancialDataStatus !== "ready") {
+      addToast(
+        "Private financial data must finish loading or migration before a complete export is available.",
+        "warning",
+      );
+      return;
+    }
+    if (!(await flushPrivateFinancialData())) return;
     if (!(await flushWorkspace())) return;
     const exportData = {
       exportedAt: new Date().toISOString(),
       workspace: workspaceData,
+      privateFinancialData: createPrivateFinancialPayload(),
       deviceOnlyFinancialData: {
         dailyWage,
         dailyAllowance,
@@ -3047,7 +2937,7 @@ export default function App() {
     const confirmed = await requestConfirmation({
       title: "Permanently delete your account?",
       message:
-        "This deletes your account and all TimeCloud app data, including your workspace, attendance, and encrypted salary vault. Unsaved changes will be discarded. This cannot be undone. Operational logs and backups may be retained under the provider's retention policies.",
+        "This deletes your account and all TimeCloud app data, including your workspace, attendance, and private financial data. Unsaved changes will be discarded. This cannot be undone. Operational logs and backups may be retained under the provider's retention policies.",
       confirmLabel: "Delete account",
       variant: "danger",
     });
@@ -3073,10 +2963,12 @@ export default function App() {
       await refetchAuthSession();
       setWorkspaceLoadedForUser(null);
       setActiveModal(null);
-      salaryVaultKeyRef.current = null;
-      salaryVaultRevisionRef.current = 0;
-      setSalaryVaultRecord(null);
-      setSalaryVaultStatus("loading");
+      privateFinancialDataRevisionRef.current = 0;
+      historicalPayslipsRef.current = [];
+      setHistoricalPayslips([]);
+      setLegacySalaryVault(null);
+      setPrivateFinancialDataStatus("loading");
+      setPrivateFinancialDataError("");
       addToast(
         "Account and all associated TimeCloud app data were deleted.",
         "info",
@@ -3880,6 +3772,7 @@ export default function App() {
               ),
             ),
             nightDifferential,
+            dailyWage,
           )}
           selected={day === selectedDay}
           hasIncentive={incentiveDates.has(formatDate(year, monthIndex, day))}
@@ -3891,6 +3784,7 @@ export default function App() {
   }, [
     attendance,
     availableEmployeeIncentives,
+    dailyWage,
     holidays,
     lateGracePeriodMinutes,
     manilaNow,
@@ -4014,8 +3908,8 @@ export default function App() {
                   if (signOutInProgressRef.current) return;
                   signOutInProgressRef.current = true;
                   try {
-                    setSignOutStatus("Saving encrypted salary data...");
-                    if (!(await flushSalaryVault())) return;
+                    setSignOutStatus("Saving private financial data...");
+                    if (!(await flushPrivateFinancialData())) return;
                     setSignOutStatus("Saving workspace changes...");
                     if (!(await flushWorkspace())) return;
                     setSignOutStatus("Signing out...");
@@ -4048,29 +3942,33 @@ export default function App() {
                   <span>{signOutStatus}</span>
                 </div>
               )}
-              {salaryVaultStatus !== "unlocked" && (
+              {privateFinancialDataStatus !== "ready" && (
                 <div
                   className="flex flex-col gap-2 border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between"
                   role="status"
                 >
                   <span>
-                    {salaryVaultStatus === "locked"
-                      ? "Salary vault is locked. Unlock it in Settings to view and sync encrypted salary data."
-                      : salaryVaultStatus === "error"
-                        ? "Encrypted salary vault could not be checked. Salary data remains locked until the vault can be loaded."
-                        : salaryVaultStatus === "unavailable"
-                          ? "Encrypted salary sync is unavailable on this server. Other workspace data remains available."
-                          : "Create an encrypted salary vault in Settings to sync salary settings and earnings across devices."}
+                    {privateFinancialDataStatus === "migration-required"
+                      ? "Existing encrypted salary data needs a one-time migration. Enter your current passphrase in Settings; it will not be needed after migration."
+                      : privateFinancialDataStatus === "error"
+                        ? "Private financial data could not be loaded. It is not available for editing until the data can be loaded."
+                        : privateFinancialDataStatus === "unavailable"
+                          ? "Private financial storage is not configured. Legacy financial data will be preserved until it is available."
+                          : "Private financial data is loading."}
                   </span>
                   <button
                     type="button"
-                    onClick={() => {
-                      setActiveSettingsTab("general");
-                      setActiveModal("settingsModal");
-                    }}
+                    onClick={() =>
+                      privateFinancialDataStatus === "migration-required"
+                        ? (setActiveSettingsTab("general"),
+                          setActiveModal("settingsModal"))
+                        : retryWorkspaceLoad()
+                    }
                     className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold hover:bg-amber-100"
                   >
-                    Open salary vault
+                    {privateFinancialDataStatus === "migration-required"
+                      ? "Migrate data"
+                      : "Retry loading"}
                   </button>
                 </div>
               )}
@@ -4101,12 +3999,12 @@ export default function App() {
                 )}
               </div>
             )}
-            {salaryVaultError && (
+            {privateFinancialDataError && (
               <div
                 className="border-b border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800"
                 role="alert"
               >
-                {salaryVaultError}
+                {privateFinancialDataError}
               </div>
             )}
             {workspaceSaveError && (
@@ -4205,15 +4103,15 @@ export default function App() {
               onDeleteExpense={deleteExpense}
               employeeIncentives={availableEmployeeIncentives}
               onDeleteIncentive={deleteEmployeeIncentive}
-              salaryVaultError={salaryVaultError}
+              privateFinancialDataError={privateFinancialDataError}
               workspaceLoading={workspaceLoading}
               workspaceError={workspaceError}
               workspaceSaveError={workspaceSaveError}
               historicalPayslips={
-                salaryVaultStatus === "unlocked" ? historicalPayslips : []
+                privateFinancialDataStatus === "ready" ? historicalPayslips : []
               }
               payslipHistorySaving={payslipHistorySaving}
-              salaryVaultStatus={salaryVaultStatus}
+              privateFinancialDataStatus={privateFinancialDataStatus}
               currentPayrollPeriod={payrollPeriod}
               onViewCurrentPayslip={() => {
                 setActiveHistoricalPayslip(null);
@@ -4265,7 +4163,7 @@ export default function App() {
               open={activeModal === "payslipModal"}
               userName={user?.name}
               historicalPayslip={
-                salaryVaultStatus === "unlocked"
+                privateFinancialDataStatus === "ready"
                   ? activeHistoricalPayslip
                   : null
               }
@@ -4280,11 +4178,11 @@ export default function App() {
               cutoffPayrollDeductions={selectedPayslipDeductions}
               payrollPeriodNetPay={selectedPayslipNetPay}
               payrollPeriodEarningsAvailable={isPayrollPeriodEarningsAvailable(
-                salaryVaultStatus,
+                privateFinancialDataStatus,
               )}
               dailyWage={dailyWage}
               formatCurrency={formatCurrency}
-              canSavePayslip={salaryVaultStatus === "unlocked"}
+              canSavePayslip={privateFinancialDataStatus === "ready"}
               payslipAlreadySaved={Boolean(
                 findPayslipSnapshot(
                   historicalPayslips,
@@ -4298,104 +4196,114 @@ export default function App() {
             <FeatureErrorBoundary name="Settings">
               <SettingsModal
                 open={activeModal === "settingsModal"}
-              activeSettingsTab={activeSettingsTab}
-              holidays={holidays}
-              selectedLocality={selectedLocality}
-              holidayEligibilityConfirmed={holidayEligibilityConfirmed}
-              settingsBalances={settingsBalances}
-              dailyWage={dailyWage}
-              dailyAllowance={dailyAllowance}
-              overtimeMultiplier={overtimeMultiplier}
-              payrollSettings={salaryVaultExtraSettings}
-              payrollDeductions={payrollDeductions}
-              nightDifferential={nightDifferential}
-              onDeleteAccount={deleteAccount}
-              accountDeletionLoading={accountDeletionLoading}
-              salaryVaultStatus={salaryVaultStatus}
-              salaryVaultError={salaryVaultError}
-              salaryVaultConflict={salaryVaultConflict}
-              salaryVaultSyncing={salaryVaultSyncing}
-              onUnlockSalaryVault={unlockOrCreateSalaryVault}
-              onLockSalaryVault={lockSalaryVault}
-              onRotateSalaryVault={rotateSalaryVaultPassphrase}
-                onReloadSalaryVault={reloadSalaryVault}
-                onRetryWorkspaceLoad={retryWorkspaceLoad}
-              onSettingsValidationError={(message) =>
-                showToast(message, "warning")
-              }
-                onSaveSettings={async (draft) => {
-                const currentPayrollSettings =
-                  getPayrollDeductionSettingsDefaults(salaryVaultExtraSettings);
-                const financialSettingsChanged =
-                  draft.dailyWage !== dailyWage ||
-                  draft.dailyAllowance !== dailyAllowance ||
-                  draft.overtimeMultiplier !== overtimeMultiplier ||
-                  draft.nightDifferential !== nightDifferential ||
-                  payrollDeductionSettingKeys.some(
-                    (key) => draft[key] !== currentPayrollSettings[key],
-                  );
-                if (
-                  financialSettingsChanged &&
-                  salaryVaultStatus !== "unlocked"
-                ) {
-                  addToast(
-                    "Unlock or create the encrypted salary vault before changing salary settings.",
-                    "warning",
-                  );
-                  return false;
+                activeSettingsTab={activeSettingsTab}
+                holidays={holidays}
+                selectedLocality={selectedLocality}
+                holidayEligibilityConfirmed={holidayEligibilityConfirmed}
+                settingsBalances={settingsBalances}
+                dailyWage={dailyWage}
+                dailyAllowance={dailyAllowance}
+                overtimeMultiplier={overtimeMultiplier}
+                payrollSettings={privateFinancialSettings}
+                payrollDeductions={payrollDeductions}
+                nightDifferential={nightDifferential}
+                onDeleteAccount={deleteAccount}
+                accountDeletionLoading={accountDeletionLoading}
+                privateFinancialDataStatus={privateFinancialDataStatus}
+                privateFinancialDataError={privateFinancialDataError}
+                privateFinancialDataConflict={privateFinancialDataConflict}
+                privateFinancialDataSyncing={privateFinancialDataSyncing}
+                legacySalaryVaultAvailable={Boolean(legacySalaryVault)}
+                onMigrateLegacySalaryVault={migrateLegacySalaryVault}
+                onReloadPrivateFinancialData={retryWorkspaceLoad}
+                onSettingsValidationError={(message) =>
+                  showToast(message, "warning")
                 }
-                if (salaryVaultStatus === "unlocked") {
-                  try {
-                    await persistPrivateSalaryVault({
-                      settings: {
-                        ...salaryVaultExtraSettings,
-                        dailyWage: draft.dailyWage,
-                        dailyAllowance: draft.dailyAllowance,
-                        overtimeMultiplier: draft.overtimeMultiplier,
-                        nightDifferential: draft.nightDifferential,
-                        ...Object.fromEntries(
-                          payrollDeductionSettingKeys.map((key) => [
-                            key,
-                            draft[key],
-                          ]),
-                        ),
-                      },
-                      attendance: extractPrivateFinancialAttendance(attendance),
-                    });
-                  } catch (error) {
-                    const conflict = error?.code === "40001";
-                    const message = conflict
-                      ? "Encrypted salary data changed on another device. Unlock the vault again before saving."
-                      : "Salary settings could not be saved to the encrypted cloud vault. Your settings were not confirmed as saved.";
-                    setSalaryVaultError(message);
-                    addToast(message, "error");
+                onSaveSettings={async (draft) => {
+                  const currentPayrollSettings =
+                    getPayrollDeductionSettingsDefaults(
+                      privateFinancialSettings,
+                    );
+                  const financialSettingsChanged =
+                    draft.dailyWage !== dailyWage ||
+                    draft.dailyAllowance !== dailyAllowance ||
+                    draft.overtimeMultiplier !== overtimeMultiplier ||
+                    draft.nightDifferential !== nightDifferential ||
+                    payrollDeductionSettingKeys.some(
+                      (key) => draft[key] !== currentPayrollSettings[key],
+                    );
+                  if (
+                    financialSettingsChanged &&
+                    privateFinancialDataStatus !== "ready"
+                  ) {
+                    addToast(
+                      "Private financial data is not ready to save yet.",
+                      "warning",
+                    );
                     return false;
                   }
-                }
-                setHolidays(draft.holidays);
-                setSelectedLocality(draft.selectedLocality);
-                setHolidayEligibilityConfirmed(
-                  draft.holidayEligibilityConfirmed,
-                );
-                setDailyWage(draft.dailyWage);
-                setDailyAllowance(draft.dailyAllowance);
-                setOvertimeMultiplier(draft.overtimeMultiplier);
-                setNightDifferential(draft.nightDifferential);
-                setSalaryVaultExtraSettings((current) => ({
-                  ...current,
-                  ...Object.fromEntries(
-                    payrollDeductionSettingKeys.map((key) => [key, draft[key]]),
-                  ),
-                }));
-                setSettingsBalances(draft.settingsBalances);
-                setLeaveBalances({
-                  VL: Number(draft.settingsBalances.VL) || 0,
-                  SL: Number(draft.settingsBalances.SL) || 0,
-                  EL: Number(draft.settingsBalances.EL) || 0,
-                });
-                setActiveModal(null);
-                showToast("Settings saved successfully.", "success");
-                return true;
+                  if (financialSettingsChanged) {
+                    window.clearTimeout(
+                      privateFinancialDataSyncTimerRef.current,
+                    );
+                    privateFinancialDataSyncTimerRef.current = null;
+                    try {
+                      await persistPrivateFinancialData({
+                        settings: {
+                          ...privateFinancialSettings,
+                          dailyWage: draft.dailyWage,
+                          dailyAllowance: draft.dailyAllowance,
+                          overtimeMultiplier: draft.overtimeMultiplier,
+                          nightDifferential: draft.nightDifferential,
+                          ...Object.fromEntries(
+                            payrollDeductionSettingKeys.map((key) => [
+                              key,
+                              draft[key],
+                            ]),
+                          ),
+                        },
+                        attendance:
+                          extractPrivateFinancialAttendance(attendance),
+                        payslips: historicalPayslipsRef.current,
+                      });
+                      privateFinancialDataSkipNextSyncRef.current = true;
+                    } catch (error) {
+                      const conflict = error?.code === "REVISION_CONFLICT";
+                      const message = conflict
+                        ? "Private financial data changed on another device. Reload before saving."
+                        : "Salary settings could not be saved. Your settings were not confirmed as saved.";
+                      setPrivateFinancialDataError(message);
+                      addToast(message, "error");
+                      return false;
+                    }
+                  }
+                  setHolidays(draft.holidays);
+                  setSelectedLocality(draft.selectedLocality);
+                  setHolidayEligibilityConfirmed(
+                    draft.holidayEligibilityConfirmed,
+                  );
+                  setDailyWage(draft.dailyWage);
+                  setDailyAllowance(draft.dailyAllowance);
+                  setOvertimeMultiplier(draft.overtimeMultiplier);
+                  setNightDifferential(draft.nightDifferential);
+                  setPrivateFinancialSettings((current) => ({
+                    ...current,
+                    ...Object.fromEntries(
+                      payrollDeductionSettingKeys.map((key) => [
+                        key,
+                        draft[key],
+                      ]),
+                    ),
+                  }));
+                  setSettingsBalances(draft.settingsBalances);
+                  setLeaveBalances({
+                    VL: Number(draft.settingsBalances.VL) || 0,
+                    SL: Number(draft.settingsBalances.SL) || 0,
+                    EL: Number(draft.settingsBalances.EL) || 0,
+                  });
+                  setActiveModal(null);
+                  showToast("Settings saved successfully.", "success");
+                  return true;
                 }}
               />
             </FeatureErrorBoundary>

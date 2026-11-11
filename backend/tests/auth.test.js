@@ -118,6 +118,10 @@ test("account cleanup removes only the target user's application documents", asy
       { _id: "alice", ciphertext: "encrypted" },
       { _id: "bob", ciphertext: "encrypted" },
     ],
+    private_financial_data: [
+      { _id: "alice", ciphertext: "encrypted" },
+      { _id: "bob", ciphertext: "encrypted" },
+    ],
   });
 
   await deleteUserAppData(database, "alice");
@@ -131,6 +135,14 @@ test("account cleanup removes only the target user's application documents", asy
   assert.equal(
     (await database.collection("private_salary_vault").findOne({ _id: "alice" })),
     null,
+  );
+  assert.equal(
+    (await database.collection("private_financial_data").findOne({ _id: "alice" })),
+    null,
+  );
+  assert.equal(
+    (await database.collection("private_financial_data").findOne({ _id: "bob" }))._id,
+    "bob",
   );
   assert.equal(database.sessionEnded, true);
 });

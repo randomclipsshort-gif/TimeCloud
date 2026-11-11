@@ -1,8 +1,13 @@
 import { getServerConfig, ServerConfigError } from "../config/config.js";
 import { getMongoDb } from "../config/mongodb.js";
 import { getAuth } from "./auth.js";
+import {
+  decryptPrivateFinancialData,
+  encryptPrivateFinancialData,
+} from "./privateFinancialData.js";
 
 const MAX_WORKSPACE_BYTES = 1_048_576;
+const MAX_PRIVATE_FINANCIAL_DATA_BYTES = 1_048_576;
 const MAX_REQUEST_BYTES = 1_100_000;
 const privateFieldPattern =
   /(salary|wage|pay|earning|compensation|rate|bonus|commission|incentive|income|gross|deduction|tax|payroll|allowance|night.?differential|overtime.?multiplier|overtime.?amount|^(base|ot|penalty|est)$)|^(sss|philhealth|pagibig)(frequency|monthlycutoff|firstcutoffamount|secondcutoffamount)$/i;
@@ -121,7 +126,7 @@ export function validateWorkspaceData(data) {
     throw new ApiError(
       400,
       "PRIVATE_DATA_IN_WORKSPACE",
-      "Private financial data must be saved through the encrypted salary vault.",
+      "Private financial data must be saved through the private financial-data API.",
     );
   }
   const serialized = JSON.stringify(data);
@@ -283,6 +288,62 @@ export function validateVaultRecord(record) {
   };
 }
 
+export function validatePrivateFinancialData(data) {
+  const allowedFields = new Set(["settings", "attendance", "payslips"]);
+  if (
+    !isObject(data) ||
+    Object.keys(data).some((key) => !allowedFields.has(key)) ||
+    !isObject(data.settings) ||
+    !isObject(data.attendance) ||
+    !Array.isArray(data.payslips) ||
+    !Object.values(data.attendance).every(isObject) ||
+    !data.payslips.every(isObject)
+  ) {
+    throw new ApiError(
+      400,
+      "INVALID_PRIVATE_FINANCIAL_DATA",
+      "Private financial data is invalid.",
+    );
+  }
+  if (
+    Buffer.byteLength(JSON.stringify(data), "utf8") >
+    MAX_PRIVATE_FINANCIAL_DATA_BYTES
+  ) {
+    throw new ApiError(
+      413,
+      "PRIVATE_FINANCIAL_DATA_TOO_LARGE",
+      "Private financial data exceeds the 1 MiB limit.",
+    );
+  }
+  return data;
+}
+
+function getPrivateDataEncryptionKey(config) {
+  if (
+    !Buffer.isBuffer(config.privateDataEncryptionKey) ||
+    config.privateDataEncryptionKey.length !== 32
+  ) {
+    throw new ApiError(
+      503,
+      "PRIVATE_DATA_UNAVAILABLE",
+      "Private financial storage is not configured.",
+    );
+  }
+  return config.privateDataEncryptionKey;
+}
+
+function getLegacyVaultRecord(record) {
+  if (!record) return null;
+  return {
+    ciphertext: record.ciphertext,
+    nonce: record.nonce,
+    salt: record.salt,
+    format_version: record.format_version,
+    key_version: record.key_version,
+    revision: record.revision,
+  };
+}
+
 async function getSession(requestHeaders, loadAuth = getAuth) {
   const auth = await loadAuth();
   return auth.api.getSession({ headers: requestHeaders });
@@ -354,22 +415,20 @@ async function handleApiRequest(
   const workspaces = database.collection("workspaces");
   const punches = database.collection("attendance_punches");
   const vaults = database.collection("private_salary_vault");
+  const privateFinancialData = database.collection("private_financial_data");
   const indexSetup = ensurePunchIndex(database);
   await indexSetup;
 
   if (url.pathname === "/api/workspace" && method === "GET") {
     assertExpectedUserId(url.searchParams.get("expectedUserId") ?? undefined, userId);
     const workspace = await workspaces.findOne({ _id: userId });
-    const [punchSettlement, vaultSettlement] = await Promise.allSettled([
+    const [punchSettlement] = await Promise.allSettled([
       punches
         .find({ userId }, { projection: { shiftDate: 1, attendanceRecord: 1 } })
         .toArray(),
-      vaults.findOne({ _id: userId }),
     ]);
     const punchRows =
       punchSettlement.status === "fulfilled" ? punchSettlement.value : [];
-    const salaryVault =
-      vaultSettlement.status === "fulfilled" ? vaultSettlement.value : null;
     success(response, {
       data: workspace?.data ?? null,
       revision: workspace?.revision ?? 0,
@@ -377,25 +436,6 @@ async function handleApiRequest(
         shift_date: row.shiftDate,
         attendance_record: row.attendanceRecord,
       })),
-      salaryVault: salaryVault
-        ? {
-            ciphertext: salaryVault.ciphertext,
-            nonce: salaryVault.nonce,
-            salt: salaryVault.salt,
-            format_version: salaryVault.format_version,
-            key_version: salaryVault.key_version,
-            revision: salaryVault.revision,
-            updated_at: salaryVault.updatedAt,
-          }
-        : null,
-      salaryVaultTableAvailable: true,
-      salaryVaultLoadError:
-          vaultSettlement.status === "rejected"
-            ? {
-                code: "SALARY_VAULT_LOAD_FAILED",
-                message: "Encrypted salary-vault data could not be loaded.",
-              }
-            : null,
       attendancePunchLoadError:
           punchSettlement.status === "rejected"
             ? {
@@ -452,38 +492,64 @@ async function handleApiRequest(
     return;
   }
 
-  if (url.pathname === "/api/salary-vault" && method === "GET") {
-    assertExpectedUserId(url.searchParams.get("expectedUserId") ?? undefined, userId);
-    const salaryVault = await vaults.findOne({ _id: userId });
-    success(
-      response,
-      salaryVault
-        ? {
-            ciphertext: salaryVault.ciphertext,
-            nonce: salaryVault.nonce,
-            salt: salaryVault.salt,
-            format_version: salaryVault.format_version,
-            key_version: salaryVault.key_version,
-            revision: salaryVault.revision,
-            updated_at: salaryVault.updatedAt,
-          }
-        : null,
+  if (url.pathname === "/api/private-financial-data" && method === "GET") {
+    assertExpectedUserId(
+      url.searchParams.get("expectedUserId") ?? undefined,
+      userId,
     );
+    const encryptionKey = getPrivateDataEncryptionKey(config);
+    const saved = await privateFinancialData.findOne({ _id: userId });
+    if (saved) {
+      try {
+        const data = validatePrivateFinancialData(
+          decryptPrivateFinancialData(saved, encryptionKey, userId),
+        );
+        success(response, {
+          data,
+          revision: saved.revision,
+          legacyVault: null,
+        });
+      } catch {
+        throw new ApiError(
+          500,
+          "PRIVATE_DATA_CORRUPT",
+          "Private financial data could not be decrypted.",
+        );
+      }
+      return;
+    }
+
+    const legacyVault = await vaults.findOne({ _id: userId });
+    success(response, {
+      data: null,
+      revision: 0,
+      legacyVault: getLegacyVaultRecord(legacyVault),
+    });
     return;
   }
 
-  if (url.pathname === "/api/salary-vault" && method === "PUT") {
+  if (url.pathname === "/api/private-financial-data" && method === "PUT") {
     const body = await readJsonBody(request);
     assertExpectedUserId(body?.expectedUserId, userId);
-    const record = validateVaultRecord(body?.record);
+    const data = validatePrivateFinancialData(body?.data);
     const expectedRevision = readRevision(body?.expectedRevision);
+    const encryptionKey = getPrivateDataEncryptionKey(config);
+    const existing = await privateFinancialData.findOne({ _id: userId });
+    if (!existing && (await vaults.findOne({ _id: userId }))) {
+      throw new ApiError(
+        409,
+        "LEGACY_MIGRATION_REQUIRED",
+        "Migrate the existing encrypted salary data before saving changes.",
+      );
+    }
+    const encrypted = encryptPrivateFinancialData(data, encryptionKey, userId);
     const now = new Date();
     let saved;
     if (expectedRevision === 0) {
       try {
-        await vaults.insertOne({
+        await privateFinancialData.insertOne({
           _id: userId,
-          ...record,
+          ...encrypted,
           revision: 1,
           updatedAt: now,
         });
@@ -493,26 +559,111 @@ async function handleApiRequest(
           throw new ApiError(
             409,
             "REVISION_CONFLICT",
-            "The salary vault changed in another session. Reload it before saving again.",
+            "Private financial data changed in another session. Reload before saving again.",
           );
         }
         throw error;
       }
     } else {
-      saved = await vaults.findOneAndUpdate(
+      saved = await privateFinancialData.findOneAndUpdate(
         { _id: userId, revision: expectedRevision },
-        { $set: { ...record, updatedAt: now }, $inc: { revision: 1 } },
+        { $set: { ...encrypted, updatedAt: now }, $inc: { revision: 1 } },
         { returnDocument: "after", projection: { revision: 1 } },
       );
       if (!saved) {
         throw new ApiError(
           409,
           "REVISION_CONFLICT",
-          "The salary vault changed in another session. Reload it before saving again.",
+          "Private financial data changed in another session. Reload before saving again.",
         );
       }
     }
     success(response, { revision: saved.revision });
+    return;
+  }
+
+  if (
+    url.pathname === "/api/private-financial-data/migrate" &&
+    method === "POST"
+  ) {
+    const body = await readJsonBody(request);
+    assertExpectedUserId(body?.expectedUserId, userId);
+    const data = validatePrivateFinancialData(body?.data);
+    const expectedLegacyRevision = readRevision(body?.expectedLegacyRevision);
+    const encryptionKey = getPrivateDataEncryptionKey(config);
+    const legacyVault = await vaults.findOne({
+      _id: userId,
+      revision: expectedLegacyRevision,
+    });
+    if (!legacyVault) {
+      throw new ApiError(
+        409,
+        "LEGACY_MIGRATION_CONFLICT",
+        "The encrypted salary data changed. Reload it and try migrating again.",
+      );
+    }
+    try {
+      validateVaultRecord({
+        ciphertext: legacyVault.ciphertext,
+        nonce: legacyVault.nonce,
+        salt: legacyVault.salt,
+        format_version: legacyVault.format_version,
+        key_version: legacyVault.key_version,
+      });
+    } catch {
+      throw new ApiError(
+        409,
+        "LEGACY_MIGRATION_INVALID",
+        "The existing encrypted salary data is invalid and was not changed.",
+      );
+    }
+    if (await privateFinancialData.findOne({ _id: userId })) {
+      throw new ApiError(
+        409,
+        "REVISION_CONFLICT",
+        "Private financial data already exists. Reload before migrating again.",
+      );
+    }
+
+    const mongoSession = database.client.startSession();
+    let revision = 0;
+    try {
+      await mongoSession.withTransaction(async () => {
+        await privateFinancialData.insertOne(
+          {
+            _id: userId,
+            ...encryptPrivateFinancialData(data, encryptionKey, userId),
+            revision: 1,
+            updatedAt: new Date(),
+          },
+          { session: mongoSession },
+        );
+        const deleted = await vaults.deleteOne(
+          { _id: userId, revision: expectedLegacyRevision },
+          { session: mongoSession },
+        );
+        if (deleted.deletedCount !== 1) {
+          throw new ApiError(
+            409,
+            "LEGACY_MIGRATION_CONFLICT",
+            "The encrypted salary data changed. Reload it and try migrating again.",
+          );
+        }
+        revision = 1;
+      });
+    } catch (error) {
+      if (error?.code === 11000) {
+        throw new ApiError(
+          409,
+          "REVISION_CONFLICT",
+          "Private financial data changed in another session. Reload before migrating again.",
+        );
+      }
+      throw error;
+    } finally {
+      await mongoSession.endSession();
+    }
+    success(response, { revision });
     return;
   }
 

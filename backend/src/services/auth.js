@@ -34,6 +34,9 @@ export async function deleteUserAppData(database, userId) {
       await database
         .collection("private_salary_vault")
         .deleteOne({ _id: userId }, { session: mongoSession });
+      await database
+        .collection("private_financial_data")
+        .deleteOne({ _id: userId }, { session: mongoSession });
 
       const workspace = await database.collection("workspaces").findOne(
         { _id: userId },
@@ -47,7 +50,13 @@ export async function deleteUserAppData(database, userId) {
         { _id: userId },
         { session: mongoSession, projection: { _id: 1 } },
       );
-      if (workspace || punch || salaryVault) {
+      const privateFinancialData = await database
+        .collection("private_financial_data")
+        .findOne(
+          { _id: userId },
+          { session: mongoSession, projection: { _id: 1 } },
+        );
+      if (workspace || punch || salaryVault || privateFinancialData) {
         throw new Error("Account data deletion could not be verified.");
       }
     });

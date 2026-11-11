@@ -57,34 +57,35 @@ test("workspace normalization safely falls back for non-object data", () => {
 
 test("optional cloud read failures do not block unrelated workspace data", () => {
   const punchFailure = new Error("Punch request failed");
-  const vaultFailure = new Error("Vault request failed");
+  const privateDataFailure = new Error("Private financial-data request failed");
   const result = resolveOptionalWorkspaceLoads(
     { status: "rejected", reason: punchFailure },
-    { status: "rejected", reason: vaultFailure },
+    { status: "rejected", reason: privateDataFailure },
   );
 
   assert.equal(result.attendancePunchLoadError, punchFailure);
   assert.deepEqual(result.punchRows, []);
-  assert.equal(result.salaryVaultLoadError, vaultFailure);
-  assert.equal(result.salaryVaultTableAvailable, true);
-  assert.equal(result.salaryVault, null);
+  assert.equal(result.privateFinancialDataLoadError, privateDataFailure);
+  assert.equal(result.privateFinancialData, null);
 });
 
-test("salary-vault read failures remain visible without discarding other reads", () => {
-  const vaultFailure = Object.assign(new Error("Vault request failed"), {
-    code: "SALARY_VAULT_LOAD_FAILED",
-  });
+test("private financial-data read failures remain visible without discarding other reads", () => {
+  const privateDataFailure = Object.assign(
+    new Error("Private financial-data request failed"),
+    {
+      code: "PRIVATE_DATA_UNAVAILABLE",
+    },
+  );
   const result = resolveOptionalWorkspaceLoads(
     { status: "fulfilled", value: { data: [] } },
     {
       status: "rejected",
-      reason: vaultFailure,
+      reason: privateDataFailure,
     },
   );
 
   assert.equal(result.attendancePunchLoadError, null);
-  assert.equal(result.salaryVaultTableAvailable, true);
-  assert.equal(result.salaryVaultLoadError, vaultFailure);
+  assert.equal(result.privateFinancialDataLoadError, privateDataFailure);
 });
 
 test("invalid punch rows disable punches instead of being silently merged", () => {

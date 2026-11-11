@@ -49,8 +49,8 @@ export function isValidPayrollPeriodEndDate(value) {
   return Boolean(parsed && (parsed.day === 10 || parsed.day === 25));
 }
 
-export function isPayrollPeriodEarningsAvailable(vaultStatus) {
-  return ["unlocked", "uninitialized"].includes(vaultStatus);
+export function isPayrollPeriodEarningsAvailable(privateFinancialDataStatus) {
+  return privateFinancialDataStatus === "ready";
 }
 
 export function getPayrollPeriodForEndDate(endDate) {

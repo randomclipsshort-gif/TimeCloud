@@ -21,6 +21,9 @@ npm start
 
 The service binds to `0.0.0.0` and uses `PORT` (default `10000`). Check
 `http://localhost:10000/health`.
+Private financial features also require a generated
+`PRIVATE_DATA_ENCRYPTION_KEY` in `backend/.env`; without it, private-data API
+requests fail closed and the rest of local development remains available.
 
 Run backend tests:
 
@@ -50,6 +53,7 @@ Set these variables in the Render service:
 | `APP_ORIGIN` | Exact frontend origin, currently `https://time-cloud.vercel.app`. |
 | `API_ORIGIN` | Public backend origin, currently `https://timecloud.onrender.com`. |
 | `TIMECLOUD_GATEWAY_SECRET` | Required in production; same random 64-character hexadecimal secret as Vercel. |
+| `PRIVATE_DATA_ENCRYPTION_KEY` | Required for private financial data; random 32-byte key encoded as 64 hexadecimal characters. |
 | `PORT` | Supplied by Render; do not hardcode a production port. |
 | `SMTP_URL` | Optional SMTP/SMTPS URL for password-reset email. |
 | `SMTP_FROM` | Optional sender address; configure together with `SMTP_URL`. |
@@ -70,6 +74,29 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 Set this exact value as `TIMECLOUD_GATEWAY_SECRET` in both Render and Vercel.
 It must be 64 hexadecimal characters. Never commit it, prefix it with `VITE_`,
 or print it in application logs. Local development does not require it.
+
+Generate `PRIVATE_DATA_ENCRYPTION_KEY` separately:
+
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Configure this key only in the backend environment, including local
+`backend/.env`; never add it to frontend variables or source control. The key
+encrypts records in `private_financial_data` using AES-256-GCM. Keep a secure
+backup and retain the same key: losing it makes stored financial data
+unrecoverable. Key rotation requires decrypting and re-encrypting existing
+records; changing the environment value alone will make them unreadable.
+
+Legacy accounts with data in `private_salary_vault` can migrate by entering
+their existing vault passphrase once in Settings. Decryption happens in the
+browser; the passphrase is never sent to or stored by the backend. The backend
+encrypts the migrated data with `PRIVATE_DATA_ENCRYPTION_KEY` and deletes the
+legacy vault record only after the new record is committed. Old plaintext
+financial fields in workspace records are also moved to private storage before
+workspace saves are allowed. Keep the encryption key configured during
+migration; if it is unavailable, the old records are retained and financial
+data remains unavailable.
 
 Create a new database in Atlas and allow the Render service to connect. The
 backend initializes empty app collections only in an empty database. It
@@ -121,17 +148,20 @@ collections. TimeCloud uses:
 - `workspaces` for schedules, attendance corrections, leave, holidays,
   preferences, regular expenses, and travel plans.
 - `attendance_punches` for server-validated clock-in/out records.
-- `private_salary_vault` for client-encrypted financial data.
+- `private_financial_data` for server-encrypted financial data.
+- `private_salary_vault` for legacy client-encrypted records until migration.
 
 User identity is derived from the verified server-side session. Workspace and
-vault writes use revision checks. Registration does not require email
+private financial-data writes use revision checks. Registration does not require email
 verification. Password reset is optional and requires `SMTP_URL` and
 `SMTP_FROM`. Sessions use HttpOnly cookies and expire after one hour.
 
-Salary, earnings, payslips, and designated financial attendance fields are
-encrypted in the browser using AES-256-GCM and PBKDF2-HMAC-SHA-256. MongoDB
-receives ciphertext and envelope metadata, never a passphrase or encryption
-key. There is no import of historical accounts, records, or keys.
+Financial settings, earnings, payslips, and designated attendance fields are
+encrypted by the backend using AES-256-GCM with a random nonce and per-user
+authenticated additional data. MongoDB stores ciphertext and envelope
+metadata, not plaintext. Legacy vaults use browser-side PBKDF2-HMAC-SHA-256
+decryption for one-time migration; the old record is retained unless the
+server-encrypted replacement commits successfully.
 
 ## Deployment verification
 

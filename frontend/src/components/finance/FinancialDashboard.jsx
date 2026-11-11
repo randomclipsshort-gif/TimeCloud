@@ -52,8 +52,8 @@ export default function FinancialDashboard({
   workspaceSaveError,
   historicalPayslips,
   payslipHistorySaving,
-  salaryVaultStatus,
-  salaryVaultError,
+  privateFinancialDataStatus,
+  privateFinancialDataError,
   currentPayrollPeriod,
   onViewCurrentPayslip,
   onViewHistoricalPayslip,
@@ -159,10 +159,8 @@ export default function FinancialDashboard({
       validExpenses,
     ],
   );
-  const privateSalaryDataHidden = ["locked", "unavailable", "loading"].includes(
-    salaryVaultStatus,
-  );
-  const expensesHidden = salaryVaultStatus !== "unlocked";
+  const expensesHidden = privateFinancialDataStatus !== "ready";
+  const privateFinancialDataHidden = expensesHidden;
   const filteredPayslips = historicalPayslips
     .filter((snapshot) => {
       const endDate = snapshot.period.endDate;
@@ -301,8 +299,8 @@ export default function FinancialDashboard({
                   </span>
                 </div>
                 <p className="mt-2 text-base font-extrabold tabular-nums text-slate-900">
-                  {privateSalaryDataHidden
-                    ? "Private — unlock vault"
+                  {privateFinancialDataHidden
+                    ? "Private data unavailable"
                     : formatCurrency(grossPay)}
                 </p>
                 <p className="mt-0.5 text-[10px] text-slate-400">{`${totalHours.toFixed(2)} Total Hours`}</p>
@@ -319,8 +317,8 @@ export default function FinancialDashboard({
                   </span>
                 </div>
                 <p className="mt-2 text-base font-extrabold tabular-nums text-slate-900">
-                  {privateSalaryDataHidden
-                    ? "Private — unlock vault"
+                  {privateFinancialDataHidden
+                    ? "Private data unavailable"
                     : formatCurrency(payrollDeductions.total)}
                 </p>
                 <p className="mt-0.5 text-[10px] text-rose-500">
@@ -337,8 +335,8 @@ export default function FinancialDashboard({
                   </span>
                 </div>
                 <p className="mt-2 text-base font-extrabold tabular-nums text-emerald-600">
-                  {privateSalaryDataHidden
-                    ? "Private — unlock vault"
+                  {privateFinancialDataHidden
+                    ? "Private data unavailable"
                     : formatCurrency(netPay)}
                 </p>
                 <span className="mt-0.5 inline-block rounded bg-emerald-100 px-2 py-0.5 text-[9px] font-medium text-emerald-700">
@@ -360,7 +358,7 @@ export default function FinancialDashboard({
                 </div>
                 <p className="mt-2 text-base font-extrabold tabular-nums text-rose-600">
                   {expensesHidden
-                    ? "Private — unlock vault"
+                    ? "Private data unavailable"
                     : formatCurrency(totalExpenses)}
                 </p>
                 <p className="mt-0.5 text-[10px] text-rose-500">
@@ -388,7 +386,7 @@ export default function FinancialDashboard({
                   className={`mt-2 text-base font-extrabold tabular-nums ${remaining < 0 ? "text-rose-600" : "text-emerald-600"}`}
                 >
                   {expensesHidden
-                    ? "Private — unlock vault"
+                    ? "Private data unavailable"
                     : formatCurrency(remaining)}
                 </p>
                 <p className="mt-0.5 text-[10px] text-slate-500">
@@ -405,11 +403,11 @@ export default function FinancialDashboard({
                   Expenses and ledger are private.
                 </p>
                 <p className="mt-1 text-xs">
-                  {salaryVaultStatus === "unavailable"
-                    ? "Encrypted salary sync is unavailable on this server."
-                    : salaryVaultStatus === "uninitialized"
-                      ? "Create and unlock the encrypted salary vault in Settings to view and manage expense history."
-                      : "Unlock the encrypted salary vault in Settings to view and manage expense history."}
+                  {privateFinancialDataStatus === "migration-required"
+                    ? "Migrate existing private financial data in Settings to view and manage expense history."
+                    : privateFinancialDataStatus === "unavailable"
+                      ? "Private financial storage is not configured on this server."
+                      : "Private financial data is not available. Retry cloud loading to view and manage expense history."}
                 </p>
               </div>
             ) : (
@@ -554,7 +552,7 @@ export default function FinancialDashboard({
                       Budget utilization
                     </span>
                     <span className="font-bold text-emerald-600">
-                      {privateSalaryDataHidden
+                      {privateFinancialDataHidden
                         ? "Private"
                         : `${percentage.toFixed(1)}% spent`}
                     </span>
@@ -566,13 +564,13 @@ export default function FinancialDashboard({
                     aria-valuemin="0"
                     aria-valuemax="100"
                     aria-valuenow={
-                      privateSalaryDataHidden ? 0 : Math.min(percentage, 100)
+                      privateFinancialDataHidden ? 0 : Math.min(percentage, 100)
                     }
                   >
                     <div
                       className="h-full rounded-full bg-emerald-600 transition-all duration-500"
                       style={{
-                        width: privateSalaryDataHidden
+                        width: privateFinancialDataHidden
                           ? "0%"
                           : `${Math.min(percentage, 100)}%`,
                       }}
@@ -811,8 +809,8 @@ export default function FinancialDashboard({
             onAddIncentive={onAddIncentive}
             onDeleteIncentive={onDeleteIncentive}
             requestConfirmation={requestConfirmation}
-            salaryVaultStatus={salaryVaultStatus}
-            salaryVaultError={salaryVaultError}
+            privateFinancialDataStatus={privateFinancialDataStatus}
+            privateFinancialDataError={privateFinancialDataError}
             formatCurrency={formatCurrency}
           />
         ) : activeTab === "travel" ? (
@@ -833,16 +831,16 @@ export default function FinancialDashboard({
           />
         ) : (
           <div className="space-y-4">
-            {salaryVaultStatus !== "unlocked" ? (
+            {privateFinancialDataStatus !== "ready" ? (
               <div
                 className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900"
                 role="status"
               >
-                {salaryVaultStatus === "locked"
-                  ? "Unlock the encrypted salary vault in Settings to browse historical payslips."
-                  : salaryVaultStatus === "unavailable"
-                    ? "Encrypted salary sync is unavailable on this server."
-                    : "Create and unlock the encrypted salary vault in Settings to save and browse payslip history."}
+                {privateFinancialDataStatus === "migration-required"
+                  ? "Migrate existing private financial data in Settings to browse historical payslips."
+                  : privateFinancialDataStatus === "unavailable"
+                    ? "Private financial storage is not configured on this server."
+                    : "Private financial data is not available. Retry cloud loading to save and browse payslip history."}
               </div>
             ) : (
               <>

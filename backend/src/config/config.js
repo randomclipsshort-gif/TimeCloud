@@ -28,6 +28,19 @@ export function getServerConfig(env = process.env) {
   if (!secret || Buffer.byteLength(secret, "utf8") < 32) {
     throw new ServerConfigError("AUTH_SECRET must contain at least 32 bytes.");
   }
+  const privateDataEncryptionKeyValue =
+    env.PRIVATE_DATA_ENCRYPTION_KEY?.trim() || "";
+  if (
+    privateDataEncryptionKeyValue &&
+    !/^[a-f\d]{64}$/i.test(privateDataEncryptionKeyValue)
+  ) {
+    throw new ServerConfigError(
+      "PRIVATE_DATA_ENCRYPTION_KEY must contain exactly 64 hexadecimal characters.",
+    );
+  }
+  const privateDataEncryptionKey = privateDataEncryptionKeyValue
+    ? Buffer.from(privateDataEncryptionKeyValue, "hex")
+    : null;
 
   const parseOrigin = (value, name) => {
     if (!value) {
@@ -85,6 +98,7 @@ export function getServerConfig(env = process.env) {
     apiOrigin,
     smtpUrl,
     smtpFrom,
+    privateDataEncryptionKey,
     isProduction: env.NODE_ENV === "production",
   };
 }

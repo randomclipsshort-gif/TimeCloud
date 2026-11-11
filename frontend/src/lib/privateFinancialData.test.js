@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  extractPrivateFinancialData,
   extractPrivateFinancialSettings,
   mergeAttendancePunches,
   mergeLocalPrivateAttendance,
+  mergePrivateFinancialData,
   serializeWorkspaceForCloud,
 } from "./privateFinancialData.js";
 
@@ -88,7 +90,7 @@ test("travel plans and their separate expense history remain in cloud workspace 
   ]);
 });
 
-test("payroll deduction settings stay private for encrypted vault sync", () => {
+test("payroll deduction settings stay private in server-managed financial data", () => {
   const payrollSettings = {
     payrollDeductionMode: "manual",
     manualSssPerPaycheck: "125.50",
@@ -115,7 +117,7 @@ test("payroll deduction settings stay private for encrypted vault sync", () => {
   assert.deepEqual(workspaceData, {});
 });
 
-test("employee incentive records are retained in private vault settings", () => {
+test("employee incentive records are retained in private financial settings", () => {
   const employeeIncentives = [
     { id: "incentive-1", name: "Performance bonus", amount: 500, date: "2026-10-10" },
   ];
@@ -129,7 +131,7 @@ test("employee incentive records are retained in private vault settings", () => 
   );
 });
 
-test("private settings provide defaults for older salary vaults", () => {
+test("private settings provide defaults for older financial records", () => {
   assert.deepEqual(extractPrivateFinancialSettings({}), {
     dailyWage: "",
     dailyAllowance: "0",
@@ -139,6 +141,71 @@ test("private settings provide defaults for older salary vaults", () => {
     manualSssPerPaycheck: "0",
     manualPhilHealthPerPaycheck: "0",
     manualPagIbigPerPaycheck: "0",
+  });
+
+  test("extracts legacy workspace financial data before stripping it from workspace saves", () => {
+    const legacyWorkspace = {
+      dailyWage: "1800",
+      attendance: {
+        "2026-10-28": {
+          type: "Regular",
+          base: "P1800.00",
+          est: "P1800.00 PHP",
+        },
+      },
+    };
+    const legacyData = extractPrivateFinancialData(legacyWorkspace);
+
+    assert.equal(legacyData.hasData, true);
+    assert.equal(legacyData.data.settings.dailyWage, "1800");
+    assert.deepEqual(legacyData.data.attendance, {
+      "2026-10-28": { base: "P1800.00", est: "P1800.00 PHP" },
+    });
+    assert.deepEqual(serializeWorkspaceForCloud(legacyWorkspace), {
+      attendance: { "2026-10-28": { type: "Regular" } },
+    });
+  });
+
+  test("merges legacy workspace data without dropping newer or distinct financial records", () => {
+    const merged = mergePrivateFinancialData(
+      {
+        settings: { dailyWage: "1000", dailyAllowance: "50" },
+        attendance: { "2026-10-28": { base: "old" } },
+        payslips: [
+          {
+            employeeId: "user-1",
+            period: { startDate: "2026-10-11", endDate: "2026-10-25" },
+            summary: "legacy",
+          },
+        ],
+      },
+      {
+        settings: { dailyWage: "1200" },
+        attendance: { "2026-10-28": { base: "new" } },
+        payslips: [
+          {
+            employeeId: "user-1",
+            period: { startDate: "2026-10-11", endDate: "2026-10-25" },
+            summary: "current",
+          },
+          {
+            employeeId: "user-1",
+            period: { startDate: "2026-10-26", endDate: "2026-11-10" },
+            summary: "current-only",
+          },
+        ],
+      },
+    );
+
+    assert.deepEqual(merged.settings, {
+      dailyWage: "1200",
+      dailyAllowance: "50",
+    });
+    assert.deepEqual(merged.attendance["2026-10-28"], { base: "new" });
+    assert.deepEqual(
+      merged.payslips.map((snapshot) => snapshot.summary),
+      ["current", "current-only"],
+    );
   });
 });
 

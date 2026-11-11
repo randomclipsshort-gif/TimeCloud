@@ -11,6 +11,7 @@ const validEnv = {
   MONGODB_URI: "mongodb://user:password@localhost:27017",
   MONGODB_DB_NAME: "timecloud",
   AUTH_SECRET: "a".repeat(32),
+  PRIVATE_DATA_ENCRYPTION_KEY: "b".repeat(64),
   APP_ORIGIN: "https://app.example.com",
   API_ORIGIN: "https://api.example.com",
 };
@@ -39,6 +40,10 @@ test("server configuration validates frontend/API origins, secret, and optional 
     () => getServerConfig({ ...validEnv, SMTP_URL: "smtps://smtp.example.com" }),
     /both SMTP_URL and SMTP_FROM/,
   );
+  assert.throws(
+    () => getServerConfig({ ...validEnv, PRIVATE_DATA_ENCRYPTION_KEY: "invalid" }),
+    /64 hexadecimal characters/,
+  );
   const localConfig = getServerConfig({
     ...validEnv,
     APP_ORIGIN: "http://localhost:5173",
@@ -48,6 +53,12 @@ test("server configuration validates frontend/API origins, secret, and optional 
   assert.equal(localConfig.appOrigin, "http://localhost:5173");
   assert.equal(localConfig.apiOrigin, "http://localhost:10000");
   assert.equal(localConfig.isProduction, false);
+  assert.equal(localConfig.privateDataEncryptionKey.length, 32);
+  assert.equal(
+    getServerConfig({ ...validEnv, PRIVATE_DATA_ENCRYPTION_KEY: "" })
+      .privateDataEncryptionKey,
+    null,
+  );
   const config = getServerConfig(validEnv);
   assert.equal(config.appOrigin, "https://app.example.com");
   assert.equal(config.apiOrigin, "https://api.example.com");

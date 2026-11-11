@@ -1,5 +1,6 @@
 import { apiRequest } from "./apiClient.js";
 import {
+  extractPrivateFinancialData,
   mergeAttendancePunches,
   serializeWorkspaceForCloud,
 } from "./privateFinancialData.js";
@@ -82,7 +83,7 @@ export function normalizeWorkspace(data) {
 
 export function resolveOptionalWorkspaceLoads(
   punchSettlement,
-  salaryVaultSettlement,
+  privateFinancialDataSettlement,
 ) {
   const punchResult =
     punchSettlement.status === "fulfilled" ? punchSettlement.value : null;
@@ -104,28 +105,31 @@ export function resolveOptionalWorkspaceLoads(
     (invalidPunchRows
       ? new Error("Cloud attendance data contains malformed punch records.")
       : null);
-  const salaryVaultResult =
-    salaryVaultSettlement.status === "fulfilled"
-      ? salaryVaultSettlement.value
+  const privateDataResult =
+    privateFinancialDataSettlement.status === "fulfilled"
+      ? privateFinancialDataSettlement.value
       : null;
-  const salaryVaultLoadError =
-    salaryVaultSettlement.status === "rejected"
-      ? salaryVaultSettlement.reason
-      : salaryVaultResult?.error || null;
+  const privateFinancialDataLoadError =
+    privateFinancialDataSettlement.status === "rejected"
+      ? privateFinancialDataSettlement.reason
+      : null;
   return {
     punchRows,
     attendancePunchLoadError,
-    salaryVault: salaryVaultResult?.data ?? null,
-    salaryVaultTableAvailable: true,
-    salaryVaultLoadError,
+    privateFinancialData: privateDataResult,
+    privateFinancialDataLoadError,
   };
 }
 
 export async function loadWorkspace(userId) {
   if (!userId) throw new Error("An authenticated account is required to load workspace data.");
-  const [session, loadedWorkspace] = await Promise.all([
+  const [session, loadedWorkspace, privateFinancialDataSettlement] = await Promise.all([
     apiRequest("/session"),
     apiRequest(`/workspace?expectedUserId=${encodeURIComponent(userId)}`),
+    apiRequest(`/private-financial-data?expectedUserId=${encodeURIComponent(userId)}`).then(
+      (value) => ({ status: "fulfilled", value }),
+      (reason) => ({ status: "rejected", reason }),
+    ),
   ]);
   if (session?.user?.id !== userId) {
     throw new Error("The signed-in account changed before workspace data could be loaded.");
@@ -149,26 +153,17 @@ export async function loadWorkspace(userId) {
         status: "fulfilled",
         value: { data: loadedWorkspace.punchRows, error: null },
       };
-  const salaryVaultSettlement = {
-    status: "fulfilled",
-    value: {
-      data: loadedWorkspace.salaryVault,
-      error: loadedWorkspace.salaryVaultLoadError
-        ? Object.assign(
-            new Error(loadedWorkspace.salaryVaultLoadError.message),
-            { code: loadedWorkspace.salaryVaultLoadError.code },
-          )
-        : null,
-    },
-  };
   const {
     punchRows,
     attendancePunchLoadError,
-    salaryVault,
-    salaryVaultTableAvailable,
-    salaryVaultLoadError,
-  } = resolveOptionalWorkspaceLoads(punchSettlement, salaryVaultSettlement);
+    privateFinancialData,
+    privateFinancialDataLoadError,
+  } = resolveOptionalWorkspaceLoads(
+    punchSettlement,
+    privateFinancialDataSettlement,
+  );
   const rawWorkspace = workspaceResult.data?.data;
+  const legacyWorkspacePrivateData = extractPrivateFinancialData(rawWorkspace);
   const workspace = normalizeWorkspace(serializeWorkspaceForCloud(rawWorkspace));
   const sanitizedPunches = punchRows.map((row) => ({
     ...row,
@@ -187,42 +182,62 @@ export async function loadWorkspace(userId) {
       attendance,
     },
     revision: workspaceResult.data?.revision ?? 0,
-    salaryVault,
-    salaryVaultTableAvailable,
-    salaryVaultLoadError,
+    privateFinancialData,
+    privateFinancialDataLoadError,
+    legacyWorkspacePrivateData,
     attendancePunchLoadError,
     workspaceDataWarning,
   };
 }
 
-export async function savePrivateSalaryVault(record, expectedRevision, expectedUserId) {
-  if (!expectedUserId) throw new Error("An authenticated account is required to save the encrypted salary vault.");
+export async function savePrivateFinancialData(
+  data,
+  expectedRevision,
+  expectedUserId,
+) {
+  if (!expectedUserId) throw new Error("An authenticated account is required to save private financial data.");
   const session = await apiRequest("/session");
   if (session?.user?.id !== expectedUserId) {
-    throw new Error("The signed-in account changed before the encrypted salary vault could be saved.");
+    throw new Error("The signed-in account changed before private financial data could be saved.");
   }
-  const result = await apiRequest("/salary-vault", {
+  const result = await apiRequest("/private-financial-data", {
     method: "PUT",
     body: {
-      record,
+      data,
       expectedRevision,
       expectedUserId,
     },
   });
   const revision = Number(result.revision);
   if (!Number.isSafeInteger(revision) || revision < 1) {
-    throw new Error("The encrypted salary-vault save returned an invalid revision.");
+    throw new Error("The private financial-data save returned an invalid revision.");
   }
   return revision;
 }
 
-export async function loadPrivateSalaryVault(userId) {
-  if (!userId) throw new Error("An authenticated account is required to load the encrypted salary vault.");
+export async function migrateLegacyPrivateFinancialData(
+  data,
+  expectedLegacyRevision,
+  expectedUserId,
+) {
+  if (!expectedUserId) throw new Error("An authenticated account is required to migrate private financial data.");
   const session = await apiRequest("/session");
-  if (session?.user?.id !== userId) {
-    throw new Error("The signed-in account changed before the encrypted salary vault could be loaded.");
+  if (session?.user?.id !== expectedUserId) {
+    throw new Error("The signed-in account changed before private financial data could be migrated.");
   }
-  return apiRequest(`/salary-vault?expectedUserId=${encodeURIComponent(userId)}`);
+  const result = await apiRequest("/private-financial-data/migrate", {
+    method: "POST",
+    body: {
+      data,
+      expectedLegacyRevision,
+      expectedUserId,
+    },
+  });
+  const revision = Number(result.revision);
+  if (!Number.isSafeInteger(revision) || revision < 1) {
+    throw new Error("The private financial-data migration returned an invalid revision.");
+  }
+  return revision;
 }
 
 export async function saveWorkspace(data, expectedRevision, expectedUserId) {

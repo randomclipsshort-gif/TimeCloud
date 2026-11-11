@@ -16,7 +16,7 @@ export default function DashboardContent(props) {
     selectedDate,
     canClearShift,
     canRecordAttendance,
-    salaryVaultStatus,
+    privateFinancialDataStatus,
     holidayPayEstimate,
     estimatedEarnings,
     selectedDateIncentives,
@@ -56,7 +56,7 @@ export default function DashboardContent(props) {
     employeeIncentives,
     onAddIncentive,
     onDeleteIncentive,
-    salaryVaultError,
+    privateFinancialDataError,
     workspaceLoading,
     workspaceError,
     workspaceSaveError,
@@ -121,7 +121,7 @@ export default function DashboardContent(props) {
               selectedDate={selectedDate}
               canClearShift={canClearShift}
               canRecordAttendance={canRecordAttendance}
-              salaryVaultStatus={salaryVaultStatus}
+              privateFinancialDataStatus={privateFinancialDataStatus}
               holidayPayEstimate={holidayPayEstimate}
               estimatedEarnings={estimatedEarnings}
               selectedDateIncentives={selectedDateIncentives}
@@ -185,8 +185,8 @@ export default function DashboardContent(props) {
               workspaceSaveError={workspaceSaveError}
               historicalPayslips={historicalPayslips}
               payslipHistorySaving={payslipHistorySaving}
-              salaryVaultStatus={salaryVaultStatus}
-              salaryVaultError={salaryVaultError}
+              privateFinancialDataStatus={privateFinancialDataStatus}
+              privateFinancialDataError={privateFinancialDataError}
               currentPayrollPeriod={currentPayrollPeriod}
               onViewCurrentPayslip={onViewCurrentPayslip}
               onViewHistoricalPayslip={onViewHistoricalPayslip}

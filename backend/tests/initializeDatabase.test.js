@@ -64,12 +64,14 @@ test("fresh database initialization creates empty app collections and unique pun
 
   assert.deepEqual([...database.collections.keys()].sort(), [
     "attendance_punches",
+    "private_financial_data",
     "private_salary_vault",
     "timecloud_metadata",
     "workspaces",
   ]);
   assert.deepEqual(database.collections.get("workspaces"), []);
   assert.deepEqual(database.collections.get("attendance_punches"), []);
+  assert.deepEqual(database.collections.get("private_financial_data"), []);
   assert.deepEqual(database.collections.get("private_salary_vault"), []);
   assert.deepEqual(database.indexes, [{
     collection: "attendance_punches",
@@ -109,5 +111,6 @@ test("initialized databases can finish creating collections after an interrupted
 
   assert.equal(database.collections.has("workspaces"), true);
   assert.equal(database.collections.has("attendance_punches"), true);
+  assert.equal(database.collections.has("private_financial_data"), true);
   assert.equal(database.collections.has("private_salary_vault"), true);
 });

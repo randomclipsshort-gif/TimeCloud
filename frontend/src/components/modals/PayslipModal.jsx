@@ -65,13 +65,13 @@ export default function PayslipModal({
   );
   const earningsLabel = earningsAvailable
     ? formatCurrency(activeSummary.recordedEarnings)
-    : "Private — unlock salary vault";
+    : "Private data unavailable";
   const monthlyNetLabel = payrollPeriodEarningsAvailable
     ? formatCurrency(monthlyPayslipNet)
-    : "Private — unlock salary vault";
+    : "Private data unavailable";
   const monthlyGrossLabel = payrollPeriodEarningsAvailable
     ? formatCurrency(monthlyPayslipGross)
-    : "Private — unlock salary vault";
+    : "Private data unavailable";
   const monthlyRangeStart = new Date(`${monthlyPayslipRange.startDate}T00:00:00Z`);
   const monthlyRangeEnd = new Date(`${monthlyPayslipRange.endDate}T00:00:00Z`);
   const startYear = monthlyRangeStart.getUTCFullYear();
@@ -94,7 +94,7 @@ export default function PayslipModal({
     ) + 1;
   const netPayLabel = earningsAvailable
     ? formatCurrency(activeNetPay)
-    : "Private — unlock salary vault";
+    : "Private data unavailable";
   const recordedHours =
     activeSummary.regularHours + activeSummary.overtimeHours;
   const recordedWorkdays = Number.isFinite(activeSummary.eligibleWorkdays)
@@ -216,7 +216,7 @@ export default function PayslipModal({
               [
                 "Daily wage",
                 !earningsAvailable
-                  ? "Private — unlock salary vault"
+                  ? "Private data unavailable"
                   : Number(activeDailyWage) > 0
                     ? formatCurrency(Number(activeDailyWage))
                     : "Not set",
@@ -444,7 +444,7 @@ export default function PayslipModal({
                 className="inline-flex items-center gap-2 rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
                 title={
                   !canSavePayslip
-                    ? "Unlock the salary vault to save an encrypted payslip snapshot"
+                    ? "Private financial data is not available to save this payslip"
                     : undefined
                 }
               >

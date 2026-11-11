@@ -4,6 +4,7 @@ const applicationCollections = [
   "workspaces",
   "attendance_punches",
   "private_salary_vault",
+  "private_financial_data",
 ];
 
 export class FreshDatabaseError extends Error {

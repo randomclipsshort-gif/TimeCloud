@@ -8,11 +8,11 @@ export default function EmployeeIncentives({
   onAddIncentive,
   onDeleteIncentive,
   requestConfirmation,
-  salaryVaultStatus,
-  salaryVaultError,
+  privateFinancialDataStatus,
+  privateFinancialDataError,
   formatCurrency,
 }) {
-  const isVaultUnlocked = salaryVaultStatus === "unlocked";
+  const isPrivateDataReady = privateFinancialDataStatus === "ready";
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
   const [name, setName] = useState("");
   const [count, setCount] = useState("");
@@ -46,7 +46,7 @@ export default function EmployeeIncentives({
     }),
   );
 
-  if (!isVaultUnlocked) {
+  if (!isPrivateDataReady) {
     return (
       <div
         className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900"
@@ -54,11 +54,11 @@ export default function EmployeeIncentives({
       >
         <p className="font-semibold">Employee incentives are private.</p>
         <p className="mt-1 text-xs">
-          {salaryVaultStatus === "unavailable"
-            ? "The salary vault is unavailable until MongoDB storage is configured."
-            : salaryVaultStatus === "uninitialized"
-              ? "Create and unlock the encrypted salary vault in Settings to add and view incentives."
-              : "Unlock the encrypted salary vault in Settings to add and view incentives."}
+          {privateFinancialDataStatus === "migration-required"
+            ? "Migrate existing private financial data in Settings to add and view incentives."
+            : privateFinancialDataStatus === "unavailable"
+              ? "Private financial storage is not configured on this server."
+              : "Private financial data is not available. Retry cloud loading to add and view incentives."}
         </p>
       </div>
     );
@@ -66,9 +66,9 @@ export default function EmployeeIncentives({
 
   return (
     <div className="space-y-5">
-      {salaryVaultError && (
+      {privateFinancialDataError && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">
-          {salaryVaultError}
+          {privateFinancialDataError}
         </p>
       )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

@@ -10,16 +10,10 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 function getCrypto() {
-  if (!globalThis.crypto?.subtle || !globalThis.crypto?.getRandomValues) {
-    throw new Error("This browser does not support secure salary-vault encryption.");
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("This browser does not support secure legacy-vault migration.");
   }
   return globalThis.crypto;
-}
-
-function encodeBase64(bytes) {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
 }
 
 function decodeBase64(value, expectedLength, label) {
@@ -38,7 +32,7 @@ function decodeBase64(value, expectedLength, label) {
   return bytes;
 }
 
-async function deriveKey(passphrase, salt) {
+async function deriveLegacyKey(passphrase, salt) {
   const cryptoApi = getCrypto();
   const material = await cryptoApi.subtle.importKey(
     "raw",
@@ -57,23 +51,18 @@ async function deriveKey(passphrase, salt) {
     material,
     { name: "AES-GCM", length: 256 },
     false,
-    ["encrypt", "decrypt"],
+    ["decrypt"],
   );
 }
 
-function validatePassphrase(passphrase) {
-  if (typeof passphrase !== "string" || passphrase.length < 12) {
-    throw new Error("Use a vault passphrase with at least 12 characters.");
-  }
-}
-
-function validatePayload(payload) {
+function validateLegacyPayload(payload) {
   if (
     payload === null ||
     typeof payload !== "object" ||
     Array.isArray(payload) ||
     payload.settings === null ||
     typeof payload.settings !== "object" ||
+    Array.isArray(payload.settings) ||
     payload.attendance === null ||
     typeof payload.attendance !== "object" ||
     Array.isArray(payload.attendance) ||
@@ -85,55 +74,14 @@ function validatePayload(payload) {
   }
 }
 
-function getAdditionalData(keyVersion) {
+function getLegacyAdditionalData(keyVersion) {
   return encoder.encode(`timecloud:private-salary-vault:${FORMAT_VERSION}:${keyVersion}`);
 }
 
-export async function createSalaryVault(payload, passphrase, keyVersion = KEY_VERSION) {
-  validatePassphrase(passphrase);
-  validatePayload(payload);
-  if (!Number.isSafeInteger(keyVersion) || keyVersion < KEY_VERSION || keyVersion > 2_147_483_647) {
-    throw new Error("The salary vault key version is invalid.");
+export async function unlockLegacySalaryVault(record, passphrase) {
+  if (typeof passphrase !== "string" || passphrase.length < 12) {
+    throw new Error("Use your existing vault passphrase to migrate the data.");
   }
-  const cryptoApi = getCrypto();
-  const salt = cryptoApi.getRandomValues(new Uint8Array(SALT_LENGTH));
-  const key = await deriveKey(passphrase, salt);
-  return {
-    record: await encryptSalaryVault(payload, key, salt, keyVersion),
-    key,
-  };
-}
-
-export async function encryptSalaryVault(payload, key, salt, keyVersion = KEY_VERSION) {
-  validatePayload(payload);
-  if (!key || !salt || salt.length !== SALT_LENGTH ||
-    !Number.isSafeInteger(keyVersion) || keyVersion < KEY_VERSION ||
-    keyVersion > 2_147_483_647) {
-    throw new Error("The salary vault is locked.");
-  }
-  const cryptoApi = getCrypto();
-  const nonce = cryptoApi.getRandomValues(new Uint8Array(NONCE_LENGTH));
-  const ciphertext = await cryptoApi.subtle.encrypt(
-    {
-      name: "AES-GCM",
-      iv: nonce,
-      additionalData: getAdditionalData(keyVersion),
-      tagLength: 128,
-    },
-    key,
-    encoder.encode(JSON.stringify(payload)),
-  );
-  return {
-    ciphertext: encodeBase64(new Uint8Array(ciphertext)),
-    nonce: encodeBase64(nonce),
-    salt: encodeBase64(salt),
-    format_version: FORMAT_VERSION,
-    key_version: keyVersion,
-  };
-}
-
-export async function unlockSalaryVault(record, passphrase) {
-  validatePassphrase(passphrase);
   if (
     !record ||
     record.format_version !== FORMAT_VERSION ||
@@ -147,30 +95,29 @@ export async function unlockSalaryVault(record, passphrase) {
   const salt = decodeBase64(record.salt, SALT_LENGTH, "key salt");
   const nonce = decodeBase64(record.nonce, NONCE_LENGTH, "encryption nonce");
   const ciphertext = decodeBase64(record.ciphertext, null, "encrypted data");
-  const key = await deriveKey(passphrase, salt);
+  const key = await deriveLegacyKey(passphrase, salt);
   let plaintext;
   try {
     plaintext = await getCrypto().subtle.decrypt(
       {
         name: "AES-GCM",
         iv: nonce,
-        additionalData: getAdditionalData(record.key_version),
+        additionalData: getLegacyAdditionalData(record.key_version),
         tagLength: 128,
       },
       key,
       ciphertext,
     );
   } catch {
-    throw new Error("Unable to unlock the salary vault. Check the passphrase or restore a valid vault backup.");
+    throw new Error("Unable to migrate the salary vault. Check the passphrase or restore a valid vault backup.");
   }
 
   let payload;
   try {
     payload = JSON.parse(decoder.decode(plaintext));
-    validatePayload(payload);
+    validateLegacyPayload(payload);
   } catch {
     throw new Error("The encrypted salary vault is damaged or contains invalid data.");
   }
-
-  return { payload, key, salt };
+  return payload;
 }

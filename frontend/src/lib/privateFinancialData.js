@@ -81,8 +81,67 @@ export function extractPrivateFinancialSettings(settings) {
   };
 }
 
+export function extractPrivateFinancialData(workspace) {
+  const source = isObject(workspace) ? workspace : {};
+  const settings = {
+    ...pickPrivateFinancialKeys(source),
+    ...pickPrivateFinancialKeys(source.settings),
+  };
+  const attendance = getPrivateAttendance(source.attendance);
+  const payslips = Array.isArray(source.payslips) ? source.payslips : [];
+  return {
+    data: {
+      settings: { ...privateSettingsDefaults, ...settings },
+      attendance,
+      payslips,
+    },
+    hasData:
+      Object.keys(settings).length > 0 ||
+      Object.keys(attendance).length > 0 ||
+      payslips.length > 0,
+  };
+}
+
 export function extractPrivateFinancialAttendance(attendance) {
   return getPrivateAttendance(attendance);
+}
+
+export function mergePrivateFinancialData(baseData, overridingData) {
+  const base = isObject(baseData) ? baseData : {};
+  const overriding = isObject(overridingData) ? overridingData : {};
+  const payslips = new Map();
+  for (const [source, snapshots] of [
+    ["base", Array.isArray(base.payslips) ? base.payslips : []],
+    [
+      "override",
+      Array.isArray(overriding.payslips) ? overriding.payslips : [],
+    ],
+  ]) {
+    snapshots.forEach((snapshot, index) => {
+      const key =
+        typeof snapshot?.employeeId === "string" &&
+        typeof snapshot?.period?.startDate === "string" &&
+        typeof snapshot?.period?.endDate === "string"
+          ? `${snapshot.employeeId}:${snapshot.period.startDate}:${snapshot.period.endDate}`
+          : `${source}:${index}`;
+      payslips.set(key, snapshot);
+    });
+  }
+  return {
+    settings: {
+      ...(isObject(base.settings) ? base.settings : {}),
+      ...(isObject(overriding.settings) ? overriding.settings : {}),
+    },
+    attendance: mergeLocalPrivateAttendance(
+      base.attendance,
+      overriding.attendance,
+    ),
+    payslips: [...payslips.values()].sort((left, right) =>
+      String(left?.period?.endDate ?? "").localeCompare(
+        String(right?.period?.endDate ?? ""),
+      ),
+    ),
+  };
 }
 
 export function mergeAttendancePunches(attendance, punchRows) {

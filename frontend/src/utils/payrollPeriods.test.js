@@ -99,12 +99,12 @@ test("creates valid full-calendar-month payroll periods", () => {
   assert.equal(getCalendarPayrollPeriod("2026-13"), null);
 });
 
-test("keeps private period earnings hidden while the salary vault is locked", () => {
-  assert.equal(isPayrollPeriodEarningsAvailable("locked"), false);
+test("keeps private period earnings hidden until private data is ready", () => {
+  assert.equal(isPayrollPeriodEarningsAvailable("migration-required"), false);
   assert.equal(isPayrollPeriodEarningsAvailable("loading"), false);
   assert.equal(isPayrollPeriodEarningsAvailable("unavailable"), false);
-  assert.equal(isPayrollPeriodEarningsAvailable("unlocked"), true);
-  assert.equal(isPayrollPeriodEarningsAvailable("uninitialized"), true);
+  assert.equal(isPayrollPeriodEarningsAvailable("error"), false);
+  assert.equal(isPayrollPeriodEarningsAvailable("ready"), true);
   assert.equal(isPayrollPeriodEarningsAvailable("unexpected"), false);
 });
 

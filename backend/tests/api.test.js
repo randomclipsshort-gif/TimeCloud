@@ -6,10 +6,13 @@ import {
   containsPrivateFinancialData,
   handleApiRequestWithErrors,
   isWithinClockInWindow,
+  validatePrivateFinancialData,
   validateShiftDate,
   validateVaultRecord,
   validateWorkspaceData,
 } from "../src/services/apiService.js";
+
+const privateDataEncryptionKey = Buffer.alloc(32, 0x53);
 
 class MemoryCollection {
   constructor() {
@@ -51,6 +54,15 @@ class MemoryCollection {
     this.documents.set(key, structuredClone(document));
   }
 
+  async deleteOne(filter) {
+    const entry = [...this.documents.entries()].find(([, document]) =>
+      Object.entries(filter).every(([key, value]) => document[key] === value),
+    );
+    if (!entry) return { deletedCount: 0 };
+    this.documents.delete(entry[0]);
+    return { deletedCount: 1 };
+  }
+
   async findOneAndUpdate(filter, update) {
     const entry = [...this.documents.entries()].find(([, document]) =>
       Object.entries(filter).every(([key, value]) =>
@@ -76,6 +88,16 @@ function createMemoryDatabase() {
     collection(name) {
       if (!collections.has(name)) collections.set(name, new MemoryCollection());
       return collections.get(name);
+    },
+    client: {
+      startSession() {
+        return {
+          async withTransaction(operation) {
+            await operation();
+          },
+          async endSession() {},
+        };
+      },
     },
   };
 }
@@ -104,7 +126,11 @@ function createRequest(userId, method, url, body) {
   };
 }
 
-async function callApi(database, request) {
+async function callApi(
+  database,
+  request,
+  encryptionKey = privateDataEncryptionKey,
+) {
   const response = createResponse();
   await handleApiRequestWithErrors(request, response, {
     loadMongoDb: async () => database,
@@ -119,7 +145,10 @@ async function callApi(database, request) {
         },
       },
     }),
-    loadConfig: () => ({ origin: "https://time-cloud.vercel.app" }),
+    loadConfig: () => ({
+      origin: "https://time-cloud.vercel.app",
+      privateDataEncryptionKey: encryptionKey,
+    }),
   });
   return response;
 }
@@ -134,7 +163,7 @@ test("workspace validation rejects malformed, oversized, and plaintext financial
     (error) =>
       error instanceof ApiError &&
       error.code === "PRIVATE_DATA_IN_WORKSPACE" &&
-      /encrypted salary vault/.test(error.message),
+      /private financial-data API/.test(error.message),
   );
   assert.throws(
     () => validateWorkspaceData({ description: "x".repeat(1_048_600) }),
@@ -173,6 +202,31 @@ test("vault validation accepts only the encrypted envelope and supported version
   assert.throws(
     () => validateVaultRecord({ ...record, nonce: "invalid" }),
     (error) => error instanceof ApiError && error.code === "INVALID_VAULT",
+  );
+});
+
+const validPrivateData = {
+  settings: { dailyWage: "2500" },
+  attendance: { "2026-11-10": { base: "P2500.00" } },
+  payslips: [{ id: "alice:2026-11-10", netPay: 2375 }],
+};
+
+test("private financial data validation accepts only the supported payload shape", () => {
+  assert.deepEqual(validatePrivateFinancialData(validPrivateData), validPrivateData);
+  assert.throws(
+    () => validatePrivateFinancialData({ ...validPrivateData, rawSalary: "2500" }),
+    (error) =>
+      error instanceof ApiError &&
+      error.code === "INVALID_PRIVATE_FINANCIAL_DATA",
+  );
+  assert.throws(
+    () => validatePrivateFinancialData({
+      ...validPrivateData,
+      attendance: { "2026-11-10": null },
+    }),
+    (error) =>
+      error instanceof ApiError &&
+      error.code === "INVALID_PRIVATE_FINANCIAL_DATA",
   );
 });
 
@@ -340,39 +394,134 @@ test("workspace API rejects stale revision writes without replacing newer data",
   assert.equal(read.body.data.data.selectedLocality, "Manila");
 });
 
-test("salary vault API isolates users and stores only ciphertext envelopes", async () => {
+test("private financial API encrypts data at rest and isolates accounts", async () => {
   const database = createMemoryDatabase();
-  const record = {
-    ciphertext: "A".repeat(32),
-    nonce: "A".repeat(16),
-    salt: `${"A".repeat(22)}==`,
-    format_version: 1,
-    key_version: 1,
-  };
   const save = await callApi(
     database,
-    createRequest("alice", "PUT", "/api/salary-vault", {
-      record,
+    createRequest("alice", "PUT", "/api/private-financial-data", {
+      data: validPrivateData,
       expectedRevision: 0,
     }),
   );
   const bobRead = await callApi(
     database,
-    createRequest("bob", "GET", "/api/salary-vault"),
+    createRequest("bob", "GET", "/api/private-financial-data"),
+  );
+  const aliceRead = await callApi(
+    database,
+    createRequest("alice", "GET", "/api/private-financial-data"),
   );
 
   assert.equal(save.statusCode, 200);
   assert.deepEqual(save.body.data, { revision: 1 });
-  assert.equal(bobRead.body.data, null);
+  assert.deepEqual(bobRead.body.data, {
+    data: null,
+    revision: 0,
+    legacyVault: null,
+  });
+  assert.deepEqual(aliceRead.body.data, {
+    data: validPrivateData,
+    revision: 1,
+    legacyVault: null,
+  });
   assert.deepEqual(
-    await database.collection("private_salary_vault").findOne({ _id: "alice" }),
-    {
-      _id: "alice",
-      ...record,
-      revision: 1,
-      updatedAt: (await database.collection("private_salary_vault").findOne({ _id: "alice" })).updatedAt,
-    },
+    (await database.collection("private_financial_data").findOne({ _id: "alice" }))
+      .encryption_version,
+    1,
   );
+  assert.equal(
+    JSON.stringify(
+      await database.collection("private_financial_data").findOne({ _id: "alice" }),
+    ).includes("2500"),
+    false,
+  );
+});
+
+test("private financial API refuses direct writes until legacy vault data is migrated", async () => {
+  const database = createMemoryDatabase();
+  await database.collection("private_salary_vault").insertOne({
+    _id: "alice",
+    ciphertext: "A".repeat(32),
+    nonce: "A".repeat(16),
+    salt: `${"A".repeat(22)}==`,
+    format_version: 1,
+    key_version: 1,
+    revision: 3,
+  });
+
+  const write = await callApi(
+    database,
+    createRequest("alice", "PUT", "/api/private-financial-data", {
+      data: validPrivateData,
+      expectedRevision: 0,
+    }),
+  );
+  const legacyRead = await callApi(
+    database,
+    createRequest("alice", "GET", "/api/private-financial-data"),
+  );
+
+  assert.equal(write.statusCode, 409);
+  assert.equal(write.body.error.code, "LEGACY_MIGRATION_REQUIRED");
+  assert.equal(legacyRead.body.data.legacyVault.revision, 3);
+  assert.equal(
+    await database.collection("private_financial_data").findOne({ _id: "alice" }),
+    null,
+  );
+});
+
+test("legacy private financial data migrates atomically after decryption by the user", async () => {
+  const database = createMemoryDatabase();
+  const legacyRecord = {
+    ciphertext: "A".repeat(32),
+    nonce: "A".repeat(16),
+    salt: `${"A".repeat(22)}==`,
+    format_version: 1,
+    key_version: 1,
+    revision: 3,
+  };
+  await database.collection("private_salary_vault").insertOne({
+    _id: "alice",
+    ...legacyRecord,
+  });
+
+  const migrate = await callApi(
+    database,
+    createRequest("alice", "POST", "/api/private-financial-data/migrate", {
+      expectedUserId: "alice",
+      expectedLegacyRevision: 3,
+      data: validPrivateData,
+    }),
+  );
+  const legacyRead = await callApi(
+    database,
+    createRequest("alice", "GET", "/api/private-financial-data"),
+  );
+  const saved = await database
+    .collection("private_financial_data")
+    .findOne({ _id: "alice" });
+
+  assert.equal(migrate.statusCode, 200);
+  assert.deepEqual(migrate.body.data, { revision: 1 });
+  assert.equal(
+    await database.collection("private_salary_vault").findOne({ _id: "alice" }),
+    null,
+  );
+  assert.deepEqual(legacyRead.body.data.data, validPrivateData);
+  assert.equal(saved.encryption_version, 1);
+  assert.equal(JSON.stringify(saved).includes("2500"), false);
+});
+
+test("private financial storage fails closed without a server encryption key", async () => {
+  const database = createMemoryDatabase();
+  const response = await callApi(
+    database,
+    createRequest("alice", "GET", "/api/private-financial-data"),
+    null,
+  );
+
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.body.error.code, "PRIVATE_DATA_UNAVAILABLE");
 });
 
 function getCurrentManilaShift() {
