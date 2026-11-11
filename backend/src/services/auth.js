@@ -2,6 +2,7 @@ import { mongodbAdapter } from "@better-auth/mongo-adapter";
 import { betterAuth } from "better-auth";
 import nodemailer from "nodemailer";
 import { getServerConfig } from "../config/config.js";
+import { CLIENT_IP_HEADER } from "../config/gateway.js";
 import { getMongoDb } from "../config/mongodb.js";
 
 export function getAuthCookieAttributes(config) {
@@ -134,6 +135,10 @@ export function createAuth({
       cookiePrefix: "timecloud",
       useSecureCookies: cookieAttributes.secure,
       defaultCookieAttributes: cookieAttributes,
+      ipAddress: {
+        ipAddressHeaders: [CLIENT_IP_HEADER],
+        ipv6Subnet: 64,
+      },
     },
   });
 }

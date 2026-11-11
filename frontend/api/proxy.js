@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 const hopByHopHeaders = new Set([
   "connection",
   "content-length",
@@ -12,6 +14,10 @@ const hopByHopHeaders = new Set([
   "upgrade",
   "accept-encoding",
 ]);
+const gatewaySecretHeader = "x-timecloud-gateway-secret";
+const clientIpHeader = "x-timecloud-client-ip";
+const privateHeaders = new Set([gatewaySecretHeader, clientIpHeader]);
+const gatewaySecretPattern = /^[a-f\d]{64}$/i;
 
 function getRenderOrigin(env) {
   const configured = env.RENDER_API_URL?.trim();
@@ -39,6 +45,20 @@ function writeJsonError(response, status, code, message) {
   response.end(JSON.stringify({ error: { code, message } }));
 }
 
+function getGatewaySecret(env) {
+  const secret = env.TIMECLOUD_GATEWAY_SECRET;
+  return typeof secret === "string" && gatewaySecretPattern.test(secret)
+    ? secret
+    : null;
+}
+
+function getCanonicalClientIp(request) {
+  const forwardedFor = request.headers?.["x-forwarded-for"];
+  if (typeof forwardedFor !== "string") return null;
+  const clientIp = forwardedFor.trim();
+  return isIP(clientIp) ? clientIp : null;
+}
+
 export function createProxyHandler({ env = process.env, fetchImpl = fetch } = {}) {
   return async function handler(request, response) {
     let upstreamOrigin;
@@ -57,12 +77,41 @@ export function createProxyHandler({ env = process.env, fetchImpl = fetch } = {}
       return;
     }
 
+    const gatewaySecret = getGatewaySecret(env);
+    if (!gatewaySecret) {
+      writeJsonError(
+        response,
+        503,
+        "API_UNAVAILABLE",
+        "The application API is not configured.",
+      );
+      return;
+    }
+
+    const clientIp = getCanonicalClientIp(request);
+    if (!clientIp) {
+      writeJsonError(
+        response,
+        502,
+        "GATEWAY_IP_UNAVAILABLE",
+        "The client address could not be verified.",
+      );
+      return;
+    }
+
     const headers = new Headers();
     for (const [name, rawValue] of Object.entries(request.headers)) {
       if (hopByHopHeaders.has(name.toLowerCase()) || rawValue === undefined) continue;
       const value = Array.isArray(rawValue) ? rawValue.join(", ") : String(rawValue);
       headers.set(name, value);
     }
+    headers.delete("x-forwarded-for");
+    headers.delete("x-real-ip");
+    headers.delete("x-vercel-forwarded-for");
+    headers.delete(clientIpHeader);
+    headers.delete(gatewaySecretHeader);
+    headers.set(clientIpHeader, clientIp);
+    headers.set(gatewaySecretHeader, gatewaySecret);
     headers.set("accept-encoding", "identity");
 
     const method = (request.method || "GET").toUpperCase();
@@ -102,7 +151,12 @@ export function createProxyHandler({ env = process.env, fetchImpl = fetch } = {}
       });
       response.statusCode = upstreamResponse.status;
       for (const [name, value] of upstreamResponse.headers) {
-        if (name.toLowerCase() === "set-cookie" || hopByHopHeaders.has(name.toLowerCase())) {
+        const lowerName = name.toLowerCase();
+        if (
+          lowerName === "set-cookie" ||
+          hopByHopHeaders.has(lowerName) ||
+          privateHeaders.has(lowerName)
+        ) {
           continue;
         }
         response.setHeader(name, value);

@@ -4,6 +4,12 @@ import { readFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { createProxyHandler } from "./proxy.js";
 
+const TEST_GATEWAY_SECRET = "a".repeat(64);
+const proxyEnv = {
+  RENDER_API_URL: "https://timecloud.onrender.com",
+  TIMECLOUD_GATEWAY_SECRET: TEST_GATEWAY_SECRET,
+};
+
 function createResponse() {
   const headers = new Map();
   return {
@@ -43,6 +49,8 @@ test("Vercel API proxy forwards rewritten nested requests, query, and auth cooki
     "cache-control": "no-store",
     "content-encoding": "br",
     "content-length": "25",
+    "x-timecloud-client-ip": "198.51.100.10",
+    "x-timecloud-gateway-secret": TEST_GATEWAY_SECRET,
   });
   for (const cookie of cookies) upstreamHeaders.append("set-cookie", cookie);
   let upstreamUrl;
@@ -53,7 +61,7 @@ test("Vercel API proxy forwards rewritten nested requests, query, and auth cooki
     diagnostic = { message, details };
   };
   const handler = createProxyHandler({
-    env: { RENDER_API_URL: "https://timecloud.onrender.com" },
+    env: proxyEnv,
     fetchImpl: async (url, options) => {
       upstreamUrl = url;
       upstreamOptions = options;
@@ -73,6 +81,11 @@ test("Vercel API proxy forwards rewritten nested requests, query, and auth cooki
         cookie: "timecloud.session_token=old",
         origin: "https://time-cloud.vercel.app",
         connection: "keep-alive",
+        "x-forwarded-for": "198.51.100.10",
+        "x-real-ip": "203.0.113.11",
+        "x-vercel-forwarded-for": "203.0.113.12",
+        "x-timecloud-client-ip": "203.0.113.13",
+        "x-timecloud-gateway-secret": "b".repeat(64),
       },
     }, response);
   } finally {
@@ -85,6 +98,16 @@ test("Vercel API proxy forwards rewritten nested requests, query, and auth cooki
   );
   assert.equal(upstreamOptions.headers.get("cookie"), "timecloud.session_token=old");
   assert.equal(upstreamOptions.headers.get("origin"), "https://time-cloud.vercel.app");
+  assert.equal(upstreamOptions.headers.get("x-timecloud-client-ip"), "198.51.100.10");
+  assert.equal(
+    upstreamOptions.headers.get("x-timecloud-gateway-secret"),
+    TEST_GATEWAY_SECRET,
+  );
+  assert.equal(upstreamOptions.headers.has("x-forwarded-for"), false);
+  assert.equal(upstreamOptions.headers.has("x-real-ip"), false);
+  assert.equal(upstreamOptions.headers.has("x-vercel-forwarded-for"), false);
+  assert.equal(response.headers.has("x-timecloud-client-ip"), false);
+  assert.equal(response.headers.has("x-timecloud-gateway-secret"), false);
   assert.equal(upstreamOptions.headers.get("accept-encoding"), "identity");
   assert.equal(upstreamOptions.headers.has("connection"), false);
   assert.deepEqual(response.headers.get("set-cookie"), cookies);
@@ -102,6 +125,8 @@ test("Vercel API proxy forwards rewritten nested requests, query, and auth cooki
       contentEncoding: "br",
     },
   });
+  assert.equal(JSON.stringify(diagnostic).includes(TEST_GATEWAY_SECRET), false);
+  assert.equal(JSON.stringify(diagnostic).includes("198.51.100.10"), false);
 });
 
 test("Vercel API proxy forwards methods and JSON request bodies without logging them", async () => {
@@ -124,7 +149,7 @@ test("Vercel API proxy forwards methods and JSON request bodies without logging 
         ? Readable.from([Buffer.from(body)])
         : undefined;
       const handler = createProxyHandler({
-        env: { RENDER_API_URL: "https://timecloud.onrender.com" },
+        env: proxyEnv,
         fetchImpl: async (_url, options) => {
           forwardedOptions = options;
           if (options.body) {
@@ -142,6 +167,7 @@ test("Vercel API proxy forwards methods and JSON request bodies without logging 
         headers: {
           cookie: "timecloud.session_token=session-token-marker",
           "content-type": "application/json",
+          "x-forwarded-for": "198.51.100.10",
         },
       };
       if (requestBody) {
@@ -181,6 +207,8 @@ test("Vercel API proxy failure logs do not include sensitive request data", asyn
     "password-marker",
     "session-token-marker",
     "timecloud.session_token=session-token-marker",
+    TEST_GATEWAY_SECRET,
+    "198.51.100.10",
   ];
   let diagnostic;
   const originalError = console.error;
@@ -188,7 +216,7 @@ test("Vercel API proxy failure logs do not include sensitive request data", asyn
     diagnostic = { message, details };
   };
   const handler = createProxyHandler({
-    env: { RENDER_API_URL: "https://timecloud.onrender.com" },
+    env: proxyEnv,
     fetchImpl: async () => {
       throw new Error(sensitiveValues.join(" "));
     },
@@ -205,6 +233,8 @@ test("Vercel API proxy failure logs do not include sensitive request data", asyn
       headers: {
         cookie: sensitiveValues[2],
         "content-type": "application/json",
+        "x-forwarded-for": sensitiveValues[4],
+        "x-timecloud-gateway-secret": sensitiveValues[3],
       },
       [Symbol.asyncIterator]:
         requestBody[Symbol.asyncIterator].bind(requestBody),
@@ -225,7 +255,7 @@ test("Vercel API proxy failure logs do not include sensitive request data", asyn
 test("Vercel API proxy preserves manual redirect status and Location header", async () => {
   let forwardedOptions;
   const handler = createProxyHandler({
-    env: { RENDER_API_URL: "https://timecloud.onrender.com" },
+    env: proxyEnv,
     fetchImpl: async (_url, options) => {
       forwardedOptions = options;
       return new Response(null, {
@@ -239,7 +269,7 @@ test("Vercel API proxy preserves manual redirect status and Location header", as
   await handler({
     method: "POST",
     url: "/api/proxy?__tc_path=%2Fapi%2Fauth%2Fsign-in%2Femail",
-    headers: {},
+    headers: { "x-forwarded-for": "198.51.100.10" },
   }, response);
 
   assert.equal(forwardedOptions.redirect, "manual");
@@ -253,7 +283,7 @@ test("Vercel API proxy preserves manual redirect status and Location header", as
 test("Vercel API proxy rejects request URLs that could escape the configured Render origin", async () => {
   let forwarded = false;
   const handler = createProxyHandler({
-    env: { RENDER_API_URL: "https://timecloud.onrender.com" },
+    env: proxyEnv,
     fetchImpl: async () => {
       forwarded = true;
       return new Response("unexpected");
@@ -264,10 +294,91 @@ test("Vercel API proxy rejects request URLs that could escape the configured Ren
   await handler({
     method: "GET",
     url: "/api/proxy?__tc_path=https%3A%2F%2Fattacker.example%2Fapi%2Fhealth",
-    headers: {},
+    headers: { "x-forwarded-for": "198.51.100.10" },
   }, response);
 
   assert.equal(forwarded, false);
   assert.equal(response.statusCode, 400);
   assert.equal(JSON.parse(response.body).error.code, "INVALID_PROXY_PATH");
+});
+
+test("Vercel API proxy forwards a validated IPv6 address as the canonical IP", async () => {
+  let upstreamOptions;
+  const handler = createProxyHandler({
+    env: proxyEnv,
+    fetchImpl: async (_url, options) => {
+      upstreamOptions = options;
+      return new Response(null, { status: 204 });
+    },
+  });
+  const response = createResponse();
+
+  await handler({
+    method: "GET",
+    url: "/api/proxy?__tc_path=%2Fapi%2Fsession",
+    headers: { "x-forwarded-for": "2001:db8::8" },
+  }, response);
+
+  assert.equal(response.statusCode, 204);
+  assert.equal(upstreamOptions.headers.get("x-timecloud-client-ip"), "2001:db8::8");
+});
+
+test("Vercel API proxy rejects missing, invalid, and chained client IP headers", async () => {
+  const invalidHeaders = [
+    {},
+    { "x-forwarded-for": "not-an-ip" },
+    { "x-forwarded-for": "198.51.100.10, 203.0.113.10" },
+    { "x-real-ip": "198.51.100.10" },
+  ];
+
+  for (const headers of invalidHeaders) {
+    let forwarded = false;
+    const handler = createProxyHandler({
+      env: proxyEnv,
+      fetchImpl: async () => {
+        forwarded = true;
+        return new Response("unexpected");
+      },
+    });
+    const response = createResponse();
+
+    await handler({
+      method: "GET",
+      url: "/api/proxy?__tc_path=%2Fapi%2Fsession",
+      headers,
+    }, response);
+
+    assert.equal(forwarded, false);
+    assert.equal(response.statusCode, 502);
+    assert.equal(JSON.parse(response.body).error.code, "GATEWAY_IP_UNAVAILABLE");
+  }
+});
+
+test("Vercel API proxy fails closed when the gateway secret is missing or malformed", async () => {
+  const invalidEnvironments = [
+    { RENDER_API_URL: proxyEnv.RENDER_API_URL },
+    { ...proxyEnv, TIMECLOUD_GATEWAY_SECRET: "too-short" },
+  ];
+
+  for (const env of invalidEnvironments) {
+    let forwarded = false;
+    const handler = createProxyHandler({
+      env,
+      fetchImpl: async () => {
+        forwarded = true;
+        return new Response("unexpected");
+      },
+    });
+    const response = createResponse();
+
+    await handler({
+      method: "GET",
+      url: "/api/proxy?__tc_path=%2Fapi%2Fsession",
+      headers: { "x-forwarded-for": "198.51.100.10" },
+    }, response);
+
+    assert.equal(forwarded, false);
+    assert.equal(response.statusCode, 503);
+    assert.equal(JSON.parse(response.body).error.code, "API_UNAVAILABLE");
+  }
 });

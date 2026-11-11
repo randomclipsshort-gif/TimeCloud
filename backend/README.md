@@ -49,16 +49,27 @@ Set these variables in the Render service:
 | `AUTH_SECRET` | New random secret of at least 32 bytes. |
 | `APP_ORIGIN` | Exact frontend origin, currently `https://time-cloud.vercel.app`. |
 | `API_ORIGIN` | Public backend origin, currently `https://timecloud.onrender.com`. |
+| `TIMECLOUD_GATEWAY_SECRET` | Required in production; same random 64-character hexadecimal secret as Vercel. |
 | `PORT` | Supplied by Render; do not hardcode a production port. |
 | `SMTP_URL` | Optional SMTP/SMTPS URL for password-reset email. |
 | `SMTP_FROM` | Optional sender address; configure together with `SMTP_URL`. |
 | `NODE_ENV` | Set to `production`. |
 
-Generate a secret locally:
+Generate the Better Auth secret locally:
 
 ```powershell
 node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
 ```
+
+Generate a separate gateway secret:
+
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Set this exact value as `TIMECLOUD_GATEWAY_SECRET` in both Render and Vercel.
+It must be 64 hexadecimal characters. Never commit it, prefix it with `VITE_`,
+or print it in application logs. Local development does not require it.
 
 Create a new database in Atlas and allow the Render service to connect. The
 backend initializes empty app collections only in an empty database. It
@@ -73,13 +84,16 @@ environment variable:
 | Variable | Value |
 | --- | --- |
 | `RENDER_API_URL` | Render service origin, e.g. `https://your-service.onrender.com`, without a trailing slash. |
+| `TIMECLOUD_GATEWAY_SECRET` | Same random 64-character hexadecimal secret configured on Render; server-side only. |
 
 Do not prefix this variable with `VITE_`. Production browser calls always use
 the same-origin Vercel `/api/*` function; `VITE_API_BASE_URL` is ignored in
 production. This keeps auth cookies same-origin and avoids third-party-cookie
 requirements. The proxy forwards request cookies and preserves each backend
-`Set-Cookie` header. Do not configure a catch-all rewrite that sends `/api/*`
-to the SPA.
+`Set-Cookie` header. It validates Vercel's single-address `x-forwarded-for`
+value, overwrites the internal client-IP header, and authenticates to Render
+with the shared secret. Render rejects production API requests without that
+secret. Do not configure a catch-all rewrite that sends `/api/*` to the SPA.
 
 Set `API_ORIGIN` to the Render service origin so Better Auth has the correct
 public API base URL. Production Better Auth cookies use

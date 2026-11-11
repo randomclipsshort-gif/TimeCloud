@@ -36,13 +36,14 @@ The Vite development server proxies `/api` requests to the backend on port
 
 - Deploy `frontend/` as a Vite project to Vercel. Set its Root Directory to
   `frontend`, build with `npm run build`, and use `dist` as the output
-  directory. Configure the private `RENDER_API_URL` variable for the Vercel
-  `/api/*` proxy.
+  directory. Configure the private `RENDER_API_URL` and
+  `TIMECLOUD_GATEWAY_SECRET` variables for the Vercel `/api/*` proxy.
 - Deploy `backend/` as a Node web service to Render. Set its Root Directory to
   `backend`, build with `npm install`, start with `npm start`, and set the
-  health check path to `/health`.
-- Set backend secrets only in Render. Full environment and deployment steps are
-  documented in [`backend/README.md`](./backend/README.md).
+  health check path to `/health`. Set `TIMECLOUD_GATEWAY_SECRET` to the same
+  value on both platforms; keep other backend secrets in Render.
+- Full environment and deployment steps are documented in
+  [`backend/README.md`](./backend/README.md).
 
 ## Fresh database
 

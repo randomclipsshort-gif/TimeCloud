@@ -37,6 +37,13 @@ function, including nested Better Auth paths. `VITE_API_BASE_URL` is ignored
 in production; production browser requests always use the same-origin Vercel
 API function. `RENDER_API_URL` is read only by the Vercel function and is not
 included in the browser bundle.
+
+Set `TIMECLOUD_GATEWAY_SECRET` as a private Vercel environment variable for
+every deployment that proxies to the production backend. It must be the same
+random 64-character hexadecimal secret configured on Render. Do not prefix it
+with `VITE_`, expose it to browser code, commit it, or log it. Local development
+does not require this secret.
+
 This same-origin proxy is important for authentication: direct browser calls
 from `vercel.app` to `onrender.com` use cross-site cookies and may be blocked
 by third-party-cookie restrictions, even when the backend cookie uses
