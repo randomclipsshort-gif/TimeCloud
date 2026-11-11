@@ -1,6 +1,7 @@
 const hopByHopHeaders = new Set([
   "connection",
   "content-length",
+  "content-encoding",
   "host",
   "keep-alive",
   "proxy-authenticate",
@@ -62,6 +63,7 @@ export function createProxyHandler({ env = process.env, fetchImpl = fetch } = {}
       const value = Array.isArray(rawValue) ? rawValue.join(", ") : String(rawValue);
       headers.set(name, value);
     }
+    headers.set("accept-encoding", "identity");
 
     const method = (request.method || "GET").toUpperCase();
     const hasBody = !["GET", "HEAD"].includes(method);
@@ -91,6 +93,12 @@ export function createProxyHandler({ env = process.env, fetchImpl = fetch } = {}
         body: hasBody ? request : undefined,
         ...(hasBody ? { duplex: "half" } : {}),
         redirect: "manual",
+      });
+      console.info("TimeCloud Render API response.", {
+        status: upstreamResponse.status,
+        path: targetUrl.pathname,
+        contentType: upstreamResponse.headers.get("content-type"),
+        contentEncoding: upstreamResponse.headers.get("content-encoding"),
       });
       response.statusCode = upstreamResponse.status;
       for (const [name, value] of upstreamResponse.headers) {
