@@ -101,6 +101,28 @@ export function getPayrollPeriodForDate(dateKey) {
   return periodFromParts(nextYear, nextMonth, 10);
 }
 
+export function getPayrollCutoffPeriodsForDate(dateKey) {
+  const parsedDate = parseDateKey(dateKey);
+  const currentPeriod = getPayrollPeriodForDate(dateKey);
+  if (!parsedDate || !currentPeriod) return null;
+
+  const currentCutoff = Number(currentPeriod.endDate.slice(-2));
+  if (currentCutoff === 25) {
+    return {
+      firstCutoff: getPreviousPayrollPeriod(currentPeriod),
+      secondCutoff: currentPeriod,
+    };
+  }
+
+  return {
+    firstCutoff: currentPeriod,
+    secondCutoff:
+      parsedDate.day >= 26
+        ? getPreviousPayrollPeriod(currentPeriod)
+        : getNextPayrollPeriod(currentPeriod),
+  };
+}
+
 export function getPreviousPayrollPeriod(period) {
   const previousDate = period && addDays(period.startDate, -1);
   return previousDate ? getPayrollPeriodForDate(previousDate) : null;

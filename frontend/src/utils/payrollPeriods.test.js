@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   formatPayrollPeriod,
   getCalendarPayrollPeriod,
+  getPayrollCutoffPeriodsForDate,
   getNextPayrollPeriod,
   getPayrollPeriodForDate,
   getPayrollPeriodForEndDate,
@@ -38,6 +39,18 @@ test("maps cutoff dates to inclusive semi-monthly periods", () => {
     startDate: "2026-11-11",
     endDate: "2026-11-25",
   });
+});
+
+test("selects the adjacent first and second cutoff periods around a date", () => {
+  assert.deepEqual(getPayrollCutoffPeriodsForDate("2026-11-11"), {
+    firstCutoff: { startDate: "2026-10-26", endDate: "2026-11-10" },
+    secondCutoff: { startDate: "2026-11-11", endDate: "2026-11-25" },
+  });
+  assert.deepEqual(getPayrollCutoffPeriodsForDate("2026-11-26"), {
+    firstCutoff: { startDate: "2026-11-26", endDate: "2026-12-10" },
+    secondCutoff: { startDate: "2026-11-11", endDate: "2026-11-25" },
+  });
+  assert.equal(getPayrollCutoffPeriodsForDate("invalid"), null);
 });
 
 test("handles year transitions and leap-year February", () => {

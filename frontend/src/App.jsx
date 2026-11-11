@@ -60,6 +60,7 @@ import {
 import {
   getCalendarPayrollPeriod,
   formatPayrollPeriod,
+  getPayrollCutoffPeriodsForDate,
   getPayrollPeriodForDate,
   getPayrollPeriodForMonth,
   isPayrollPeriodEarningsAvailable,
@@ -819,7 +820,12 @@ export default function App() {
   const [selectedDay, setSelectedDay] = useState(() =>
     Number(initialCalendarDate.slice(8, 10)),
   );
-  const [financeTrackingScope, setFinanceTrackingScope] = useState("cutoff-10");
+  const [financeTrackingScope, setFinanceTrackingScope] = useState(() =>
+    Number(initialCalendarDate.slice(8, 10)) >= 11 &&
+    Number(initialCalendarDate.slice(8, 10)) <= 25
+      ? "cutoff-25"
+      : "cutoff-10",
+  );
   const [attendance, setAttendance] = useState({});
   const [activeTimeEntry, setActiveTimeEntry] = useState(null);
   const [holidays, setHolidays] = useState(() =>
@@ -930,6 +936,16 @@ export default function App() {
   const selectedDate = formatDate(year, monthIndex, selectedDay);
   const monthLabel = `${months[monthIndex]} ${year}`;
   const calendarPayrollMonth = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+  const financeAnchorDate =
+    calendarPayrollMonth === manilaNow.date.slice(0, 7)
+      ? manilaNow.date
+      : selectedDate;
+  useEffect(() => {
+    const activePeriod = getPayrollPeriodForDate(financeAnchorDate);
+    setFinanceTrackingScope(
+      activePeriod?.endDate.endsWith("-25") ? "cutoff-25" : "cutoff-10",
+    );
+  }, [financeAnchorDate]);
   const currentPayrollPeriod = useMemo(
     () => getPayrollPeriodForDate(manilaNow.date),
     [manilaNow.date],
@@ -1490,11 +1506,11 @@ export default function App() {
   );
   const { remaining, percentage } = getBudgetUtilization(netPay, totalExpenses);
   const financeCutoffPeriods = useMemo(
-    () =>
-      [10, 25].map((cutoffDay) =>
-        getPayrollPeriodForMonth(calendarPayrollMonth, cutoffDay),
-      ),
-    [calendarPayrollMonth],
+    () => {
+      const periods = getPayrollCutoffPeriodsForDate(financeAnchorDate);
+      return periods ? [periods.firstCutoff, periods.secondCutoff] : [];
+    },
+    [financeAnchorDate],
   );
   const financeCutoffSummaries = useMemo(
     () =>
