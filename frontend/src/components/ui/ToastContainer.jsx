@@ -7,7 +7,7 @@ const toastStyles = {
 
 export default function ToastContainer({ toasts, dismissToast }) {
   return (
-    <div id="toastContainer" aria-live="polite" className="fixed bottom-5 right-5 z-[100] flex flex-col gap-2">
+    <div id="toastContainer" aria-live="polite" className="fixed bottom-5 right-5 z-[120] flex flex-col gap-2">
       {toasts.map((toast) => (
         <div
           key={toast.id}
