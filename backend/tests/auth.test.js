@@ -16,6 +16,7 @@ test("auth cookies allow secure cross-site production sessions and keep localhos
     ...sharedEnv,
     APP_ORIGIN: "https://time-cloud.vercel.app",
     API_ORIGIN: "https://timecloud.onrender.com",
+    NODE_ENV: "production",
   });
   assert.deepEqual(getAuthCookieAttributes(productionConfig), {
     httpOnly: true,
@@ -23,6 +24,10 @@ test("auth cookies allow secure cross-site production sessions and keep localhos
     sameSite: "none",
     path: "/",
   });
+  assert.equal(
+    Object.hasOwn(getAuthCookieAttributes(productionConfig), "domain"),
+    false,
+  );
 
   const localConfig = getServerConfig({
     ...sharedEnv,

@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from "./apiBaseUrl.js";
+
 export class ApiClientError extends Error {
   constructor(message, { status, code } = {}) {
     super(message);
@@ -7,8 +9,10 @@ export class ApiClientError extends Error {
   }
 }
 
-const configuredApiOrigin =
-  import.meta.env?.VITE_API_BASE_URL?.trim().replace(/\/+$/, "") || "";
+const configuredApiOrigin = getApiBaseUrl(
+  import.meta.env?.VITE_API_BASE_URL,
+  import.meta.env?.PROD,
+);
 
 export async function apiRequest(path, { method = "GET", body, signal } = {}) {
   if (typeof path !== "string" || !path.startsWith("/") || path.startsWith("//")) {

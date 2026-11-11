@@ -340,6 +340,13 @@ async function handleApiRequest(
 
   const session = await getSession(requestHeaders, loadAuth);
   if (!session?.user?.id) {
+    if (url.pathname === "/api/workspace") {
+      console.warn("TimeCloud workspace request rejected without an authenticated session.", {
+        method,
+        origin: requestHeaders.get("origin") || null,
+        cookieHeaderPresent: requestHeaders.has("cookie"),
+      });
+    }
     throw new ApiError(401, "AUTH_REQUIRED", "Sign in to continue.");
   }
   const userId = session.user.id;

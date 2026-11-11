@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
+import { getApiBaseUrl } from "./apiBaseUrl.js";
 
-const configuredApiOrigin = import.meta.env?.VITE_API_BASE_URL
-  ?.trim()
-  .replace(/\/+$/, "");
+const configuredApiOrigin = getApiBaseUrl(
+  import.meta.env?.VITE_API_BASE_URL,
+  import.meta.env?.PROD,
+);
 const authBasePath = `${configuredApiOrigin || ""}/api/auth`;
 const sessionListeners = new Set();
 let sessionRequest;
@@ -94,7 +96,26 @@ async function mutate(path, body) {
       "/delete-user",
     ].includes(path)
   ) {
-    await refreshSession({ force: true });
+    const sessionResult = await refreshSession({ force: true });
+    if (
+      path === "/sign-in/email" &&
+      (sessionResult.error ||
+        !sessionResult.data?.user?.id ||
+        !sessionResult.data?.session)
+    ) {
+      const error = {
+        message:
+          sessionResult.error?.message ||
+          "The sign-in request succeeded, but no authenticated session was established. Check the API proxy and cookie settings.",
+        code: "SESSION_NOT_ESTABLISHED",
+      };
+      if (sessionResult.error?.status) error.status = sessionResult.error.status;
+      console.warn("Better Auth sign-in did not establish a session.", {
+        status: sessionResult.error?.status ?? 200,
+        code: error.code,
+      });
+      return { data: null, error };
+    }
   }
   return result;
 }

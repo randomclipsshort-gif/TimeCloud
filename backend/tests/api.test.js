@@ -97,7 +97,7 @@ function createRequest(userId, method, url, body) {
     method,
     url,
     headers: {
-      "x-test-user": userId,
+      ...(userId ? { cookie: `timecloud.session_token=${userId}-token` } : {}),
       origin: "https://time-cloud.vercel.app",
     },
     body,
@@ -111,7 +111,10 @@ async function callApi(database, request) {
     loadAuth: async () => ({
       api: {
         getSession: async ({ headers }) => {
-          const userId = headers.get("x-test-user");
+          const token = headers
+            .get("cookie")
+            ?.match(/(?:^|;\s*)timecloud\.session_token=([^;]+)/)?.[1];
+          const userId = token?.replace(/-token$/, "");
           return userId ? { user: { id: userId } } : null;
         },
       },
@@ -279,6 +282,37 @@ test("workspace API derives ownership from the authenticated session", async () 
   );
   assert.equal(aliceRead.body.data.data.selectedLocality, "Manila");
   assert.equal(bobReadAfterWrite.body.data.data.selectedLocality, "Cebu");
+});
+
+test("workspace API rejects requests without a verified session cookie", async () => {
+  const database = createMemoryDatabase();
+  const originalWarn = console.warn;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args);
+
+  try {
+    const response = await callApi(
+      database,
+      {
+        ...createRequest(null, "GET", "/api/workspace"),
+        headers: {
+          "x-test-user": "alice",
+          origin: "https://time-cloud.vercel.app",
+        },
+      },
+    );
+
+    assert.equal(response.statusCode, 401);
+    assert.equal(response.body.error.code, "AUTH_REQUIRED");
+    assert.equal(warnings.length, 1);
+    assert.deepEqual(warnings[0][1], {
+      method: "GET",
+      origin: "https://time-cloud.vercel.app",
+      cookieHeaderPresent: false,
+    });
+  } finally {
+    console.warn = originalWarn;
+  }
 });
 
 test("workspace API rejects stale revision writes without replacing newer data", async () => {

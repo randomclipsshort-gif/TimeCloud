@@ -43,7 +43,7 @@ test("frontend auth client calls Better Auth through the same-origin API", async
 test("registration and logout refresh session state using credentialed requests", async () => {
   const originalFetch = globalThis.fetch;
   const requests = [];
-  let signedIn = true;
+  let signedIn = false;
   globalThis.fetch = async (url, options) => {
     requests.push({ url: String(url), options });
     if (String(url).endsWith("/get-session")) {
@@ -57,7 +57,12 @@ test("registration and logout refresh session state using credentialed requests"
       );
     }
     if (String(url).endsWith("/sign-out")) signedIn = false;
-    if (String(url).endsWith("/sign-in/email")) signedIn = true;
+    if (
+      String(url).endsWith("/sign-up/email") ||
+      String(url).endsWith("/sign-in/email")
+    ) {
+      signedIn = true;
+    }
     return new Response(JSON.stringify({ token: "session-token" }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -79,6 +84,7 @@ test("registration and logout refresh session state using credentialed requests"
     assert.equal(registration.error, null);
     assert.equal(logout.error, null);
     assert.equal(loginAfterLogout.error, null);
+    assert.equal(loginAfterLogout.data.token, "session-token");
     assert.deepEqual(
       requests.map(({ url }) => url),
       [
@@ -96,6 +102,43 @@ test("registration and logout refresh session state using credentialed requests"
     assert.equal(requests[5].options.method, "GET");
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test("sign-in reports HTTP 200 when no authenticated session can be retrieved", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  const requests = [];
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args);
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url: String(url), options });
+    const body = String(url).endsWith("/get-session")
+      ? null
+      : { token: null, user: { id: "user-1" } };
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const result = await authClient.signIn.email({
+      email: "person@example.com",
+      password: "example-password",
+    });
+
+    assert.equal(result.data, null);
+    assert.equal(result.error.code, "SESSION_NOT_ESTABLISHED");
+    assert.equal(requests.length, 2);
+    assert.ok(requests.every(({ options }) => options.credentials === "include"));
+    assert.deepEqual(warnings[0][1], {
+      status: 200,
+      code: "SESSION_NOT_ESTABLISHED",
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
   }
 });
 

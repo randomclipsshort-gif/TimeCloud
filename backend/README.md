@@ -74,10 +74,12 @@ environment variable:
 | --- | --- |
 | `RENDER_API_URL` | Render service origin, e.g. `https://your-service.onrender.com`, without a trailing slash. |
 
-Do not prefix this variable with `VITE_`. Leave `VITE_API_BASE_URL` empty in
-Vercel so browser calls use the Vercel `/api/*` function. This keeps auth
-cookies same-origin and avoids third-party-cookie requirements. The proxy
-forwards request cookies and preserves each backend `Set-Cookie` header.
+Do not prefix this variable with `VITE_`. Production browser calls always use
+the same-origin Vercel `/api/*` function; `VITE_API_BASE_URL` is ignored in
+production. This keeps auth cookies same-origin and avoids third-party-cookie
+requirements. The proxy forwards request cookies and preserves each backend
+`Set-Cookie` header. Do not configure a catch-all rewrite that sends `/api/*`
+to the SPA.
 
 Set `API_ORIGIN` to the Render service origin so Better Auth has the correct
 public API base URL. Production Better Auth cookies use

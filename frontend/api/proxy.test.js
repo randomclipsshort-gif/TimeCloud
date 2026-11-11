@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { createProxyHandler } from "./[...path].js";
 
 function createResponse() {
@@ -18,6 +19,13 @@ function createResponse() {
     },
   };
 }
+
+test("Vercel configuration does not rewrite API requests to the SPA", async () => {
+  const config = JSON.parse(
+    await readFile(new URL("../vercel.json", import.meta.url), "utf8"),
+  );
+  assert.equal(config.rewrites, undefined);
+});
 
 test("Vercel API proxy forwards same-origin requests and preserves separate auth cookies", async () => {
   const cookies = [
