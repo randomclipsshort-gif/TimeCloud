@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { createProxyHandler } from "./[...path].js";
+import { createProxyHandler } from "./proxy.js";
 
 function createResponse() {
   const headers = new Map();
@@ -20,14 +20,19 @@ function createResponse() {
   };
 }
 
-test("Vercel configuration does not rewrite API requests to the SPA", async () => {
+test("Vercel routes nested API requests to the shared proxy function", async () => {
   const config = JSON.parse(
     await readFile(new URL("../vercel.json", import.meta.url), "utf8"),
   );
-  assert.equal(config.rewrites, undefined);
+  assert.deepEqual(config.rewrites, [
+    {
+      source: "/api/:path*",
+      destination: "/api/proxy?__tc_path=/api/:path*",
+    },
+  ]);
 });
 
-test("Vercel API proxy forwards same-origin requests and preserves separate auth cookies", async () => {
+test("Vercel API proxy forwards rewritten nested requests, query, and auth cookies", async () => {
   const cookies = [
     "timecloud.session_token=one; Path=/; HttpOnly; Secure; SameSite=None",
     "timecloud.session_data=two; Path=/; HttpOnly; Secure; SameSite=None",
@@ -54,7 +59,7 @@ test("Vercel API proxy forwards same-origin requests and preserves separate auth
 
   await handler({
     method: "GET",
-    url: "/api/auth/get-session",
+    url: "/api/proxy?__tc_path=%2Fapi%2Fauth%2Fget-session&probe=1",
     headers: {
       cookie: "timecloud.session_token=old",
       origin: "https://time-cloud.vercel.app",
@@ -62,7 +67,10 @@ test("Vercel API proxy forwards same-origin requests and preserves separate auth
     },
   }, response);
 
-  assert.equal(upstreamUrl.href, "https://timecloud-api.onrender.com/api/auth/get-session");
+  assert.equal(
+    upstreamUrl.href,
+    "https://timecloud-api.onrender.com/api/auth/get-session?probe=1",
+  );
   assert.equal(upstreamOptions.headers.get("cookie"), "timecloud.session_token=old");
   assert.equal(upstreamOptions.headers.get("origin"), "https://time-cloud.vercel.app");
   assert.equal(upstreamOptions.headers.has("connection"), false);
@@ -85,7 +93,7 @@ test("Vercel API proxy rejects request URLs that could escape the configured Ren
 
   await handler({
     method: "GET",
-    url: "https://attacker.example/api/health",
+    url: "/api/proxy?__tc_path=https%3A%2F%2Fattacker.example%2Fapi%2Fhealth",
     headers: {},
   }, response);
 

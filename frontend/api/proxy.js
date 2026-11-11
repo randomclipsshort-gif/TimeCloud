@@ -66,15 +66,24 @@ export function createProxyHandler({ env = process.env, fetchImpl = fetch } = {}
     const method = (request.method || "GET").toUpperCase();
     const hasBody = !["GET", "HEAD"].includes(method);
     try {
-      const requestPath = request.url || "/";
+      const requestUrl = new URL(request.url || "/", "http://localhost");
+      const rewrittenPath = requestUrl.searchParams.get("__tc_path");
+      const requestPath = rewrittenPath ?? requestUrl.pathname + requestUrl.search;
       const targetUrl = new URL(requestPath, upstreamOrigin);
       if (
-        !requestPath.startsWith("/") ||
+        !requestPath.startsWith("/api/") ||
         requestPath.startsWith("//") ||
-        targetUrl.origin !== upstreamOrigin
+        targetUrl.origin !== upstreamOrigin ||
+        !targetUrl.pathname.startsWith("/api/")
       ) {
         writeJsonError(response, 400, "INVALID_PROXY_PATH", "The API path is invalid.");
         return;
+      }
+      if (rewrittenPath !== null) {
+        targetUrl.search = "";
+        for (const [name, value] of requestUrl.searchParams) {
+          if (name !== "__tc_path") targetUrl.searchParams.append(name, value);
+        }
       }
       const upstreamResponse = await fetchImpl(targetUrl, {
         method,
