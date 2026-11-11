@@ -39,14 +39,15 @@ test("server configuration validates frontend/API origins, secret, and optional 
     () => getServerConfig({ ...validEnv, SMTP_URL: "smtps://smtp.example.com" }),
     /both SMTP_URL and SMTP_FROM/,
   );
-  assert.equal(
-    getServerConfig({
-      ...validEnv,
-      APP_ORIGIN: "http://localhost:5173",
-      API_ORIGIN: "http://localhost:10000",
-    }).appOrigin,
-    "http://localhost:5173",
-  );
+  const localConfig = getServerConfig({
+    ...validEnv,
+    APP_ORIGIN: "http://localhost:5173",
+    API_ORIGIN: "http://localhost:10000",
+    NODE_ENV: "development",
+  });
+  assert.equal(localConfig.appOrigin, "http://localhost:5173");
+  assert.equal(localConfig.apiOrigin, "http://localhost:10000");
+  assert.equal(localConfig.isProduction, false);
   const config = getServerConfig(validEnv);
   assert.equal(config.appOrigin, "https://app.example.com");
   assert.equal(config.apiOrigin, "https://api.example.com");

@@ -3,11 +3,12 @@ import {
   Clock3,
   Download,
   FileText,
+  LoaderCircle,
   LogOut,
   Settings,
 } from "lucide-react";
 
-export default function Header({ clock, user, onLogout }) {
+export default function Header({ clock, user, onLogout, isSigningOut = false }) {
   return (
   <header className="border-b border-slate-200 bg-white/95 backdrop-blur-md">
     <div className="mx-auto flex min-h-16 w-full max-w-[1600px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 md:py-2">
@@ -79,11 +80,17 @@ export default function Header({ clock, user, onLogout }) {
             <button
               type="button"
               onClick={onLogout}
-              className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition hover:bg-red-50 hover:text-red-600"
-              title="Sign out"
-              aria-label="Sign out"
+              disabled={isSigningOut}
+              className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-wait disabled:opacity-70"
+              title={isSigningOut ? "Signing out..." : "Sign out"}
+              aria-label={isSigningOut ? "Signing out..." : "Sign out"}
+              aria-busy={isSigningOut}
             >
-              <LogOut size={16} aria-hidden="true" />
+              {isSigningOut ? (
+                <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
+              ) : (
+                <LogOut size={16} aria-hidden="true" />
+              )}
             </button>
           )}
         </div>

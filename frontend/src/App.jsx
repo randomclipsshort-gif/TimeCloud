@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LoaderCircle } from "lucide-react";
 import Header from "./components/layout/Header.jsx";
 import AuthPage from "./components/AuthPage.jsx";
 import DashboardContent from "./components/DashboardContent.jsx";
@@ -213,7 +214,7 @@ function getWorkspaceLoadErrorMessage(error) {
   const code = typeof error?.code === "string" ? error.code : "";
 
   if (code === "AUTH_REQUIRED") {
-    return "Your session has expired. Sign in again to load your cloud data.";
+    return "This cloud-data request was rejected because the server did not recognize an authenticated session. Refresh and try again; if the problem continues, sign in again.";
   }
   return `Cloud data could not be loaded${code ? ` (${code})` : ""}: ${detail}`;
 }
@@ -784,6 +785,7 @@ export default function App() {
   const [attendancePunchError, setAttendancePunchError] = useState("");
   const [workspaceDataWarning, setWorkspaceDataWarning] = useState("");
   const [workspaceSaveError, setWorkspaceSaveError] = useState("");
+  const [signOutStatus, setSignOutStatus] = useState("");
   const [salaryVaultStatus, setSalaryVaultStatus] = useState("loading");
   const [salaryVaultError, setSalaryVaultError] = useState("");
   const [salaryVaultConflict, setSalaryVaultConflict] = useState(false);
@@ -886,6 +888,7 @@ export default function App() {
   const earlyPunchWindowMinutes = defaultEarlyPunchWindowMinutes;
   const lateGracePeriodMinutes = defaultLateGracePeriodMinutes;
   const workspaceLoadedRef = useRef(false);
+  const signOutInProgressRef = useRef(false);
   const userRef = useRef(null);
   const pendingSuccessToasts = useRef([]);
   const pendingExpenseClearRef = useRef(false);
@@ -2089,31 +2092,6 @@ export default function App() {
       checkExpiration();
     };
 
-    const handlePageHide = (event) => {
-      if (event.persisted) return;
-      fetch("/api/auth/sign-out", {
-        method: "POST",
-        credentials: "same-origin",
-        keepalive: true,
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      })
-        .then((response) => {
-          if (!response.ok) {
-            console.warn(
-              "Could not revoke the session while closing the page:",
-              response.status,
-            );
-          }
-        })
-        .catch((error) => {
-          console.warn(
-            "Could not revoke the session while closing the page:",
-            error instanceof Error ? error.message : "Request failed.",
-          );
-        });
-    };
-
     expirationTimer = window.setInterval(
       checkExpiration,
       AUTH_ACTIVITY_WRITE_INTERVAL_MS,
@@ -2129,7 +2107,6 @@ export default function App() {
       window.addEventListener(eventName, handleActivity, { passive: true }),
     );
     window.addEventListener("storage", handleStorage);
-    window.addEventListener("pagehide", handlePageHide);
     document.addEventListener("visibilitychange", checkExpiration);
 
     return () => {
@@ -2138,7 +2115,6 @@ export default function App() {
         window.removeEventListener(eventName, handleActivity),
       );
       window.removeEventListener("storage", handleStorage);
-      window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("visibilitychange", checkExpiration);
       if (!signOutStarted) {
         try {
@@ -4001,13 +3977,25 @@ export default function App() {
             <button
               type="button"
               onClick={async () => {
-                const { error } = await authClient.signOut();
-                if (error)
+                if (signOutInProgressRef.current) return;
+                signOutInProgressRef.current = true;
+                setSignOutStatus("Signing out...");
+                try {
+                  const { error } = await authClient.signOut();
+                  if (error) {
+                    showToast("Unable to sign out. Please try again.", "error");
+                  }
+                } catch {
                   showToast("Unable to sign out. Please try again.", "error");
+                } finally {
+                  signOutInProgressRef.current = false;
+                  setSignOutStatus("");
+                }
               }}
-              className="ml-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+              disabled={Boolean(signOutStatus)}
+              className="ml-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 disabled:cursor-wait disabled:opacity-70"
             >
-              Sign out
+              {signOutStatus || "Sign out"}
             </button>
           </div>
         </div>
@@ -4021,15 +4009,45 @@ export default function App() {
               <Header
                 clock={clock}
                 user={user}
+                isSigningOut={Boolean(signOutStatus)}
                 onLogout={async () => {
-                  if (!(await flushSalaryVault())) return;
-                  if (!(await flushWorkspace())) return;
-                  const { error } = await authClient.signOut();
-                  if (error)
+                  if (signOutInProgressRef.current) return;
+                  signOutInProgressRef.current = true;
+                  try {
+                    setSignOutStatus("Saving encrypted salary data...");
+                    if (!(await flushSalaryVault())) return;
+                    setSignOutStatus("Saving workspace changes...");
+                    if (!(await flushWorkspace())) return;
+                    setSignOutStatus("Signing out...");
+                    const { error } = await authClient.signOut();
+                    if (error) {
+                      showToast("Unable to sign out. Please try again.", "error");
+                    } else {
+                      addToast("Signed out successfully.", "info");
+                    }
+                  } catch {
                     showToast("Unable to sign out. Please try again.", "error");
-                  else addToast("Signed out successfully.", "info");
+                  } finally {
+                    signOutInProgressRef.current = false;
+                    setSignOutStatus("");
+                  }
                 }}
               />
+              {signOutStatus && (
+                <div
+                  className="flex items-center justify-center gap-2 border-b border-teal-200 bg-teal-50 px-4 py-2 text-sm font-medium text-teal-800"
+                  role="status"
+                  aria-live="polite"
+                  aria-busy="true"
+                >
+                  <LoaderCircle
+                    size={16}
+                    className="animate-spin"
+                    aria-hidden="true"
+                  />
+                  <span>{signOutStatus}</span>
+                </div>
+              )}
               {salaryVaultStatus !== "unlocked" && (
                 <div
                   className="flex flex-col gap-2 border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between"
