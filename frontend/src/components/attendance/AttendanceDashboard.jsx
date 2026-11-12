@@ -276,7 +276,7 @@ export default function AttendanceDashboard({
 
           {/* Earnings and pay components */}
           <div
-            className={`mb-3 min-h-[58px] rounded-xl border p-4 ${
+            className={`mb-3 flex min-h-[58px] flex-col justify-center rounded-xl border p-4 ${
               isAbsent
                 ? "border-rose-200 bg-rose-50/40"
                 : "border-teal-200 bg-teal-50/20"
