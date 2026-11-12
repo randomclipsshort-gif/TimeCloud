@@ -10,6 +10,7 @@ import GrantLeaveModal from "./components/modals/GrantLeaveModal.jsx";
 import PayslipModal from "./components/modals/PayslipModal.jsx";
 import SettingsModal from "./components/modals/SettingsModal.jsx";
 import ConfirmationDialog from "./components/ui/ConfirmationDialog.jsx";
+import ShiftIcon from "./components/ui/ShiftIcon.jsx";
 import ToastContainer from "./components/ui/ToastContainer.jsx";
 import FeatureErrorBoundary from "./components/ui/FeatureErrorBoundary.jsx";
 import { holidayCalendarByYear } from "./data/holidayCalendar.js";
@@ -17,7 +18,11 @@ import {
   getHolidayClassification,
   getHolidayForDate,
 } from "./utils/holidayUtils.js";
-import { calculateHolidayPay, getAttendanceHours } from "./utils/holidayPay.js";
+import {
+  calculateHolidayPay,
+  getAttendanceHours,
+  hasAttendanceTimeData,
+} from "./utils/holidayPay.js";
 import { getAttendancePunchAvailability } from "./utils/attendancePunchRules.js";
 import {
   AUTH_ACTIVITY_WRITE_INTERVAL_MS,
@@ -264,12 +269,15 @@ function parseTimeMinutes(time) {
 }
 
 function applyNightDifferential(record, calculation) {
-  if (calculation.status === "not-applicable") return record;
+  if (calculation.status === "not-applicable") {
+    return { ...record, payrollCalculationNotice: "" };
+  }
   if (calculation.status !== "ready") {
     return {
       ...record,
       payrollCalculationStatus: calculation.status,
       payrollCalculationMessage: calculation.reasons.join(" "),
+      payrollCalculationNotice: "",
     };
   }
   const componentTotal =
@@ -285,6 +293,7 @@ function applyNightDifferential(record, calculation) {
     est: `${formatPayAmount(calculation.earnings)} PHP`,
     payrollCalculationStatus: calculation.status,
     payrollCalculationMessage: "",
+    payrollCalculationNotice: calculation.notice || "",
   };
 }
 
@@ -600,47 +609,70 @@ function CalendarDay({
   onNavigate,
 }) {
   let cardStyle =
-    "bg-slate-50/80 border border-slate-200/70 hover:bg-white hover:border-teal-300";
-  if (selected) {
+    "bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50/50";
+  if (record.type === "Absent") {
     cardStyle =
-      "bg-teal-50/60 border-2 border-teal-600 shadow-sm ring-2 ring-teal-500/25";
+      "bg-rose-50/50 border border-rose-300 hover:border-rose-400";
   } else if (record.type === "Rest Day") {
-    cardStyle = "bg-slate-100/60 border border-slate-200/70 hover:bg-slate-100";
+    cardStyle = "bg-slate-50 border border-slate-200 hover:border-slate-300";
   } else if (record.type === "Leave") {
     const leaveCardStyles = {
-      VL: "bg-amber-50/70 border border-amber-200 hover:border-amber-300",
-      SL: "bg-sky-50/70 border border-sky-200 hover:border-sky-300",
-      EL: "bg-rose-50/70 border border-rose-200 hover:border-rose-300",
+      VL: "bg-amber-50/50 border border-amber-300 hover:border-amber-400",
+      SL: "bg-sky-50/50 border border-sky-300 hover:border-sky-400",
+      EL: "bg-rose-50/50 border border-rose-300 hover:border-rose-400",
     };
     cardStyle =
-      leaveCardStyles[record.leaveCode] || "bg-sky-50/70 border border-sky-200";
+      leaveCardStyles[record.leaveCode] || "bg-sky-50/50 border border-sky-300";
   } else if (["Regular Holiday", "Unworked Holiday"].includes(record.type)) {
     cardStyle =
-      "bg-white border border-rose-200 border-l-4 border-l-rose-500 hover:border-rose-300 shadow-xs";
+      "bg-rose-50/30 border border-rose-200 hover:border-rose-300";
   } else if (record.type === "Company Break") {
     cardStyle =
-      "bg-emerald-50/70 border border-emerald-200 border-l-4 border-l-emerald-500 hover:border-emerald-300";
+      "bg-emerald-50/50 border border-emerald-200 hover:border-emerald-300";
   } else if (["Special Holiday", "Special Non-Working"].includes(record.type)) {
     cardStyle =
-      "bg-white border border-indigo-200 border-l-4 border-l-indigo-500 hover:border-indigo-300 shadow-xs";
+      "bg-indigo-50/30 border border-indigo-200 hover:border-indigo-300";
   }
   const holidayCellStyles = {
     "Regular Holiday":
-      "bg-white border border-rose-200 border-l-4 border-l-rose-500 hover:border-rose-300 shadow-xs",
+      "bg-rose-50/30 border border-rose-200 hover:border-rose-300",
     "Special Non-Working Day":
-      "bg-white border border-indigo-200 border-l-4 border-l-indigo-500 hover:border-indigo-300 shadow-xs",
+      "bg-indigo-50/30 border border-indigo-200 hover:border-indigo-300",
     "Special Working Day":
-      "bg-white border border-teal-200 border-l-4 border-l-teal-500 hover:border-teal-300 shadow-xs",
+      "bg-teal-50/30 border border-teal-200 hover:border-teal-300",
     "Local Holiday":
-      "bg-white border border-violet-200 border-l-4 border-l-violet-500 hover:border-violet-300 shadow-xs",
+      "bg-violet-50/30 border border-violet-200 hover:border-violet-300",
     "Ordinary Working Day":
-      "bg-white border border-slate-200 border-l-4 border-l-slate-400 hover:border-slate-300 shadow-xs",
+      "bg-white border border-slate-200 hover:border-slate-300",
     "Company Break":
-      "bg-emerald-50/70 border border-emerald-200 border-l-4 border-l-emerald-500 hover:border-emerald-300",
+      "bg-emerald-50/50 border border-emerald-200 hover:border-emerald-300",
   };
-  if (!selected && record.holidayClassification) {
+  if (record.type !== "Absent" && record.holidayClassification) {
     cardStyle = holidayCellStyles[record.holidayClassification] || cardStyle;
   }
+  const selectionRingColor =
+    record.type === "Absent"
+      ? "ring-rose-400"
+      : record.type === "Leave"
+        ? record.leaveCode === "VL"
+          ? "ring-amber-400"
+          : record.leaveCode === "EL"
+            ? "ring-rose-400"
+            : "ring-sky-400"
+        : record.type === "Rest Day"
+          ? "ring-slate-400"
+          : record.holidayClassification === "Regular Holiday"
+            ? "ring-rose-400"
+            : record.holidayClassification === "Special Non-Working Day"
+              ? "ring-indigo-400"
+              : record.holidayClassification === "Special Working Day"
+                ? "ring-teal-400"
+                : record.holidayClassification === "Local Holiday"
+                  ? "ring-violet-400"
+                  : "ring-teal-500";
+  const selectedStyle = selected
+    ? `shadow-md ring-2 ${selectionRingColor} ring-offset-1`
+    : "";
 
   const holidayLabelColors = {
     "Regular Holiday": "text-rose-700",
@@ -656,77 +688,79 @@ function CalendarDay({
     (record.punchSource === "manual"
       ? getAssignedShiftName(record, shiftTemplates)
       : record.shift);
+  const calendarHasShift =
+    record.hasAssignedShift === true ||
+    Boolean(record.shiftStartTime && record.shiftEndTime);
+  const calendarStatus = (() => {
+    if (record.type === "Absent") return "Absent";
+    if (record.type === "Leave") return record.shift;
+    if (record.type === "Rest Day") return "Rest Day";
+    if (calendarHasShift) return calendarShiftName;
+    return null;
+  })();
+  const calendarStatusIcon =
+    record.type === "Absent"
+      ? "fa-user-xmark"
+      : record.type === "Leave"
+        ? record.leaveIcon || "fa-umbrella-beach"
+        : record.type === "Rest Day"
+          ? matchingShift?.icon || "fa-calendar-xmark"
+          : matchingShift?.icon || record.customIcon;
+  const calendarStatusColor =
+    record.type === "Absent"
+      ? "text-rose-600"
+      : record.type === "Leave"
+        ? record.leaveCode === "VL"
+          ? "text-amber-700"
+          : record.leaveCode === "EL"
+            ? "text-rose-600"
+            : "text-sky-700"
+        : record.type === "Rest Day"
+          ? "text-slate-600"
+          : "text-slate-800";
+  const calendarStatusIconColor =
+    record.type === "Absent"
+      ? "text-rose-600"
+      : record.type === "Leave"
+        ? calendarStatusColor
+        : record.type === "Rest Day"
+          ? "text-slate-600"
+          : matchingShift?.iconColor ||
+            record.customIconColor ||
+            "text-slate-600";
+  const isMorningShift = calendarStatus?.toLowerCase() === "morning";
+  const isNightShift = calendarStatus?.toLowerCase() === "night";
+  const isAfternoonShift = calendarStatus?.toLowerCase().includes("afternoon");
+  const calendarCellDetail =
+    record.type === "Absent"
+      ? record.holidayName
+        ? "Unworked Holiday"
+        : "Unexcused / No Pay"
+      : record.type === "Leave"
+        ? `Paid Leave (${record.wageRate || "100%"})`
+        : record.type === "Rest Day"
+          ? "Rest Day"
+          : calendarHasShift
+            ? [
+                formatTime(record.shiftStartTime),
+                formatTime(record.shiftEndTime),
+              ]
+                .filter(Boolean)
+                .join(" - ") || record.assigned
+            : record.holidayName
+              ? record.holidayDutyLabel || "Not Scheduled"
+              : "No shift assigned";
   const rangeStyle = {
     single: "rounded-xl bg-indigo-100/90 ring-2 ring-inset ring-indigo-400",
     start: "rounded-xl bg-indigo-100/90 ring-2 ring-inset ring-indigo-400",
     middle: "rounded-xl bg-indigo-100/90 ring-1 ring-inset ring-indigo-400",
     end: "rounded-xl bg-indigo-100/90 ring-2 ring-inset ring-indigo-400",
   }[rangePosition];
-  let label = null;
-  if (record.holidayName) {
-    label = (
-      <div className="flex flex-col">
-        <span
-          className={`text-[10px] font-bold leading-tight ${holidayLabelColors[record.holidayClassification] || "text-indigo-700"}`}
-        >
-          {record.holidayName}
-        </span>
-        {record.holidayDutyLabel !== "Not Scheduled" && (
-          <span
-            className={`text-[9px] font-semibold mt-0.5 ${record.holidayUnworked ? "text-slate-600" : "text-slate-500"}`}
-          >
-            {record.holidayDutyLabel}
-          </span>
-        )}
-      </div>
-    );
-  } else if (record.type === "Absent") {
-    label = (
-      <span className="px-2 py-0.5 text-[10px] font-bold bg-red-100 text-red-800 rounded inline-block w-fit">
-        Absent
-      </span>
-    );
-  } else if (record.type === "Leave") {
-    const leaveLabelStyles = {
-      VL: "bg-amber-100 text-amber-800",
-      SL: "bg-sky-100 text-sky-800",
-      EL: "bg-rose-100 text-rose-800",
-    };
-    label = (
-      <span
-        className={`inline-flex w-fit max-w-full items-center gap-1.5 truncate rounded px-2 py-0.5 text-[10px] font-bold ${leaveLabelStyles[record.leaveCode] || "bg-sky-100 text-sky-800"}`}
-      >
-        <i
-          className={`fa-solid ${record.leaveIcon || "fa-umbrella-beach"} shrink-0`}
-          aria-hidden="true"
-        />
-        <span className="truncate">{record.shift}</span>
-      </span>
-    );
-  } else if (record.type === "Rest Day") {
-    label = (
-      <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-200 text-slate-700 rounded inline-block w-fit">
-        Rest Day
-      </span>
-    );
-  } else if (record.customIcon) {
-    label = (
-      <div className="flex items-center space-x-1.5">
-        <i
-          className={`fa-solid ${record.customIcon} ${record.customIconColor || "text-teal-600"} text-xs`}
-        />
-        <span className="text-[10px] font-bold text-slate-700 truncate">
-          {calendarShiftName}
-        </span>
-      </div>
-    );
-  }
-
   return (
     <button
       type="button"
       data-calendar-date={dateKey}
-      aria-label={`${dateKey}: ${record.holidayName ? `${record.holidayName}, ${record.holidayClassification}, ` : ""}${record.type === "Absent" && record.holidayName ? "Unworked Holiday" : calendarShiftName}${hasIncentive ? ", incentive recorded" : ""}${rangePosition ? `, ${rangePosition} of selected date range` : ""}`}
+      aria-label={`${dateKey}: ${record.holidayName ? `${record.holidayName}, ${record.holidayClassification}, ` : ""}${calendarStatus || calendarShiftName}, ${calendarCellDetail}${hasIncentive ? ", incentive recorded" : ""}${rangePosition ? `, ${rangePosition} of selected date range` : ""}`}
       aria-pressed={selected}
       tabIndex={selected ? 0 : -1}
       onClick={onSelect}
@@ -755,7 +789,7 @@ function CalendarDay({
       }}
       title={hasIncentive ? "Incentive recorded" : undefined}
       style={{ touchAction: rangeMode ? "none" : "pan-y" }}
-      className={`select-none rounded-xl min-h-[90px] flex flex-col transition cursor-pointer relative box-border text-left ${cardStyle}`}
+      className={`select-none rounded-xl min-h-[100px] flex flex-col transition cursor-pointer relative box-border text-left ${cardStyle} ${selectedStyle}`}
     >
       {rangeStyle && (
         <span
@@ -763,10 +797,27 @@ function CalendarDay({
           className={`pointer-events-none absolute inset-0 z-0 ${rangeStyle}`}
         />
       )}
-      <span className="relative z-10 p-2.5 flex flex-col justify-between h-full w-full">
+      <span className="relative z-10 flex h-full w-full flex-col p-2.5 font-mono">
         <span className="flex justify-between items-center">
           <span
-            className={`text-xs font-bold ${rangePosition ? "text-indigo-950" : selected ? "text-teal-900" : "text-slate-700"}`}
+            className={`text-[13px] font-bold ${
+              rangePosition
+                ? "text-indigo-950"
+                : record.type === "Absent"
+                  ? "text-rose-600"
+                  : record.type === "Leave"
+                    ? record.leaveCode === "VL"
+                      ? "text-amber-700"
+                      : record.leaveCode === "EL"
+                        ? "text-rose-600"
+                        : "text-sky-700"
+                    : record.holidayName
+                      ? holidayLabelColors[record.holidayClassification] ||
+                        "text-slate-700"
+                      : selected
+                        ? "text-teal-700"
+                        : "text-slate-700"
+            }`}
           >
             {day}
           </span>
@@ -785,7 +836,7 @@ function CalendarDay({
             )}
             {hasIncentive && (
               <i
-                className="fa-solid fa-gift text-[10px] text-teal-600"
+                className="fa-solid fa-gift text-[11px] text-teal-600"
                 aria-hidden="true"
               ></i>
             )}
@@ -816,16 +867,56 @@ function CalendarDay({
               ))}
           </span>
         </span>
-        <span className="my-auto py-1 flex flex-col justify-center">
-          {label}
-        </span>
-        {record.type !== "Rest Day" && record.assigned !== "Rest Day" && (
-          <span className="text-[10px] text-slate-500 font-medium">
-            {record.type === "Unassigned" && record.holidayName
-              ? "Not Scheduled"
-              : record.assigned}
+        {record.holidayName && (
+          <span
+            className={`mt-0.5 truncate text-[10px] font-semibold leading-tight ${
+              holidayLabelColors[record.holidayClassification] ||
+              "text-indigo-700"
+            }`}
+            title={record.holidayName}
+          >
+            {record.holidayName}
           </span>
         )}
+        <span className="mt-auto flex min-h-0 flex-col pt-1">
+          {calendarStatus && (
+            <span
+              className="flex min-w-0 items-center gap-1 truncate text-[11px] font-semibold leading-tight"
+              title={calendarStatus}
+            >
+              {calendarStatusIcon && (
+                <ShiftIcon
+                  icon={calendarStatusIcon}
+                  size={11}
+                  className={`shrink-0 ${
+                    isMorningShift || isAfternoonShift
+                      ? "text-indigo-600"
+                      : isNightShift
+                        ? "text-slate-600"
+                        : calendarStatusIconColor
+                  }`}
+                />
+              )}
+              <span className={`truncate ${calendarStatusColor}`}>
+                {calendarStatus}
+              </span>
+            </span>
+          )}
+          {calendarCellDetail && (
+            <span
+              className={`mt-0.5 truncate text-[10px] leading-tight ${
+                record.type === "Absent"
+                  ? "text-rose-600"
+                  : record.type === "Leave"
+                    ? "text-amber-800"
+                    : "text-slate-500"
+              }`}
+              title={calendarCellDetail}
+            >
+              {calendarCellDetail}
+            </span>
+          )}
+        </span>
       </span>
     </button>
   );
@@ -866,6 +957,8 @@ export default function App() {
   });
   const [accountDeletionLoading, setAccountDeletionLoading] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
+  const [manualEntryInitialType, setManualEntryInitialType] =
+    useState("Present");
   const [activeSettingsTab, setActiveSettingsTab] = useState("general");
   const [page, setPage] = useState(0);
   const [initialCalendarDate] = useState(() => getManilaDateTime().date);
@@ -945,6 +1038,7 @@ export default function App() {
   const [shiftTemplates, setShiftTemplates] = useState(defaultShiftTemplates);
   const [selectedShiftTemplate, setSelectedShiftTemplate] =
     useState("rest-day");
+  const [isCustomShiftActive, setIsCustomShiftActive] = useState(false);
   const [customShiftName, setCustomShiftName] = useState("");
   const [customShiftStart, setCustomShiftStart] = useState("10:00 PM");
   const [customShiftEnd, setCustomShiftEnd] = useState("06:00 AM");
@@ -1332,6 +1426,7 @@ export default function App() {
           unworked:
             selectedRecord.holidayUnworked ||
             selectedRecord.type === "Absent",
+          hasAttendanceTime: hasAttendanceTimeData(selectedRecord),
           overtimeMultiplier: Number(selectedPayrollSettings.overtimeMultiplier),
         })
     : null;
@@ -2011,6 +2106,7 @@ export default function App() {
       setTravelPlans([]);
       setShiftTemplates(defaultShiftTemplates);
       setSelectedShiftTemplate("rest-day");
+      setIsCustomShiftActive(false);
       setLeaveBalances(emptyWorkspace.leaveBalances);
       setSettingsBalances(emptyWorkspace.settingsBalances);
       setNightDifferential(localPrivateFinancialDefaults.nightDifferential);
@@ -2376,16 +2472,19 @@ export default function App() {
     setSelectedDay(Number(range.startDate.slice(8, 10)));
     setCustomShiftName("");
     setSelectedShiftTemplate("rest-day");
+    setIsCustomShiftActive(false);
     setActiveModal("calendarRangeActionsModal");
   };
 
   const openRangeAssignShift = () => {
     setCustomShiftName("");
     setSelectedShiftTemplate("rest-day");
+    setIsCustomShiftActive(false);
     setActiveModal("assignShiftModal");
   };
 
   const openRangeManualEntry = () => {
+    setManualEntryInitialType("Present");
     setActiveModal("manualEntryModal");
   };
 
@@ -3277,14 +3376,19 @@ export default function App() {
     else if (action.startsWith("changeMonth("))
       changeMonth(Number(action.match(/-?\d+/)?.[0] || 0));
     else if (action === "resetCalendar()") resetCalendar();
-    else if (action === "openManualEntryModal()")
+    else if (action === "openManualEntryModal()") {
+      setManualEntryInitialType("Present");
       setActiveModal("manualEntryModal");
-    else if (action === "clearSelectedShift()") {
+    } else if (action === "openMarkAbsentModal()") {
+      setManualEntryInitialType("Absent");
+      setActiveModal("manualEntryModal");
+    } else if (action === "clearSelectedShift()") {
       void clearAttendanceDates([selectedDate]);
     } else if (action === "openAssignShiftModal()") {
       clearCalendarRange();
       setCustomShiftName("");
       setSelectedShiftTemplate("rest-day");
+      setIsCustomShiftActive(false);
       setActiveModal("assignShiftModal");
     } else if (action === "addExpense()") addExpense();
     else if (action.startsWith("switchSettingsTab("))
@@ -3298,12 +3402,14 @@ export default function App() {
     } else if (action.startsWith("selectShiftCard(")) {
       setSelectedShiftTemplate(actionArgument(action));
       setCustomShiftName("");
+      setIsCustomShiftActive(false);
     } else if (action.startsWith("deleteShiftTemplate(")) {
       const id = actionArgument(action);
       const template = shiftTemplates.find((item) => item.id === id);
       if (!template || template.protected) return;
       setShiftTemplates((current) => current.filter((item) => item.id !== id));
       if (selectedShiftTemplate === id) setSelectedShiftTemplate("rest-day");
+      if (selectedShiftTemplate === id) setIsCustomShiftActive(false);
       showToast(`"${template.label}" template deleted.`, "success");
     } else if (action.startsWith("handleSaveCustomShift(")) {
       event.preventDefault();
@@ -3344,6 +3450,7 @@ export default function App() {
       ]);
       setSelectedShiftTemplate(id);
       setCustomShiftName("");
+      setIsCustomShiftActive(false);
       showToast(`Custom shift "${name}" saved to options.`, "success");
     }
   };
@@ -3568,6 +3675,13 @@ export default function App() {
         showToast("Choose a valid target date.", "warning");
         return;
       }
+      if (isAbsentEntry && targetDates.includes(activeTimeEntry?.date)) {
+        showToast(
+          "Cannot mark attendance absent while Time In is active.",
+          "warning",
+        );
+        return;
+      }
       if (isRangeEntry) {
         const conflictingDates = getManualEntryRangeConflicts(
           attendance,
@@ -3611,32 +3725,47 @@ export default function App() {
       const attendanceUpdates = {};
       for (const targetDate of targetDates) {
         const assignedRecord = attendance[targetDate] || defaultAttendance;
-        if (
-          assignedRecord.hasAssignedShift !== true &&
-          !(assignedRecord.shiftStartTime && assignedRecord.shiftEndTime)
-        ) {
+        const hasAssignedShift =
+          assignedRecord.hasAssignedShift === true ||
+          Boolean(
+            assignedRecord.shiftStartTime && assignedRecord.shiftEndTime,
+          );
+        const isShiftlessAbsence =
+          isAbsentEntry &&
+          !hasAssignedShift &&
+          ["Unassigned", "Regular"].includes(assignedRecord.type);
+        if (!hasAssignedShift && !isShiftlessAbsence) {
           showToast(
             `Assign a shift to ${targetDate} before adding a manual attendance entry.`,
             "warning",
           );
           return;
         }
-        if (assignedRecord.type !== "Regular") {
+        if (assignedRecord.type !== "Regular" && !isShiftlessAbsence) {
           showToast(
             `Manual attendance cannot replace a ${assignedRecord.type.toLowerCase()} date on ${targetDate} without an eligible scheduled shift.`,
             "warning",
           );
           return;
         }
-        const scheduledStart = parseTimeMinutes(assignedRecord.shiftStartTime);
-        const scheduledEndOfDay = parseTimeMinutes(assignedRecord.shiftEndTime);
-        if (scheduledStart === null || scheduledEndOfDay === null) {
+        const scheduledStartValue = parseTimeMinutes(
+          assignedRecord.shiftStartTime,
+        );
+        const scheduledEndValue = parseTimeMinutes(
+          assignedRecord.shiftEndTime,
+        );
+        if (
+          !isAbsentEntry &&
+          (scheduledStartValue === null || scheduledEndValue === null)
+        ) {
           showToast(
             `The assigned shift on ${targetDate} has invalid scheduled times. Update the shift before entering attendance.`,
             "warning",
           );
           return;
         }
+        const scheduledStart = scheduledStartValue ?? 0;
+        const scheduledEndOfDay = scheduledEndValue ?? 0;
         const overnightShift = scheduledEndOfDay <= scheduledStart;
         const scheduledEnd = overnightShift
           ? scheduledEndOfDay + 1440
@@ -3950,7 +4079,8 @@ export default function App() {
   const monthTabs = useMemo(() => {
     const baseYear = monthCarouselMotion?.year ?? year;
     const baseMonthIndex = monthCarouselMotion?.monthIndex ?? monthIndex;
-    const padding = Math.max(4, Math.abs(monthCarouselMotion?.offset ?? 0));
+    const offset = monthCarouselMotion?.offset ?? 0;
+    const padding = Math.max(4, Math.abs(offset));
     return Array.from({ length: padding * 2 + 1 }, (_, position) => {
       const monthOffset = position - padding;
       const tabDate = new Date(baseYear, baseMonthIndex + monthOffset, 1);
@@ -3963,7 +4093,7 @@ export default function App() {
           type="button"
           onClick={() => changeMonthTo(tabYear, tabMonthIndex)}
           aria-current={isActive ? "date" : undefined}
-          className={`relative z-10 w-11 shrink-0 px-2 py-1 text-center text-xs font-medium rounded-lg transition-colors duration-300 cursor-pointer ${isActive ? "text-white font-bold" : "text-slate-600 hover:text-slate-900"}`}
+          className={`relative z-10 inline-flex h-6 w-10 shrink-0 items-center justify-center rounded-lg text-center text-xs font-medium transition-colors duration-300 cursor-pointer ${isActive ? "text-white font-bold" : "text-slate-600 hover:text-slate-900"}`}
         >
           {monthAbbreviations[tabMonthIndex]}
         </button>
@@ -3992,7 +4122,7 @@ export default function App() {
       cells.push(
         <div
           key={`previous-${offset}`}
-          className="bg-slate-50/50 border border-slate-100 rounded-xl p-0 min-h-[90px] opacity-40"
+          className="min-h-[100px] rounded-xl border border-slate-100 bg-slate-50/50 p-0 opacity-40"
         >
           <div className="p-2.5 h-full flex flex-col">
             <span className="text-xs font-semibold text-slate-400">
@@ -4074,19 +4204,37 @@ export default function App() {
         if (event.target.closest("button")) return;
         setSelectedShiftTemplate(template.id);
         setCustomShiftName("");
+        setIsCustomShiftActive(false);
       }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           setSelectedShiftTemplate(template.id);
           setCustomShiftName("");
+          setIsCustomShiftActive(false);
         }
       }}
       className={`shift-card relative cursor-pointer border-2 rounded-2xl p-3.5 flex flex-col items-center text-center transition ${selectedShiftTemplate === template.id ? "border-indigo-600 bg-indigo-50/30 shadow-xs" : "border-slate-200 bg-white hover:border-slate-300"}`}
     >
-      <span className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center mb-2">
-        <i
-          className={`fa-solid ${template.icon} text-sm ${template.iconColor}`}
+      <span
+        className={`mb-2 flex h-8 w-8 items-center justify-center rounded-full ${
+          ["morning", "afternoon"].includes(template.label?.toLowerCase())
+            ? "bg-indigo-100 text-indigo-600"
+            : "bg-slate-100"
+        }`}
+      >
+        <ShiftIcon
+          icon={template.icon}
+          size={16}
+          className={
+            ["morning", "afternoon"].includes(
+              template.label?.toLowerCase(),
+            )
+              ? ""
+              : template.label?.toLowerCase() === "night"
+                ? "text-slate-600"
+                : template.iconColor
+          }
         />
       </span>
       <span className="font-bold text-slate-800 text-xs">{template.label}</span>
@@ -4413,6 +4561,7 @@ export default function App() {
               open={activeModal === "manualEntryModal"}
               selectedDate={selectedDate}
               selectedRange={selectedCalendarRange}
+              initialEntryType={manualEntryInitialType}
               initialTimeIn={
                 selectedAttendanceRecord.shiftStartTime ||
                 selectedAttendanceRecord.workStartTime ||
@@ -4430,6 +4579,8 @@ export default function App() {
               selectedDate={selectedDate}
               selectedRange={selectedCalendarRange}
               shiftTemplateCards={shiftTemplateCards}
+              isCustomShiftActive={isCustomShiftActive}
+              setIsCustomShiftActive={setIsCustomShiftActive}
               customShiftName={customShiftName}
               setCustomShiftName={setCustomShiftName}
               customShiftStart={customShiftStart}

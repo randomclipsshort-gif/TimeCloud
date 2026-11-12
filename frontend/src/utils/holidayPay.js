@@ -7,6 +7,8 @@ export const holidayPayRules = {
   overtimeMultiplier: 1.3,
   standardHours: 8,
 };
+export const specialNonWorkingNoPayNotice =
+  "No-work, no-pay is the general rule for a special non-working day; any company policy or agreement is not configured.";
 
 function parseTimeMinutes(time) {
   if (typeof time !== "string") return null;
@@ -18,6 +20,17 @@ function parseTimeMinutes(time) {
   if (minute > 59 || hour > (meridiem ? 12 : 23) || (meridiem && hour < 1)) return null;
   if (meridiem) hour = (hour % 12) + (meridiem === "PM" ? 12 : 0);
   return hour * 60 + minute;
+}
+
+export function hasAttendanceTimeData(record) {
+  return ["workStartTime", "workEndTime", "in", "out"].some((field) => {
+    const value = record?.[field];
+    return (
+      typeof value === "string" &&
+      value.trim() !== "" &&
+      value.trim() !== "—"
+    );
+  });
 }
 
 export function getAttendanceHours(record) {
@@ -38,6 +51,7 @@ export function calculateHolidayPay({
   eligibilityKnown = false,
   worked = false,
   unworked = false,
+  hasAttendanceTime = false,
   overtimeMultiplier = holidayPayRules.overtimeMultiplier,
 }) {
   if (!holiday) return { amount: null, message: "No configured holiday applies to this date." };
@@ -72,11 +86,31 @@ export function calculateHolidayPay({
   }
 
   if (!worked) {
+    if (holiday.classification === "Special Non-Working Day") {
+      if (!hasAttendanceTime) {
+        return {
+          amount: 0,
+          regularPay: 0,
+          overtimePay: 0,
+          multiplier: 0,
+          regularPayRateLabel: "0% total including base wage",
+          notice: specialNonWorkingNoPayNotice,
+          dailyWage,
+          hoursWorked: 0,
+          breakdown: "No work recorded; no pay under the default rule.",
+          estimate: true,
+        };
+      }
+      return {
+        amount: null,
+        message:
+          "Complete clock-in and clock-out times are required to estimate special non-working day pay.",
+      };
+    }
+
     return {
       amount: null,
-      message: holiday.classification === "Special Non-Working Day"
-        ? "No-work, no-pay is the general rule for a special non-working day; any company policy or agreement is not configured."
-        : "No work was recorded; no holiday-work estimate applies.",
+      message: "No work was recorded; no holiday-work estimate applies.",
     };
   }
 

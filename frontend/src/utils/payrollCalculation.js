@@ -1,6 +1,8 @@
 import {
   calculateHolidayPay,
   getAttendanceHours,
+  hasAttendanceTimeData,
+  specialNonWorkingNoPayNotice,
 } from "./holidayPay.js";
 import { getHolidayClassification } from "./holidayUtils.js";
 import {
@@ -241,6 +243,32 @@ export function calculateAttendancePayroll({
     };
   }
 
+  if (
+    holiday &&
+    getHolidayClassification(holiday) === "Special Non-Working Day" &&
+    !hasAttendanceTimeData(record)
+  ) {
+    return {
+      status: "ready",
+      reasons: [],
+      breakdown: {
+        lateMinutes: 0,
+        undertimeMinutes: 0,
+        specialHoliday: 0,
+        allowance: 0,
+        shiftDifferentials: 0,
+        overtime: 0,
+        overtimeMinutes: 0,
+        overtimeHours: 0,
+      },
+      earnings: 0,
+      dailyWage: null,
+      nightDifferentialPay: 0,
+      overtimePay: 0,
+      notice: specialNonWorkingNoPayNotice,
+    };
+  }
+
   const allowanceAmount = Number(settings?.dailyAllowance);
   const hasAllowanceValue =
     typeof settings?.dailyAllowance === "string"
@@ -321,18 +349,20 @@ export function calculateAttendancePayroll({
       : 0,
   };
   if (holiday) {
+    const attendanceHours = getAttendanceHours(record);
     const holidayPay = calculateHolidayPay({
       holiday: {
         ...holiday,
         classification: getHolidayClassification(holiday),
       },
       dailyWage,
-      hoursWorked: getAttendanceHours(record) || 0,
+      hoursWorked: attendanceHours ?? 0,
       hasSchedule: hasAssignedShift,
       isRestDay: record.type === "Rest Day",
       eligibilityKnown: holidayEligibilityConfirmed,
-      worked: !record.clockedIn && Boolean(record.workStartTime && record.workEndTime),
+      worked: !record.clockedIn && attendanceHours !== null,
       unworked: record.holidayUnworked || record.type === "Absent",
+      hasAttendanceTime: hasAttendanceTimeData(record),
       overtimeMultiplier,
     });
     if (holidayPay.amount == null) {

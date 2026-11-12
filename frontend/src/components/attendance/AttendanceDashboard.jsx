@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { MousePointerClick, RotateCcw } from "lucide-react";
+import ShiftIcon from "../ui/ShiftIcon.jsx";
 import { groupIncentiveEarningsItems } from "../../utils/payrollEarningsBreakdown.js";
 import {
   getAttendanceBasePay,
@@ -114,10 +115,6 @@ export default function AttendanceDashboard({
         : holidayPayEstimate?.regularPayRateLabel ||
           `${record.type === "Rest Day" ? 150 : 130}% total including base wage`
       : holidayPayRateLabel;
-  const workdayBadgeLabel = record.holidayClassification || record.type;
-  const workdayBadgeTextColor = record.holidayClassification
-    ? holidayTextColors[record.holidayClassification] || "text-slate-700"
-    : "text-slate-700";
   const shiftTitleColor = record.holidayName
     ? holidayTextColors[record.holidayClassification]
     : "text-textMain";
@@ -127,23 +124,31 @@ export default function AttendanceDashboard({
       : record.shift;
   const breakdownTitle =
     record.holidayName ||
-    (record.type === "Regular" ? "Regular Work Day" : shiftTitle);
+    (record.type === "Rest Day"
+      ? "Scheduled Rest Day"
+      : record.type === "Regular"
+        ? "Regular Work Day"
+        : shiftTitle);
   const shiftSubtitle = record.holidayName
     ? `${record.holidayDutyLabel === "Holiday Duty" ? record.assignedShiftName || record.shift : record.holidayDutyLabel} · ${record.shift}${record.holidayDescription ? ` · ${record.holidayDescription}` : ""}`
-    : record.type === "Regular"
-      ? [
-          record.assignedShiftName || shiftTitle,
-          record.shift !== (record.assignedShiftName || shiftTitle)
-            ? record.shift
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" · ")
-      : null;
+    : record.type === "Rest Day"
+      ? "Rest Day — Schedule Assigned"
+      : record.type === "Regular"
+        ? [
+            record.assignedShiftName || shiftTitle,
+            record.shift !== (record.assignedShiftName || shiftTitle)
+              ? record.shift
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : null;
   const wageRateIndicator = (
     <span
       id="wageRateText"
-      className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-teal-700"
+      className={`inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold ${
+        record.type === "Absent" ? "text-rose-600" : "text-teal-700"
+      }`}
     >
       <i className="fa-solid fa-percent text-[9px]" aria-hidden="true"></i>
       {`Wage Rate: ${holidayRateLabel}`}
@@ -182,16 +187,26 @@ export default function AttendanceDashboard({
     .filter(Boolean)
     .join(" · ");
   const entryButtonDisabled = !canRecordAttendance;
+  const isAbsent = record.type === "Absent";
+  const canMarkAbsent =
+    !isAbsent &&
+    !record.clockedIn &&
+    ["Unassigned", "Regular"].includes(record.type);
+  const breakdownCardStyle = isAbsent
+    ? "border-rose-200 bg-rose-50/70"
+    : record.type === "Leave"
+      ? "border-amber-200 bg-amber-50/60"
+      : "border-slate-200 bg-slate-50";
 
   return (
     <div className="w-full shrink-0 grid grid-cols-1 items-start md:grid-cols-12 gap-6">
-      <section className="md:col-span-4 bg-cardBg rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col justify-between">
+      <section className="md:col-span-4 flex flex-col justify-between rounded-2xl border border-slate-200 bg-cardBg p-5 shadow-sm">
         <div>
-          <div className="mb-5 flex items-center justify-between gap-3">
+          <div className="mb-4 flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
                 <i
-                  className="fa-solid fa-clipboard-list text-lg"
+                  className="fa-regular fa-file-lines text-lg"
                   aria-hidden="true"
                 ></i>
               </span>
@@ -212,36 +227,40 @@ export default function AttendanceDashboard({
             </span>
           </div>
 
-          <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              {!record.holidayName &&
-                !["Regular", "Unassigned"].includes(record.type) && (
-                  <span
-                    id="workdayTypeBadge"
-                    className={`rounded-full bg-white px-2.5 py-1 text-[10px] font-bold tracking-wide ring-1 ring-slate-200 ${workdayBadgeTextColor}`}
-                  >
-                    {workdayBadgeLabel}
-                  </span>
-                )}
-            </div>
+          <div className={`mb-3 flex min-h-[76px] flex-col justify-center rounded-xl border p-4 ${breakdownCardStyle}`}>
             <div className="flex items-start justify-between gap-2">
               <div
                 id="shiftTitle"
                 className={`min-w-0 text-sm font-bold ${shiftTitleColor}`}
               >
-                {breakdownTitle}
+                {isAbsent ? "Marked Absent" : breakdownTitle}
               </div>
               {wageRateIndicator}
             </div>
-            {shiftSubtitle && (
+            {isAbsent ? (
+              <div className="mt-1 text-[11px] leading-relaxed text-rose-700">
+                {record.holidayName
+                  ? `${record.holidayName} · No attendance recorded`
+                  : "Unexcused Absence — No Basic Pay"}
+              </div>
+            ) : shiftSubtitle ? (
               <div
                 id="shiftSubTitle"
                 className="mt-1 text-[11px] leading-relaxed text-textMuted"
               >
                 {shiftSubtitle}
               </div>
-            )}
+            ) : null}
           </div>
+
+          {!salaryDataPrivate && record.payrollCalculationNotice && (
+            <p
+              className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900"
+              role="note"
+            >
+              Payroll estimate note: {record.payrollCalculationNotice}
+            </p>
+          )}
 
           {!salaryDataPrivate &&
             record.payrollCalculationStatus === "pending" && (
@@ -256,7 +275,13 @@ export default function AttendanceDashboard({
             )}
 
           {/* Earnings and pay components */}
-          <div className="mb-4 rounded-2xl border border-teal-100 bg-white p-4 shadow-xs">
+          <div
+            className={`mb-3 min-h-[58px] rounded-xl border p-4 ${
+              isAbsent
+                ? "border-rose-200 bg-rose-50/40"
+                : "border-teal-200 bg-teal-50/20"
+            }`}
+          >
             <div
               className={`flex items-center justify-between ${
                 isPayComponentsExpanded
@@ -271,7 +296,9 @@ export default function AttendanceDashboard({
                 onClick={() =>
                   setIsPayComponentsExpanded((expanded) => !expanded)
                 }
-                className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500"
+                className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider ${
+                  isAbsent ? "text-rose-700" : "text-slate-500"
+                }`}
               >
                 <span>Pay Components Breakdown</span>
                 <i
@@ -280,7 +307,7 @@ export default function AttendanceDashboard({
                 ></i>
               </button>
               {!isPayComponentsExpanded ? (
-                <span className="shrink-0 text-right text-xs font-extrabold tabular-nums text-teal-800">
+                <span className={`shrink-0 text-right text-xs font-extrabold tabular-nums ${isAbsent ? "text-rose-600" : "text-teal-800"}`}>
                   {salaryDataPrivate
                     ? "Private data unavailable"
                     : estimatedEarnings != null
@@ -592,14 +619,14 @@ export default function AttendanceDashboard({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="min-h-[46px] rounded-xl border border-slate-200 bg-white p-3">
             <div
               className={`flex items-center gap-2 transition-[margin] duration-300 ease-in-out ${
                 isTimeAttendanceExpanded ? "mb-3" : ""
               }`}
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                <i className="fa-regular fa-clock" aria-hidden="true"></i>
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center text-slate-400">
+                <i className="fa-regular fa-clock text-sm" aria-hidden="true"></i>
               </span>
               <button
                 type="button"
@@ -618,8 +645,12 @@ export default function AttendanceDashboard({
                   aria-hidden="true"
                 ></i>
               </button>
-              <span className="ml-auto shrink-0 text-right text-[11px] font-semibold text-textMain">
-                {record.assigned}
+              <span className={`ml-auto shrink-0 text-right text-[10px] font-bold ${isAbsent ? "text-rose-700" : "text-textMain"}`}>
+                {isAbsent
+                  ? "ABSENT"
+                  : record.type === "Rest Day"
+                    ? "--:-- -- - --:-- --"
+                    : record.assigned}
               </span>
             </div>
             <div
@@ -674,16 +705,8 @@ export default function AttendanceDashboard({
           </div>
         </div>
 
-        <div className="mt-6 space-y-3 border-t border-slate-100 pt-5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-[10px] font-bold uppercase tracking-wider text-textMuted">
-              Attendance actions
-            </h3>
-            <span className="text-[10px] text-textMuted">
-              {selectedDate}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 gap-2.5">
+        <div className="mt-4 space-y-2.5 border-t border-slate-100 pt-3">
+          <div className="grid grid-cols-1 gap-2">
             <button
               type="button"
               data-action="openManualEntryModal()"
@@ -693,21 +716,17 @@ export default function AttendanceDashboard({
                   ? "Assign a shift to enable manual attendance entry"
                   : undefined
               }
-              className="group flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-teal-700 bg-teal-700 px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:border-teal-800 hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none disabled:hover:border-slate-200 disabled:hover:bg-slate-100"
+              className="group flex min-h-[38px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none disabled:hover:border-slate-200 disabled:hover:bg-slate-100"
             >
-              <i className="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+              <i className="fa-solid fa-pen-to-square text-slate-400 group-hover:text-teal-600" aria-hidden="true"></i>
               <span>Manual Entry</span>
-              <i
-                className="fa-solid fa-arrow-right text-[10px] opacity-70 transition-transform group-hover:translate-x-0.5"
-                aria-hidden="true"
-              ></i>
             </button>
           </div>
           <div className="grid grid-cols-2 gap-2.5">
             <button
               type="button"
               data-action="openAssignShiftModal()"
-              className="flex min-h-10 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+              className="flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-2 text-[11px] font-semibold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
             >
               <i
                 className="fa-regular fa-calendar-days text-teal-600"
@@ -721,21 +740,21 @@ export default function AttendanceDashboard({
               disabled={!canClearShift}
               title={
                 canClearShift
-                  ? `Clear the shift and attendance for ${selectedDate}`
+                  ? `Clear the shift, attendance, and leave for ${selectedDate}`
                   : "Clear is available for dates with a shift, attendance, or leave record and no active Time In"
               }
-              className="flex min-h-10 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-2 py-2 text-xs font-semibold text-rose-700 shadow-sm transition hover:border-rose-300 hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none disabled:hover:bg-slate-50"
+              className="flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-[11px] font-semibold text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none disabled:hover:bg-slate-50"
             >
               <i
                 className="fa-regular fa-circle-xmark"
                 aria-hidden="true"
               ></i>
-              <span>Clear Shift &amp; Attendance</span>
+              <span>Clear Shift</span>
             </button>
             <button
               type="button"
               data-action="openModal('grantLeaveModal')"
-              className="col-span-2 flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 shadow-sm transition hover:border-amber-300 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
+              className="flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-2 py-2 text-[11px] font-semibold text-amber-800 transition hover:border-amber-300 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
             >
               <i
                 className="fa-solid fa-umbrella-beach text-amber-600"
@@ -743,12 +762,30 @@ export default function AttendanceDashboard({
               ></i>
               <span>Grant Leave</span>
             </button>
+            <button
+              type="button"
+              data-action="openMarkAbsentModal()"
+              disabled={!canMarkAbsent}
+              title={
+                canMarkAbsent
+                  ? `Mark ${selectedDate} absent`
+                  : "This date cannot be marked absent"
+              }
+              className="flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-2 py-2 text-[11px] font-semibold text-rose-600 transition hover:border-rose-300 hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:hover:bg-slate-50"
+            >
+              <ShiftIcon
+                icon="fa-user-xmark"
+                size={14}
+                className="text-rose-600"
+              />
+              <span>Mark Absent</span>
+            </button>
           </div>
         </div>
       </section>
 
-      <section className="md:col-span-8 lg:sticky md:top-20 md:self-start bg-cardBg rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-6 border-b border-slate-100 gap-4">
+      <section className="md:col-span-8 lg:sticky md:top-20 md:self-start flex flex-col rounded-2xl border border-slate-200 bg-cardBg p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col items-start justify-between gap-4 pb-0 sm:flex-row sm:items-center">
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-teal-700">
               Statutory Monthly Schedule
@@ -756,7 +793,7 @@ export default function AttendanceDashboard({
             <div className="flex items-center space-x-2 mt-0.5">
               <h2
                 id="calendarTitleMonth"
-                className="text-lg font-bold text-textMain"
+                className="text-xl font-bold text-textMain"
               >
                 {monthLabel}
               </h2>
@@ -771,7 +808,7 @@ export default function AttendanceDashboard({
                 aria-expanded={isYearPickerOpen}
                 aria-controls="calendarYearPicker"
                 onClick={() => setIsYearPickerOpen((isOpen) => !isOpen)}
-                className="flex items-center space-x-1 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-200 transition cursor-pointer"
+                className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
               >
                 <i className="fa-regular fa-calendar text-teal-600"></i>
                 <span>{year}</span>
@@ -815,15 +852,15 @@ export default function AttendanceDashboard({
               <div
                 id="monthTabsContainer"
                 aria-label="Month navigation"
-                className="relative flex w-[342px] max-w-full shrink-0 items-center overflow-hidden bg-slate-100 p-1 rounded-xl border border-slate-200"
+                className="relative flex w-[294px] max-w-full shrink-0 items-center overflow-hidden rounded-xl border border-slate-200 bg-white p-1"
               >
                 <span aria-hidden="true" className="month-carousel-highlight" />
-                <div className="w-full overflow-hidden">
+                <div className="relative h-6 w-full overflow-hidden">
                   <div
-                    className={`flex w-max shrink-0 gap-1 ${monthCarouselOffset ? "month-carousel-transition" : ""}`}
+                    className={`absolute left-1/2 top-1/2 flex w-max shrink-0 gap-0 ${monthCarouselOffset ? "month-carousel-transition" : ""}`}
                     onTransitionEnd={onMonthCarouselTransitionEnd}
                     style={{
-                      transform: `translateX(-${(Math.max(4, Math.abs(monthCarouselOffset)) + monthCarouselOffset - 3) * 48}px)`,
+                      transform: `translate(-${(Math.max(4, Math.abs(monthCarouselOffset)) + monthCarouselOffset) * 40 + 20}px, -50%)`,
                     }}
                   >
                     {monthTabs}
@@ -836,7 +873,7 @@ export default function AttendanceDashboard({
                   setResetAnimationKey((animationKey) => animationKey + 1)
                 }
                 data-action="resetCalendar()"
-                className="group inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 active:scale-90 motion-reduce:transition-none"
+                className="group inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 active:scale-90 motion-reduce:transition-none"
                 title="Reset View"
                 aria-label="Reset view"
               >
@@ -850,7 +887,7 @@ export default function AttendanceDashboard({
             </div>
           </div>
         </div>
-        <div className="mt-4 flex flex-col gap-2 rounded-xl border border-indigo-200 bg-indigo-50/80 px-3 py-2 text-[11px] text-indigo-900 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-5 flex flex-col gap-2 rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-2 text-[11px] text-indigo-900 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
@@ -880,21 +917,27 @@ export default function AttendanceDashboard({
             </button>
             <p className="min-w-0">
               <span className="font-semibold">Tip:</span> Click, hold, and drag
-              across multiple calendar days to choose a range action.
+              across multiple calendar days (or{" "}
+              <kbd className="rounded border border-indigo-200 bg-white px-1.5 py-0.5 font-mono text-[10px]">
+                Shift + Click
+              </kbd>
+              ) to assign shifts, leaves, or absences.
             </p>
           </div>
-          <span
-            className={`shrink-0 rounded-full px-2.5 py-1 font-semibold ${
-              calendarRangeStatus.startsWith("Selecting:")
-                ? "bg-indigo-500 text-white"
-                : "text-indigo-700"
-            }`}
-            role="status"
-          >
-            {calendarRangeStatus}
-          </span>
+          {calendarRangeStatus !== "Single-click any day to inspect" && (
+            <span
+              className={`shrink-0 rounded-full px-2.5 py-1 font-semibold ${
+                calendarRangeStatus.startsWith("Selecting:")
+                  ? "bg-indigo-500 text-white"
+                  : "text-indigo-700"
+              }`}
+              role="status"
+            >
+              {calendarRangeStatus}
+            </span>
+          )}
         </div>
-        <div className="grid grid-cols-7 text-center text-xs font-bold text-textMuted py-3 border-b border-slate-100">
+        <div className="grid grid-cols-7 border-b border-slate-100 py-3 text-center text-[11px] font-semibold tracking-wide text-textMuted">
           <div>SUN</div>
           <div>MON</div>
           <div>TUE</div>
@@ -903,7 +946,7 @@ export default function AttendanceDashboard({
           <div>FRI</div>
           <div>SAT</div>
         </div>
-        <div id="calendarGrid" role="group" aria-label={`${monthLabel} ${year} calendar`} className="grid grid-cols-7 gap-2.5 mt-3 flex-1">
+        <div id="calendarGrid" role="group" aria-label={`${monthLabel} ${year} calendar`} className="mt-3 grid flex-1 grid-cols-7 gap-2">
           {calendarCells}
         </div>
       </section>

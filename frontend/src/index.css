@@ -65,15 +65,15 @@ body {
 .month-carousel-highlight {
   position: absolute;
   z-index: 0;
-  top: 5px;
+  top: 50%;
   left: 50%;
-  width: 44px;
+  width: 40px;
   height: 24px;
   border-radius: 0.5rem;
   background-color: #0d9488;
   box-shadow: 0 1px 2px rgb(15 23 42 / 0.12);
   pointer-events: none;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
 }
 
 .month-carousel-transition {

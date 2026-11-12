@@ -4,19 +4,20 @@ export default function ManualEntryModal({
   open,
   selectedDate,
   selectedRange,
+  initialEntryType = "Present",
   initialTimeIn = "06:00",
   initialTimeOut = "14:00",
 }) {
-  const [entryType, setEntryType] = useState("Present");
+  const [entryType, setEntryType] = useState(initialEntryType);
   const [timeIn, setTimeIn] = useState(initialTimeIn);
   const [timeOut, setTimeOut] = useState(initialTimeOut);
 
   useEffect(() => {
     if (!open) return;
-    setEntryType("Present");
+    setEntryType(initialEntryType);
     setTimeIn(initialTimeIn);
     setTimeOut(initialTimeOut);
-  }, [initialTimeIn, initialTimeOut, open, selectedDate]);
+  }, [initialEntryType, initialTimeIn, initialTimeOut, open, selectedDate]);
 
   const halfDayTimeOut = (() => {
     const [hour, minute] = timeIn.split(":").map(Number);

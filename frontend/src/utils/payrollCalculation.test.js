@@ -20,6 +20,7 @@ import {
   getPayrollPeriodForDate,
   summarizePayrollPeriod,
 } from "./payrollPeriods.js";
+import { calculateHolidayPay } from "./holidayPay.js";
 
 const unconfiguredSettings = {
   dailyWage: "",
@@ -408,6 +409,62 @@ test("holiday and both cutoff earnings use the existing payroll rules", () => {
   );
   assert.equal(firstCutoff.recordedEarnings, 1000);
   assert.equal(secondCutoff.recordedEarnings, 3000);
+});
+
+test("unworked special non-working holidays are ready at zero while partial attendance remains pending", () => {
+  const holiday = {
+    date: "2026-11-01",
+    classification: "Special Non-Working Day",
+  };
+  const restDay = {
+    ...nightShift,
+    type: "Rest Day",
+    shift: "Rest Day",
+    workStartTime: "",
+    workEndTime: "",
+    in: "—",
+    out: "—",
+  };
+  const result = calculateAttendancePayroll({
+    record: restDay,
+    date: holiday.date,
+    settings: unconfiguredSettings,
+    holiday,
+  });
+  assert.equal(result.status, "ready");
+  assert.equal(result.earnings, 0);
+  assert.equal(result.breakdown.specialHoliday, 0);
+  assert.equal(getEstimatedAttendanceEarnings(result), 0);
+  assert.match(result.notice, /No-work, no-pay is the general rule/i);
+
+  const holidayPay = calculateHolidayPay({
+    holiday,
+    dailyWage: null,
+    hoursWorked: 0,
+    hasSchedule: true,
+    isRestDay: true,
+    worked: false,
+    hasAttendanceTime: false,
+  });
+  assert.equal(holidayPay.amount, 0);
+  assert.match(holidayPay.notice, /No-work, no-pay is the general rule/i);
+
+  const partialAttendance = calculateAttendancePayroll({
+    record: {
+      ...restDay,
+      type: "Regular",
+      shift: "Day",
+      shiftStartTime: "08:00",
+      shiftEndTime: "16:00",
+      workStartTime: "08:00",
+      in: "08:00",
+    },
+    date: holiday.date,
+    settings: configuredSettings,
+    holiday,
+  });
+  assert.equal(partialAttendance.status, "pending");
+  assert.match(partialAttendance.reasons.join(" "), /complete clock-in and clock-out times/i);
 });
 
 test("effective-date histories replace same-day versions and preserve snapshot amounts", () => {
