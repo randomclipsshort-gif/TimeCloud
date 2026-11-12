@@ -13,6 +13,9 @@ export default function DashboardContent(props) {
     yearOptions,
     onYearChange,
     calendarCells,
+    calendarRangeMode,
+    calendarRangeStatus,
+    onCalendarRangeModeToggle,
     selectedDate,
     canClearShift,
     canRecordAttendance,
@@ -42,6 +45,7 @@ export default function DashboardContent(props) {
     netPay,
     grossPay,
     payrollDeductions,
+    pendingPayrollRecords,
     totalHours,
     formatCurrency,
     expenseName,
@@ -139,6 +143,9 @@ export default function DashboardContent(props) {
               yearOptions={yearOptions}
               onYearChange={onYearChange}
               calendarCells={calendarCells}
+              calendarRangeMode={calendarRangeMode}
+              calendarRangeStatus={calendarRangeStatus}
+              onCalendarRangeModeToggle={onCalendarRangeModeToggle}
               monthLabel={monthLabel}
               year={year}
             />
@@ -165,6 +172,7 @@ export default function DashboardContent(props) {
               netPay={netPay}
               grossPay={grossPay}
               payrollDeductions={payrollDeductions}
+              pendingPayrollRecords={pendingPayrollRecords}
               totalHours={totalHours}
               monthValue={monthValue}
               formatCurrency={formatCurrency}

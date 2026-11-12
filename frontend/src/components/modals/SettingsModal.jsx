@@ -18,6 +18,7 @@ export default function SettingsModal({
   payrollSettings,
   payrollDeductions,
   nightDifferential,
+  payrollEffectiveDate,
   onDeleteAccount,
   accountDeletionLoading,
   onSaveSettings,
@@ -61,6 +62,7 @@ export default function SettingsModal({
       overtimeMultiplier,
       ...getPayrollDeductionSettingsDefaults(payrollSettings),
       nightDifferential,
+      payrollEffectiveDate,
       settingsBalances: { ...settingsBalances },
     });
   }, [open]);
@@ -512,6 +514,31 @@ export default function SettingsModal({
                       Overtime pay = hourly rate × overtime hours × this multiplier.
                     </p>
                   </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                  <label
+                    className="mb-2 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                    htmlFor="payrollSettingsEffectiveDate"
+                  >
+                    Settings effective date
+                  </label>
+                  <input
+                    type="date"
+                    id="payrollSettingsEffectiveDate"
+                    required
+                    disabled={privateFinancialDataStatus !== "ready"}
+                    value={settingsDraft.payrollEffectiveDate}
+                    onChange={(event) =>
+                      updateDraft("payrollEffectiveDate", event.target.value)
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                  <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
+                    Later settings updates recalculate unsaved attendance on
+                    or after this date. On first setup, pending records are
+                    backfilled from their earliest attendance date. Saved
+                    payslip snapshots remain unchanged.
+                  </p>
                 </div>
               </section>
               <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-relaxed text-amber-900">

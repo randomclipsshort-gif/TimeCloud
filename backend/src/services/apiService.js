@@ -743,6 +743,34 @@ async function handleApiRequest(
     return;
   }
 
+  if (url.pathname === "/api/punches" && method === "DELETE") {
+    const body = await readJsonBody(request);
+    assertExpectedUserId(body?.expectedUserId, userId);
+    const shiftDate = validateShiftDate(body?.shiftDate);
+    const punch = await punches.findOne({ userId, shiftDate });
+    if (!punch) {
+      success(response, { deleted: false });
+      return;
+    }
+    if (punch.timeOut == null || punch.attendanceRecord?.clockedIn) {
+      throw new ApiError(
+        409,
+        "ACTIVE_PUNCH_REQUIRED",
+        "Clock out before clearing this attendance record.",
+      );
+    }
+    const deleted = await punches.deleteOne({ userId, shiftDate });
+    if (deleted.deletedCount !== 1) {
+      throw new ApiError(
+        409,
+        "PUNCH_CHANGED",
+        "The attendance record changed before it could be cleared. Reload and try again.",
+      );
+    }
+    success(response, { deleted: true });
+    return;
+  }
+
   if (url.pathname === "/api/punches/clock-out" && method === "POST") {
     const body = await readJsonBody(request);
     assertExpectedUserId(body?.expectedUserId, userId);

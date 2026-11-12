@@ -3,6 +3,7 @@ const privateSettingsDefaults = {
   dailyAllowance: "0",
   overtimeMultiplier: "1.25",
   nightDifferential: "10",
+  payrollSettingsHistory: [],
   payrollDeductionMode: "automatic",
   manualSssPerPaycheck: "0",
   manualPhilHealthPerPaycheck: "0",

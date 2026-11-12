@@ -5,6 +5,7 @@ import AuthPage from "./components/AuthPage.jsx";
 import DashboardContent from "./components/DashboardContent.jsx";
 import ManualEntryModal from "./components/modals/ManualEntryModal.jsx";
 import AssignShiftModal from "./components/modals/AssignShiftModal.jsx";
+import CalendarRangeActionsModal from "./components/modals/CalendarRangeActionsModal.jsx";
 import GrantLeaveModal from "./components/modals/GrantLeaveModal.jsx";
 import PayslipModal from "./components/modals/PayslipModal.jsx";
 import SettingsModal from "./components/modals/SettingsModal.jsx";
@@ -19,10 +20,6 @@ import {
 import { calculateHolidayPay, getAttendanceHours } from "./utils/holidayPay.js";
 import { getAttendancePunchAvailability } from "./utils/attendancePunchRules.js";
 import {
-  getAttendanceBasePay,
-  getStoredAttendanceBasePay,
-} from "./utils/attendancePay.js";
-import {
   AUTH_ACTIVITY_WRITE_INTERVAL_MS,
   AUTH_IDLE_TIMEOUT_MS,
   getAuthActivityStorageKey,
@@ -35,6 +32,27 @@ import {
   payrollDeductionSettingKeys,
   sumCutoffPayrollDeductions,
 } from "./utils/payrollDeductions.js";
+import {
+  calculateAttendancePayroll,
+  getEstimatedAttendanceEarnings,
+  getPayrollSettingsForDate,
+} from "./utils/payrollCalculation.js";
+import {
+  createPayrollSettingsUpdate,
+  recalculatePrivateAttendance,
+} from "./utils/payrollSettingsService.js";
+import {
+  createCalendarRangeController,
+  getDateRangePosition,
+  getInclusiveDateKeys,
+  normalizeDateRange,
+} from "./utils/calendarRange.js";
+import {
+  clearShiftAndAttendanceRecord,
+  createShiftAssignmentUpdates,
+  getManualEntryRangeConflicts,
+  normalizeTwelveHourShiftTime,
+} from "./utils/shiftAssignment.js";
 import { summarizePayrollEarningsBreakdown } from "./utils/payrollEarningsBreakdown.js";
 import {
   getIncentiveTotal,
@@ -73,6 +91,7 @@ import {
 } from "./utils/payrollPeriods.js";
 import { authClient } from "./lib/authClient.js";
 import {
+  clearPunchForShift,
   clockInForShift,
   clockOutForShift,
   emptyWorkspace,
@@ -82,7 +101,6 @@ import {
   saveWorkspace,
 } from "./lib/workspace.js";
 import {
-  extractPrivateFinancialAttendance,
   extractPrivateFinancialSettings,
   localPrivateFinancialDefaults,
   mergeLocalPrivateAttendance,
@@ -168,6 +186,14 @@ const leaveTypes = {
 const formatDate = (year, monthIndex, day) =>
   `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
+function formatCalendarRangeDate(dateKey) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(year, month - 1, day));
+}
+
 function getAttendanceKey(monthIndex, day, year) {
   return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
@@ -185,12 +211,12 @@ function getRecord(records, monthIndex, day, year) {
   return (key && records[key]) || defaultAttendance;
 }
 
-function isShiftClearable(record) {
+function isAttendanceClearable(record) {
   const hasAssignedShift =
     record.type === "Rest Day" ||
     record.hasAssignedShift === true ||
     Boolean(record.shiftStartTime && record.shiftEndTime);
-  return hasAssignedShift;
+  return hasAssignedShift || record.type !== "Unassigned";
 }
 
 function getAmount(value) {
@@ -237,53 +263,28 @@ function parseTimeMinutes(time) {
   return hour * 60 + minute;
 }
 
-function getNightShiftMinutes(startTime, endTime) {
-  const start = parseTimeMinutes(startTime);
-  const endOfDay = parseTimeMinutes(endTime);
-  if (start === null || endOfDay === null) return 0;
-  const end = endOfDay <= start ? endOfDay + 1440 : endOfDay;
-  let nightMinutes = 0;
-  for (
-    let day = Math.floor(start / 1440) - 1;
-    day <= Math.floor(end / 1440);
-    day += 1
-  ) {
-    const nightStart = day * 1440 + 22 * 60;
-    const nightEnd = day * 1440 + 30 * 60;
-    nightMinutes += Math.max(
-      0,
-      Math.min(end, nightEnd) - Math.max(start, nightStart),
-    );
+function applyNightDifferential(record, calculation) {
+  if (calculation.status === "not-applicable") return record;
+  if (calculation.status !== "ready") {
+    return {
+      ...record,
+      payrollCalculationStatus: calculation.status,
+      payrollCalculationMessage: calculation.reasons.join(" "),
+    };
   }
-  return nightMinutes;
-}
-
-function applyNightDifferential(record, percentage, configuredDailyWage) {
-  if (
-    record.type === "Unassigned" ||
-    record.type === "Absent" ||
-    record.type === "Leave" ||
-    record.type === "Rest Day" ||
-    record.type === "Company Break"
-  )
-    return record;
-  const storedBaseAmount = getAmount(record.base);
-  const baseAmount =
-    storedBaseAmount === 0 && !record.holidayClassification
-      ? getAttendanceBasePay(record, configuredDailyWage)
-      : storedBaseAmount;
-  const nightHours =
-    getNightShiftMinutes(record.workStartTime, record.workEndTime) / 60;
-  const rate = Number(percentage);
-  if (baseAmount <= 0 || nightHours <= 0 || !Number.isFinite(rate) || rate <= 0)
-    return record;
-  const premium = (baseAmount / 8) * nightHours * (rate / 100);
-  const total =
-    baseAmount + getAmount(record.ot) + premium + getAmount(record.penalty);
+  const componentTotal =
+    (Number(calculation.nightDifferentialPay) || 0) +
+    (Number(calculation.overtimePay) || 0);
   return {
     ...record,
-    ot: formatPayAmount(getAmount(record.ot) + premium),
-    est: `${formatPayAmount(total)} PHP`,
+    base:
+      calculation.dailyWage == null
+        ? record.base
+        : formatPayAmount(calculation.dailyWage),
+    ot: formatPayAmount(componentTotal),
+    est: `${formatPayAmount(calculation.earnings)} PHP`,
+    payrollCalculationStatus: calculation.status,
+    payrollCalculationMessage: "",
   };
 }
 
@@ -324,9 +325,10 @@ function formatCurrency(amount) {
 
 function formatTime(time) {
   if (!time) return "";
-  const [hourText, minute = "00"] = time.split(":");
-  const value = Number(hourText);
-  return `${String(value % 12 || 12).padStart(2, "0")}:${minute} ${value >= 12 ? "PM" : "AM"}`;
+  const minutes = parseTimeMinutes(time);
+  if (minutes === null) return "";
+  const hour = Math.floor(minutes / 60) % 24;
+  return `${String(hour % 12 || 12).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")} ${hour >= 12 ? "PM" : "AM"}`;
 }
 
 function getAttendanceTimingFlags(
@@ -583,11 +585,19 @@ function CalendarDay({
   day,
   year,
   monthIndex,
+  dateKey,
   record,
   shiftTemplates,
   selected,
   hasIncentive,
+  rangePosition,
+  rangeMode,
   onSelect,
+  onRangePointerStart,
+  onRangePointerMove,
+  onRangePointerEnd,
+  onRangePointerCancel,
+  onNavigate,
 }) {
   let cardStyle =
     "bg-slate-50/80 border border-slate-200/70 hover:bg-white hover:border-teal-300";
@@ -646,6 +656,12 @@ function CalendarDay({
     (record.punchSource === "manual"
       ? getAssignedShiftName(record, shiftTemplates)
       : record.shift);
+  const rangeStyle = {
+    single: "rounded-xl bg-indigo-100/90 ring-2 ring-inset ring-indigo-400",
+    start: "rounded-xl bg-indigo-100/90 ring-2 ring-inset ring-indigo-400",
+    middle: "rounded-xl bg-indigo-100/90 ring-1 ring-inset ring-indigo-400",
+    end: "rounded-xl bg-indigo-100/90 ring-2 ring-inset ring-indigo-400",
+  }[rangePosition];
   let label = null;
   if (record.holidayName) {
     label = (
@@ -709,20 +725,59 @@ function CalendarDay({
   return (
     <button
       type="button"
-      aria-label={`${formatDate(year, monthIndex, day)}: ${record.holidayName ? `${record.holidayName}, ${record.holidayClassification}, ` : ""}${record.type === "Absent" && record.holidayName ? "Unworked Holiday" : calendarShiftName}${hasIncentive ? ", incentive recorded" : ""}`}
+      data-calendar-date={dateKey}
+      aria-label={`${dateKey}: ${record.holidayName ? `${record.holidayName}, ${record.holidayClassification}, ` : ""}${record.type === "Absent" && record.holidayName ? "Unworked Holiday" : calendarShiftName}${hasIncentive ? ", incentive recorded" : ""}${rangePosition ? `, ${rangePosition} of selected date range` : ""}`}
       aria-pressed={selected}
+      tabIndex={selected ? 0 : -1}
       onClick={onSelect}
+      onPointerDown={(event) => {
+        if (event.button !== 0 && event.pointerType !== "touch") return;
+        if (onRangePointerStart(dateKey, event)) {
+          event.currentTarget.setPointerCapture?.(event.pointerId);
+        }
+      }}
+      onPointerMove={(event) => onRangePointerMove(dateKey, event)}
+      onPointerUp={onRangePointerEnd}
+      onPointerCancel={onRangePointerCancel}
+      onLostPointerCapture={onRangePointerCancel}
+      onDragStart={(event) => event.preventDefault()}
+      onKeyDown={(event) => {
+        const offsets = {
+          ArrowLeft: -1,
+          ArrowRight: 1,
+          ArrowUp: -7,
+          ArrowDown: 7,
+        };
+        if (offsets[event.key]) {
+          event.preventDefault();
+          onNavigate(dateKey, offsets[event.key]);
+        }
+      }}
       title={hasIncentive ? "Incentive recorded" : undefined}
-      className={`rounded-xl min-h-[90px] flex flex-col transition cursor-pointer relative box-border text-left ${cardStyle}`}
+      style={{ touchAction: rangeMode ? "none" : "pan-y" }}
+      className={`select-none rounded-xl min-h-[90px] flex flex-col transition cursor-pointer relative box-border text-left ${cardStyle}`}
     >
-      <span className="p-2.5 flex flex-col justify-between h-full w-full">
+      {rangeStyle && (
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-0 z-0 ${rangeStyle}`}
+        />
+      )}
+      <span className="relative z-10 p-2.5 flex flex-col justify-between h-full w-full">
         <span className="flex justify-between items-center">
           <span
-            className={`text-xs font-bold ${selected ? "text-teal-900" : "text-slate-700"}`}
+            className={`text-xs font-bold ${rangePosition ? "text-indigo-950" : selected ? "text-teal-900" : "text-slate-700"}`}
           >
             {day}
           </span>
           <span className="flex items-center gap-1">
+            {rangePosition && (
+              <span
+                className="h-2 w-2 rounded-full bg-indigo-600 ring-2 ring-white"
+                title="Selected for shift assignment"
+                aria-hidden="true"
+              />
+            )}
             {record.clockedIn && (
               <span className="text-[9px] font-bold text-amber-700">
                 Tracking
@@ -830,6 +885,16 @@ export default function App() {
   const [selectedDay, setSelectedDay] = useState(() =>
     Number(initialCalendarDate.slice(8, 10)),
   );
+  const [selectedCalendarRange, setSelectedCalendarRange] = useState(null);
+  const [calendarRangePreview, setCalendarRangePreview] = useState(null);
+  const [calendarRangeAnchor, setCalendarRangeAnchor] = useState(null);
+  const [calendarRangeMode, setCalendarRangeMode] = useState(false);
+  const calendarRangeControllerRef = useRef(null);
+  if (!calendarRangeControllerRef.current) {
+    calendarRangeControllerRef.current = createCalendarRangeController();
+  }
+  const calendarRangePreviewRef = useRef(null);
+  const calendarRangePointerRef = useRef(null);
   const [financeTrackingScope, setFinanceTrackingScope] = useState(() =>
     Number(initialCalendarDate.slice(8, 10)) >= 11 &&
     Number(initialCalendarDate.slice(8, 10)) <= 25
@@ -881,8 +946,8 @@ export default function App() {
   const [selectedShiftTemplate, setSelectedShiftTemplate] =
     useState("rest-day");
   const [customShiftName, setCustomShiftName] = useState("");
-  const [customShiftStart, setCustomShiftStart] = useState("22:00");
-  const [customShiftEnd, setCustomShiftEnd] = useState("06:00");
+  const [customShiftStart, setCustomShiftStart] = useState("10:00 PM");
+  const [customShiftEnd, setCustomShiftEnd] = useState("06:00 AM");
   const [selectedIcon, setSelectedIcon] = useState("fa-moon");
   const [leaveBalances, setLeaveBalances] = useState(
     emptyWorkspace.leaveBalances,
@@ -1012,150 +1077,58 @@ export default function App() {
     selectedHoliday,
   );
   const canClearSelectedShift =
-    isShiftClearable(selectedAttendanceRecord) &&
+    isAttendanceClearable(selectedAttendanceRecord) &&
     activeTimeEntry?.date !== selectedDate;
-  const getPayrollRecordBreakdown = useCallback(
-    (record, date) => {
-      const recordedOvertimeAmount = Number(record.overtimeAmount);
-      const overtimeAmount = Number.isFinite(recordedOvertimeAmount)
-        ? recordedOvertimeAmount
-        : 0;
-      const lateMinutes = Number(record.lateMinutes);
-      const undertimeMinutes = Number(record.undertimeMinutes);
-      const timingValues = {
-        lateMinutes: Number.isFinite(lateMinutes) ? lateMinutes : 0,
-        undertimeMinutes: Number.isFinite(undertimeMinutes)
-          ? undertimeMinutes
-          : 0,
-      };
-      if (record.type === "Leave") {
-        const leaveEarnings = getAmount(record.est);
-        return {
-          ...timingValues,
-          [record.leaveCode === "SL" ? "paidSickLeave" : "otherPaidLeave"]:
-            leaveEarnings,
-        };
-      }
-
-      const holiday = getHolidayForDate(holidays, date, selectedLocality);
-      const hoursWorked = getAttendanceHours(record) || 0;
-      const hasAssignedShift =
-        record.type === "Rest Day" ||
-        record.hasAssignedShift === true ||
-        Boolean(record.shiftStartTime && record.shiftEndTime);
-      const nightHours =
-        getNightShiftMinutes(record.workStartTime, record.workEndTime) / 60;
-      const applicableDailyWage = holiday
-        ? Number(dailyWage)
-        : getAttendanceBasePay(record, dailyWage);
-      const rate = Number(nightDifferential);
-      const nightDifferentialPay =
-        Number.isFinite(applicableDailyWage) &&
-        applicableDailyWage > 0 &&
-        Number.isFinite(rate) &&
-        rate > 0 &&
-        nightHours > 0
-          ? (applicableDailyWage / 8) * nightHours * (rate / 100)
-          : 0;
-      const allowanceAmount = Number(dailyAllowance);
-      const hasDailyAllowance =
-        Number.isFinite(allowanceAmount) && allowanceAmount >= 0;
-
-      if (holiday) {
-        const holidayPay = calculateHolidayPay({
-          holiday: {
-            ...holiday,
-            classification: getHolidayClassification(holiday),
-          },
-          dailyWage: Number(dailyWage),
-          hoursWorked,
-          hasSchedule: hasAssignedShift,
-          isRestDay: record.type === "Rest Day",
-          eligibilityKnown: holidayEligibilityConfirmed,
-          worked: hasValidAttendanceRecord(record) && !record.clockedIn,
-          unworked: record.holidayUnworked || record.type === "Absent",
-          overtimeMultiplier: Number(overtimeMultiplier),
-        });
-        if (
-          !hasAssignedShift ||
-          holidayPay.amount == null ||
-          !hasDailyAllowance
-        )
-          return null;
-        const classification = getHolidayClassification(holiday);
-        const holidayRegularPay = Number.isFinite(holidayPay.regularPay)
-          ? holidayPay.regularPay
-          : Math.max(0, holidayPay.amount - (holidayPay.overtimePay || 0));
-        const holidayOvertimePay =
-          (Number(holidayPay.overtimePay) || 0) + overtimeAmount;
-        const holidayEarningsKey =
-          classification === "Regular Holiday"
-            ? "regularHoliday"
-            : classification === "Special Non-Working Day"
-              ? "specialHoliday"
-              : "basicPay";
-        return {
-          ...timingValues,
-          [holidayEarningsKey]: holidayRegularPay,
-          allowance: allowanceAmount,
-          shiftDifferentials: nightDifferentialPay,
-          overtime: holidayOvertimePay,
-          overtimeMinutes: Math.max(
-            Number(record.overtimeMinutes) || 0,
-            (Number(holidayPay.overtimeHours) || 0) * 60,
-          ),
-          overtimeHours: Number(holidayPay.overtimeHours) || 0,
-        };
-      }
-
-      if (
-        !hasAssignedShift ||
-        !["Regular", "Official Business"].includes(record.type) ||
-        !hasDailyAllowance
-      )
-        return null;
-
-      return {
-        ...timingValues,
-        basicPay: Math.max(
-          0,
-          getAmount(record.est) - overtimeAmount !== 0
-            ? getAmount(record.est) - overtimeAmount
-            : getStoredAttendanceBasePay(record) === 0
-              ? getAttendanceBasePay(record, dailyWage) +
-                getAmount(record.penalty)
-              : 0,
-        ),
-        allowance: allowanceAmount,
-        shiftDifferentials: nightDifferentialPay,
-        overtime: overtimeAmount,
-        overtimeMinutes: Number(record.overtimeMinutes) || 0,
-      };
-    },
+  const payrollSettingsHistory = Array.isArray(
+    privateFinancialSettings.payrollSettingsHistory,
+  )
+    ? privateFinancialSettings.payrollSettingsHistory
+    : [];
+  const getPayrollSettingsAtDate = useCallback(
+    (date) =>
+      getPayrollSettingsForDate(
+        payrollSettingsHistory,
+        privateFinancialSettings,
+        date,
+      ),
+    [payrollSettingsHistory, privateFinancialSettings],
+  );
+  const getPayrollRecordCalculation = useCallback(
+    (record, date) =>
+      calculateAttendancePayroll({
+        record,
+        date,
+        settings: getPayrollSettingsAtDate(date),
+        holiday: getHolidayForDate(holidays, date, selectedLocality),
+        holidayEligibilityConfirmed,
+      }),
     [
-      dailyAllowance,
-      dailyWage,
+      getPayrollSettingsAtDate,
       holidayEligibilityConfirmed,
       holidays,
-      nightDifferential,
-      overtimeMultiplier,
       selectedLocality,
     ],
   );
+  const getPayrollRecordBreakdown = useCallback(
+    (record, date) =>
+      getPayrollRecordCalculation(record, date).breakdown,
+    [getPayrollRecordCalculation],
+  );
   const getPayrollRecordEarnings = useCallback(
-    (record, date) => {
-      const breakdown = getPayrollRecordBreakdown(record, date);
-      if (!breakdown) return null;
-      return [
-        "basicPay",
-        "allowance",
-        "shiftDifferentials",
-        "regularHoliday",
-        "specialHoliday",
-        "overtime",
-      ].reduce((total, key) => total + (Number(breakdown[key]) || 0), 0);
+    (record, date) => getPayrollRecordCalculation(record, date).earnings,
+    [getPayrollRecordCalculation],
+  );
+  const countPendingPayrollRecords = useCallback(
+    (period) => {
+      if (!period) return 0;
+      return Object.entries(attendance).reduce((count, [date, record]) => {
+        if (date < period.startDate || date > period.endDate) return count;
+        return getPayrollRecordCalculation(record, date).status === "pending"
+          ? count + 1
+          : count;
+      }, 0);
     },
-    [getPayrollRecordBreakdown],
+    [attendance, getPayrollRecordCalculation],
   );
   const payrollPeriodSummary = useMemo(
     () =>
@@ -1178,8 +1151,11 @@ export default function App() {
     [attendance, availableEmployeeIncentives, getPayrollRecordBreakdown, payrollPeriod],
   );
   const payrollDeductionSettings = useMemo(
-    () => getPayrollDeductionSettingsDefaults(privateFinancialSettings),
-    [privateFinancialSettings],
+    () =>
+      getPayrollDeductionSettingsDefaults(
+        getPayrollSettingsAtDate(payrollPeriod.endDate),
+      ),
+    [getPayrollSettingsAtDate, payrollPeriod.endDate],
   );
   const payrollPeriodMonthGross = useMemo(() => {
     const payrollMonth = payrollPeriod.endDate.slice(0, 7);
@@ -1221,6 +1197,11 @@ export default function App() {
       payslipPeriodMode === "first" ? 10 : 25,
     );
   }, [payslipMonth, payslipPeriodMode]);
+  const selectedPayslipSettings = getPayrollSettingsAtDate(
+    selectedPayslipPeriod.endDate,
+  );
+  const selectedPayslipDeductionSettings =
+    getPayrollDeductionSettingsDefaults(selectedPayslipSettings);
   const selectedPayslipSummary = useMemo(
     () => summarizePayrollPeriod(
       attendance,
@@ -1230,6 +1211,8 @@ export default function App() {
     ),
     [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, selectedPayslipPeriod],
   );
+  const selectedPayslipPendingCount =
+    countPendingPayrollRecords(selectedPayslipPeriod);
   const monthlyPayslipPeriods = useMemo(
     () => [10, 25].map((cutoffDay) =>
       getPayrollPeriodForMonth(payslipMonth, cutoffDay),
@@ -1259,18 +1242,28 @@ export default function App() {
       ...monthlyPayslipPeriods.map((period) =>
         calculateCutoffPayrollDeductions({
           period,
-          mode: payrollDeductionSettings.payrollDeductionMode,
+          mode: getPayrollDeductionSettingsDefaults(
+            getPayrollSettingsAtDate(period.endDate),
+          ).payrollDeductionMode,
           monthlyGrossPay: monthlyPayslipGross,
           manualPerPaycheck: {
-            sss: payrollDeductionSettings.manualSssPerPaycheck,
-            philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
-            pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
+            sss: getPayrollDeductionSettingsDefaults(
+              getPayrollSettingsAtDate(period.endDate),
+            ).manualSssPerPaycheck,
+            philHealth: getPayrollDeductionSettingsDefaults(
+              getPayrollSettingsAtDate(period.endDate),
+            ).manualPhilHealthPerPaycheck,
+            pagIbig: getPayrollDeductionSettingsDefaults(
+              getPayrollSettingsAtDate(period.endDate),
+            ).manualPagIbigPerPaycheck,
           },
-          settings: payrollDeductionSettings,
+          settings: getPayrollDeductionSettingsDefaults(
+            getPayrollSettingsAtDate(period.endDate),
+          ),
         }),
       ),
     ),
-    [monthlyPayslipGross, monthlyPayslipPeriods, payrollDeductionSettings],
+    [getPayrollSettingsAtDate, monthlyPayslipGross, monthlyPayslipPeriods],
   );
   const monthlyPayslipNet =
     monthlyPayslipGross - monthlyPayslipDeductions.total;
@@ -1286,17 +1279,17 @@ export default function App() {
   const selectedPayslipDeductions = useMemo(() => {
     return calculateCutoffPayrollDeductions({
       period: selectedPayslipPeriod,
-      mode: payrollDeductionSettings.payrollDeductionMode,
+      mode: selectedPayslipDeductionSettings.payrollDeductionMode,
       monthlyGrossPay: payrollPeriodMonthGross,
       manualPerPaycheck: {
-        sss: payrollDeductionSettings.manualSssPerPaycheck,
-        philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
-        pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
+        sss: selectedPayslipDeductionSettings.manualSssPerPaycheck,
+        philHealth: selectedPayslipDeductionSettings.manualPhilHealthPerPaycheck,
+        pagIbig: selectedPayslipDeductionSettings.manualPagIbigPerPaycheck,
       },
-      settings: payrollDeductionSettings,
+      settings: selectedPayslipDeductionSettings,
     });
   }, [
-    payrollDeductionSettings,
+    selectedPayslipDeductionSettings,
     payrollPeriodMonthGross,
     selectedPayslipPeriod,
   ]);
@@ -1306,6 +1299,11 @@ export default function App() {
   const selectedWorkedHours = hasValidAttendanceRecord(selectedAttendanceRecord)
     ? getAttendanceHours(selectedAttendanceRecord)
     : 0;
+  const selectedPayrollSettings = getPayrollSettingsAtDate(selectedDate);
+  const selectedPayrollCalculation = getPayrollRecordCalculation(
+    selectedRecord,
+    selectedDate,
+  );
   const selectedHolidayPay = selectedHoliday
     ? selectedAttendanceRecord.clockedIn
       ? {
@@ -1317,58 +1315,39 @@ export default function App() {
             ...selectedHoliday,
             classification: getHolidayClassification(selectedHoliday),
           },
-          dailyWage: Number(dailyWage),
-          hoursWorked: getAttendanceHours(selectedAttendanceRecord),
+          dailyWage: Number(selectedPayrollSettings.dailyWage),
+          hoursWorked: getAttendanceHours(selectedRecord),
           hasSchedule:
-            selectedAttendanceRecord.type === "Rest Day" ||
-            (selectedAttendanceRecord.hasAssignedShift === true &&
+            selectedRecord.type === "Rest Day" ||
+            (selectedRecord.hasAssignedShift === true &&
               Boolean(
-                selectedAttendanceRecord.shiftStartTime &&
-                selectedAttendanceRecord.shiftEndTime,
+                selectedRecord.shiftStartTime &&
+                selectedRecord.shiftEndTime,
               )),
-          isRestDay: selectedAttendanceRecord.type === "Rest Day",
+          isRestDay: selectedRecord.type === "Rest Day",
           eligibilityKnown: holidayEligibilityConfirmed,
           worked:
-            hasValidAttendanceRecord(selectedAttendanceRecord) &&
-            !selectedAttendanceRecord.clockedIn,
+            hasValidAttendanceRecord(selectedRecord) &&
+            !selectedRecord.clockedIn,
           unworked:
-            selectedAttendanceRecord.holidayUnworked ||
-            selectedAttendanceRecord.type === "Absent",
-          overtimeMultiplier: Number(overtimeMultiplier),
+            selectedRecord.holidayUnworked ||
+            selectedRecord.type === "Absent",
+          overtimeMultiplier: Number(selectedPayrollSettings.overtimeMultiplier),
         })
     : null;
-  const selectedNightDifferentialPay = (() => {
-    const applicableDailyWage = selectedHoliday
-      ? Number(dailyWage)
-      : getAttendanceBasePay(selectedAttendanceRecord, dailyWage);
-    const rate = Number(nightDifferential);
-    const nightHours =
-      getNightShiftMinutes(
-        selectedAttendanceRecord.workStartTime,
-        selectedAttendanceRecord.workEndTime,
-      ) / 60;
-    if (
-      selectedAttendanceRecord.clockedIn ||
-      !hasValidAttendanceRecord(selectedAttendanceRecord) ||
-      !Number.isFinite(applicableDailyWage) ||
-      applicableDailyWage <= 0 ||
-      !Number.isFinite(rate) ||
-      rate <= 0 ||
-      nightHours <= 0
-    )
-      return null;
-    return (applicableDailyWage / 8) * nightHours * (rate / 100);
-  })();
+  const selectedNightDifferentialPay =
+    selectedPayrollCalculation.status === "ready"
+      ? selectedPayrollCalculation.nightDifferentialPay
+      : null;
   const selectedOvertimePay = selectedHoliday
-    ? selectedHolidayPay?.overtimePay != null
-      ? selectedHolidayPay.overtimePay +
-        (selectedAttendanceRecord.overtimeAmount || 0)
+    ? selectedPayrollCalculation.status === "ready"
+      ? selectedPayrollCalculation.overtimePay
       : null
-    : Number.isFinite(selectedAttendanceRecord.overtimeAmount)
-      ? selectedAttendanceRecord.overtimeAmount
+    : selectedPayrollCalculation.status === "ready"
+      ? selectedPayrollCalculation.overtimePay
       : null;
   const selectedOvertimeCalculation = (() => {
-    const multiplier = Number(overtimeMultiplier);
+    const multiplier = Number(selectedPayrollSettings.overtimeMultiplier);
     if (!Number.isFinite(multiplier) || multiplier <= 0) return null;
     if (selectedAttendanceRecord.overtimeMinutes > 0) {
       const shiftStart = parseTimeMinutes(
@@ -1381,29 +1360,17 @@ export default function App() {
       const shiftEnd =
         shiftEndOfDay <= shiftStart ? shiftEndOfDay + 1440 : shiftEndOfDay;
       const scheduledHours = (shiftEnd - shiftStart) / 60;
-      const hourlyRate =
-        getAttendanceBasePay(selectedAttendanceRecord, dailyWage) /
-        scheduledHours;
+      const hourlyRate = Number(selectedPayrollSettings.dailyWage) / scheduledHours;
       return `${formatDuration(selectedAttendanceRecord.overtimeMinutes)} × ₱${hourlyRate.toFixed(2)}/hr × ${multiplier}x`;
     }
     if (selectedHolidayPay?.overtimeHours > 0) {
       const holidayMultiplier = selectedHolidayPay.multiplier || 1;
-      const hourlyRate = (Number(dailyWage) / 8) * holidayMultiplier;
+      const hourlyRate =
+        (Number(selectedPayrollSettings.dailyWage) / 8) * holidayMultiplier;
       return `${selectedHolidayPay.overtimeHours}h × ₱${hourlyRate.toFixed(2)}/hr × ${multiplier}x`;
     }
     return `Hourly rate × OT hours × ${multiplier}x`;
   })();
-  const allowanceAmount = Number(dailyAllowance);
-  const hasDailyAllowance =
-    Number.isFinite(allowanceAmount) && allowanceAmount >= 0;
-  const hasAssignedShift =
-    selectedAttendanceRecord.type === "Rest Day" ||
-    selectedAttendanceRecord.hasAssignedShift === true ||
-    Boolean(
-      selectedAttendanceRecord.shiftStartTime &&
-      selectedAttendanceRecord.shiftEndTime,
-    );
-  const isSelectedDateAbsent = selectedRecord.type === "Absent";
   const selectedDateIncentives = getIncentivesForDate(
     availableEmployeeIncentives,
     selectedDate,
@@ -1411,36 +1378,10 @@ export default function App() {
   const selectedDailyIncentiveTotal = getIncentiveTotal(
     selectedDateIncentives,
   );
-  const selectedBaseEstimatedEarnings = selectedHoliday
-    ? hasAssignedShift &&
-      selectedHolidayPay?.amount != null &&
-      hasDailyAllowance
-      ? selectedHolidayPay.amount +
-        (selectedAttendanceRecord.overtimeAmount || 0) +
-        (selectedNightDifferentialPay || 0) +
-        (isSelectedDateAbsent ? 0 : allowanceAmount)
-      : null
-    : hasAssignedShift &&
-        selectedRecord.type !== "Absent" &&
-        ["Regular", "Official Business"].includes(
-          selectedAttendanceRecord.type,
-        ) &&
-        hasDailyAllowance
-      ? (getAmount(selectedAttendanceRecord.est) !== 0
-          ? getAmount(selectedAttendanceRecord.est)
-          : getStoredAttendanceBasePay(selectedAttendanceRecord) === 0
-            ? getAttendanceBasePay(selectedAttendanceRecord, dailyWage) +
-              getAmount(selectedAttendanceRecord.penalty)
-            : 0) +
-        allowanceAmount +
-        (selectedNightDifferentialPay || 0)
-      : null;
-  const selectedEstimatedEarnings =
-    selectedBaseEstimatedEarnings === null
-      ? selectedDailyIncentiveTotal > 0
-        ? selectedDailyIncentiveTotal
-        : null
-      : selectedBaseEstimatedEarnings + selectedDailyIncentiveTotal;
+  const selectedEstimatedEarnings = getEstimatedAttendanceEarnings(
+    selectedPayrollCalculation,
+    selectedDailyIncentiveTotal,
+  );
   const canRecordAttendance =
     selectedAttendanceRecord.hasAssignedShift === true ||
     Boolean(
@@ -1471,8 +1412,7 @@ export default function App() {
   const canTimeOut = !attendancePunchError && punchAvailability.canTimeOut;
   const selectedRecordWithNightDifferential = applyNightDifferential(
     selectedRecord,
-    nightDifferential,
-    dailyWage,
+    selectedPayrollCalculation,
   );
   const yearOptions = useMemo(
     () => Array.from({ length: 11 }, (_, index) => year - 5 + index),
@@ -1489,45 +1429,35 @@ export default function App() {
       }
     : null;
   const currentMonthPrefix = `${year}-${String(monthIndex + 1).padStart(2, "0")}-`;
-  const grossPay = Object.entries(attendance)
-    .filter(([date]) => date.startsWith(currentMonthPrefix))
-    .reduce((sum, [, record]) => {
-      if (record.clockedIn) return sum;
-      if (record.type === "Leave") return sum + getAmount(record.est);
-      return hasValidAttendanceRecord(record)
-        ? sum +
-            (getAmount(record.est) !== 0
-              ? getAmount(record.est)
-              : getStoredAttendanceBasePay(record) === 0
-                ? getAttendanceBasePay(record, dailyWage) +
-                  getAmount(record.penalty)
-                : 0)
-        : sum;
-    }, 0);
-  const grossPayWithIncentives =
-    grossPay +
-    getIncentiveTotal(
-      getIncentivesForPeriod(
-        availableEmployeeIncentives,
-        getCalendarPayrollPeriod(calendarPayrollMonth),
-      ),
-    );
+  const calendarPayrollPeriod = getCalendarPayrollPeriod(calendarPayrollMonth);
+  const grossPay = summarizePayrollPeriod(
+    attendance,
+    calendarPayrollPeriod,
+    getPayrollRecordEarnings,
+    availableEmployeeIncentives,
+  ).recordedEarnings;
   const payrollDeductions = sumCutoffPayrollDeductions(
     ...[10, 25].map((cutoffDay) =>
-      calculateCutoffPayrollDeductions({
-        period: getPayrollPeriodForMonth(calendarPayrollMonth, cutoffDay),
-        mode: payrollDeductionSettings.payrollDeductionMode,
-        monthlyGrossPay: grossPayWithIncentives,
-        manualPerPaycheck: {
-          sss: payrollDeductionSettings.manualSssPerPaycheck,
-          philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
-          pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
-        },
-        settings: payrollDeductionSettings,
-      }),
+      (() => {
+        const period = getPayrollPeriodForMonth(calendarPayrollMonth, cutoffDay);
+        const settings = getPayrollDeductionSettingsDefaults(
+          getPayrollSettingsAtDate(period.endDate),
+        );
+        return calculateCutoffPayrollDeductions({
+          period,
+          mode: settings.payrollDeductionMode,
+          monthlyGrossPay: grossPay,
+          manualPerPaycheck: {
+            sss: settings.manualSssPerPaycheck,
+            philHealth: settings.manualPhilHealthPerPaycheck,
+            pagIbig: settings.manualPagIbigPerPaycheck,
+          },
+          settings,
+        });
+      })(),
     ),
   );
-  const netPay = Math.max(0, grossPayWithIncentives - payrollDeductions.total);
+  const netPay = Math.max(0, grossPay - payrollDeductions.total);
   const totalHours = Object.entries(attendance)
     .filter(([date]) => date.startsWith(currentMonthPrefix))
     .reduce(
@@ -1544,10 +1474,15 @@ export default function App() {
   const { remaining, percentage } = getBudgetUtilization(netPay, totalExpenses);
   const financeCutoffPeriods = useMemo(
     () => {
+      if (financeTrackingScope === "month") {
+        return [10, 25].map((cutoffDay) =>
+          getPayrollPeriodForMonth(calendarPayrollMonth, cutoffDay),
+        );
+      }
       const periods = getPayrollCutoffPeriodsForDate(financeAnchorDate);
       return periods ? [periods.firstCutoff, periods.secondCutoff] : [];
     },
-    [financeAnchorDate],
+    [calendarPayrollMonth, financeAnchorDate, financeTrackingScope],
   );
   const financeCutoffSummaries = useMemo(
     () =>
@@ -1567,25 +1502,35 @@ export default function App() {
   );
   const financeCutoffDeductions = useMemo(
     () =>
-      financeCutoffPeriods.map((period) =>
-        calculateCutoffPayrollDeductions({
+      financeCutoffPeriods.map((period) => {
+        const settings = getPayrollDeductionSettingsDefaults(
+          getPayrollSettingsAtDate(period.endDate),
+        );
+        return calculateCutoffPayrollDeductions({
           period,
-          mode: payrollDeductionSettings.payrollDeductionMode,
+          mode: settings.payrollDeductionMode,
           monthlyGrossPay: financeCutoffMonthlyGross,
           manualPerPaycheck: {
-            sss: payrollDeductionSettings.manualSssPerPaycheck,
-            philHealth: payrollDeductionSettings.manualPhilHealthPerPaycheck,
-            pagIbig: payrollDeductionSettings.manualPagIbigPerPaycheck,
+            sss: settings.manualSssPerPaycheck,
+            philHealth: settings.manualPhilHealthPerPaycheck,
+            pagIbig: settings.manualPagIbigPerPaycheck,
           },
-          settings: payrollDeductionSettings,
-        }),
-      ),
-    [financeCutoffMonthlyGross, financeCutoffPeriods, payrollDeductionSettings],
+          settings,
+        });
+      }),
+    [financeCutoffMonthlyGross, financeCutoffPeriods, getPayrollSettingsAtDate],
   );
   const selectedFinanceCutoffIndex =
     financeTrackingScope === "cutoff-25" ? 1 : 0;
   const selectedFinancePeriod =
     financeCutoffPeriods[selectedFinanceCutoffIndex];
+  const financePendingPayrollCount =
+    financeTrackingScope === "month"
+      ? financeCutoffPeriods.reduce(
+          (count, period) => count + countPendingPayrollRecords(period),
+          0,
+        )
+      : countPendingPayrollRecords(selectedFinancePeriod);
   const financeExpenses =
     financeTrackingScope === "month"
       ? monthExpenses
@@ -1713,6 +1658,46 @@ export default function App() {
     privateFinancialDataSkipNextSyncRef.current = true;
   }, []);
 
+  const createPrivateAttendancePayload = useCallback(
+    (
+      records = attendance,
+      settings = privateFinancialSettings,
+      calculationOptions = {},
+    ) => {
+      const currentSettings = {
+        ...settings,
+        dailyWage: settings.dailyWage ?? dailyWage,
+        dailyAllowance: settings.dailyAllowance ?? dailyAllowance,
+        overtimeMultiplier: settings.overtimeMultiplier ?? overtimeMultiplier,
+        nightDifferential: settings.nightDifferential ?? nightDifferential,
+      };
+      const calculationHolidays = calculationOptions.holidays ?? holidays;
+      const calculationLocality =
+        calculationOptions.selectedLocality ?? selectedLocality;
+      const calculationEligibility =
+        calculationOptions.holidayEligibilityConfirmed ??
+        holidayEligibilityConfirmed;
+      return recalculatePrivateAttendance({
+        attendance: records,
+        settings: currentSettings,
+        holidays: calculationHolidays,
+        selectedLocality: calculationLocality,
+        holidayEligibilityConfirmed: calculationEligibility,
+      });
+    },
+    [
+      attendance,
+      dailyAllowance,
+      dailyWage,
+      holidayEligibilityConfirmed,
+      holidays,
+      nightDifferential,
+      overtimeMultiplier,
+      privateFinancialSettings,
+      selectedLocality,
+    ],
+  );
+
   const createPrivateFinancialPayload = useCallback(
     (payslips = historicalPayslipsRef.current) => ({
       settings: {
@@ -1722,16 +1707,12 @@ export default function App() {
         overtimeMultiplier,
         nightDifferential,
       },
-      attendance: extractPrivateFinancialAttendance(attendance),
+      attendance: createPrivateAttendancePayload(),
       payslips,
     }),
     [
+      createPrivateAttendancePayload,
       privateFinancialSettings,
-      dailyWage,
-      dailyAllowance,
-      overtimeMultiplier,
-      nightDifferential,
-      attendance,
     ],
   );
 
@@ -2298,6 +2279,11 @@ export default function App() {
     () => () => {
       timers.current.forEach(window.clearTimeout);
       window.clearTimeout(monthCarouselTimer.current);
+      const pointer = calendarRangePointerRef.current;
+      if (pointer?.target?.hasPointerCapture?.(pointer.pointerId)) {
+        pointer.target.releasePointerCapture(pointer.pointerId);
+      }
+      calendarRangeControllerRef.current.clear();
     },
     [],
   );
@@ -2333,7 +2319,283 @@ export default function App() {
     };
   }, [activeModal]);
 
+  useEffect(() => {
+    if (
+      ![
+        "calendarRangeActionsModal",
+        "assignShiftModal",
+        "manualEntryModal",
+      ].includes(activeModal) &&
+      selectedCalendarRange
+    ) {
+      setSelectedCalendarRange(null);
+    }
+  }, [activeModal, selectedCalendarRange]);
+
+  const clearCalendarRange = () => {
+    const pointer = calendarRangePointerRef.current;
+    if (pointer?.target?.hasPointerCapture?.(pointer.pointerId)) {
+      pointer.target.releasePointerCapture(pointer.pointerId);
+    }
+    calendarRangePointerRef.current = null;
+    calendarRangeControllerRef.current.clear();
+    calendarRangePreviewRef.current = null;
+    setCalendarRangePreview(null);
+    setCalendarRangeAnchor(null);
+    setCalendarRangeMode(false);
+    setSelectedCalendarRange(null);
+  };
+
+  useEffect(() => {
+    clearCalendarRange();
+  }, [monthIndex, user?.id, year]);
+
+  useEffect(() => {
+    const cancelRangeOnEscape = (event) => {
+      if (
+        event.key === "Escape" &&
+        (calendarRangeMode ||
+          calendarRangeControllerRef.current.getState().pointerActive)
+      ) {
+        clearCalendarRange();
+      }
+    };
+    window.addEventListener("keydown", cancelRangeOnEscape);
+    return () => window.removeEventListener("keydown", cancelRangeOnEscape);
+  }, [calendarRangeMode]);
+
+  const commitCalendarRange = (range) => {
+    if (!range) return;
+    calendarRangePointerRef.current = null;
+    calendarRangeControllerRef.current.completeRange();
+    calendarRangePreviewRef.current = null;
+    setCalendarRangePreview(null);
+    setCalendarRangeAnchor(null);
+    setCalendarRangeMode(false);
+    setSelectedCalendarRange(range);
+    setSelectedDay(Number(range.startDate.slice(8, 10)));
+    setCustomShiftName("");
+    setSelectedShiftTemplate("rest-day");
+    setActiveModal("calendarRangeActionsModal");
+  };
+
+  const openRangeAssignShift = () => {
+    setCustomShiftName("");
+    setSelectedShiftTemplate("rest-day");
+    setActiveModal("assignShiftModal");
+  };
+
+  const openRangeManualEntry = () => {
+    setActiveModal("manualEntryModal");
+  };
+
+  const clearAttendanceDates = async (dates) => {
+    const clearableDates = dates.filter((date) =>
+      isAttendanceClearable(attendance[date] || defaultAttendance),
+    );
+    const activeTimeEntryDate = dates.find(
+      (date) => activeTimeEntry?.date === date,
+    );
+    if (activeTimeEntryDate) {
+      showToast(
+        `Cannot clear attendance while Time In is active on ${activeTimeEntryDate}.`,
+        "warning",
+      );
+      return;
+    }
+    if (!clearableDates.length) {
+      showToast(
+        "No shifts, attendance, or leave records were found to clear.",
+        "warning",
+      );
+      return;
+    }
+
+    const confirmed = await requestConfirmation({
+      title: "Clear shift and attendance?",
+      message:
+        "This removes the selected shift and attendance records. Completed clock-in/out records are permanently deleted, and cleared leave days are returned to their balances. Saved payslip snapshots are not changed.",
+      confirmLabel: "Clear records",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+
+    const ordinaryPunchDates = clearableDates.filter(
+      (date) => attendance[date]?.punchSource === "ordinary",
+    );
+    const punchResults = await Promise.allSettled(
+      ordinaryPunchDates.map((date) => clearPunchForShift(date, user?.id)),
+    );
+    const failedPunchDates = new Set(
+      punchResults.flatMap((result, index) =>
+        result.status === "rejected" ? [ordinaryPunchDates[index]] : [],
+      ),
+    );
+    const clearedDates = clearableDates.filter(
+      (date) => !failedPunchDates.has(date),
+    );
+    if (clearedDates.length) {
+      setAttendance((state) => ({
+        ...state,
+        ...Object.fromEntries(
+          clearedDates.map((date) => [
+            date,
+            clearShiftAndAttendanceRecord(state[date] || defaultAttendance),
+          ]),
+        ),
+      }));
+      const leaveRefunds = clearedDates.reduce((refunds, date) => {
+        const leaveCode =
+          attendance[date]?.type === "Leave" ? attendance[date].leaveCode : null;
+        if (leaveCode && Object.hasOwn(leaveBalances, leaveCode)) {
+          refunds[leaveCode] = (refunds[leaveCode] || 0) + 1;
+        }
+        return refunds;
+      }, {});
+      if (Object.keys(leaveRefunds).length) {
+        setLeaveBalances((balances) => {
+          const updated = { ...balances };
+          Object.entries(leaveRefunds).forEach(([code, count]) => {
+            updated[code] = (Number(updated[code]) || 0) + count;
+          });
+          return updated;
+        });
+      }
+      setActiveModal(null);
+    }
+
+    if (failedPunchDates.size) {
+      showToast(
+        `Cleared ${clearedDates.length} day(s). Server attendance could not be deleted for: ${[...failedPunchDates].join(", ")}. Those dates were left unchanged.`,
+        "warning",
+      );
+      return;
+    }
+    const skippedCount = dates.length - clearedDates.length;
+    showToast(
+      `Cleared shifts and attendance on ${clearedDates.length} day(s)${skippedCount ? `; ${skippedCount} had no records to clear` : ""}.`,
+      "success",
+    );
+  };
+
+  const clearSelectedShiftRange = () => {
+    if (!selectedCalendarRange) return;
+    const dates = getInclusiveDateKeys(
+      selectedCalendarRange.startDate,
+      selectedCalendarRange.endDate,
+    );
+    void clearAttendanceDates(dates);
+  };
+
+  const handleCalendarDateClick = (date, event) => {
+    const result = calendarRangeControllerRef.current.click(date, {
+      shiftKey: event.shiftKey,
+    });
+    if (result.type === "ignored") return;
+    setSelectedDay(Number(date.slice(8, 10)));
+    if (result.type === "range") {
+      commitCalendarRange(result.range);
+      return;
+    }
+    setSelectedCalendarRange(null);
+    setCalendarRangeAnchor(result.anchorDate);
+    const preview = result.rangeMode ? normalizeDateRange(date, date) : null;
+    calendarRangePreviewRef.current = preview;
+    setCalendarRangePreview(preview);
+  };
+
+  const handleCalendarRangeModeToggle = () => {
+    const nextMode = !calendarRangeMode;
+    const state = calendarRangeControllerRef.current.setRangeMode(nextMode);
+    setCalendarRangeMode(state.rangeMode);
+    setCalendarRangeAnchor(state.anchorDate);
+    const preview =
+      nextMode && state.anchorDate
+        ? normalizeDateRange(state.anchorDate, state.anchorDate)
+        : null;
+    calendarRangePreviewRef.current = preview;
+    setCalendarRangePreview(preview);
+    setSelectedCalendarRange(null);
+  };
+
+  const handleRangePointerStart = (date, event) => {
+    const started = calendarRangeControllerRef.current.beginPointer({
+      date,
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    });
+    if (started) {
+      calendarRangePointerRef.current = {
+        target: event.currentTarget,
+        pointerId: event.pointerId,
+      };
+    }
+    return started;
+  };
+
+  const handleRangePointerMove = (_date, event) => {
+    const point = document.elementFromPoint(event.clientX, event.clientY);
+    const hoveredCell =
+      point instanceof Element ? point.closest("[data-calendar-date]") : null;
+    const range = calendarRangeControllerRef.current.movePointer({
+      date: hoveredCell?.getAttribute("data-calendar-date") || null,
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    });
+    if (
+      range &&
+      (range.startDate !== calendarRangePreviewRef.current?.startDate ||
+        range.endDate !== calendarRangePreviewRef.current?.endDate)
+    ) {
+      calendarRangePreviewRef.current = range;
+      setCalendarRangePreview(range);
+    }
+  };
+
+  const handleRangePointerEnd = (event) => {
+    const range = calendarRangeControllerRef.current.endPointer(event.pointerId);
+    if (calendarRangePointerRef.current?.pointerId === event.pointerId) {
+      calendarRangePointerRef.current = null;
+    }
+    if (range) commitCalendarRange(range);
+  };
+
+  const handleRangePointerCancel = (event) => {
+    const cancelled = calendarRangeControllerRef.current.cancelPointer(
+      event.pointerId,
+    );
+    if (!cancelled) return;
+    calendarRangePointerRef.current = null;
+    calendarRangePreviewRef.current = null;
+    setCalendarRangePreview(null);
+  };
+
+  const handleCalendarDayNavigate = (date, offset) => {
+    const [currentYear, currentMonth, currentDay] = date.split("-").map(Number);
+    const nextDate = new Date(Date.UTC(currentYear, currentMonth - 1, currentDay));
+    nextDate.setUTCDate(nextDate.getUTCDate() + offset);
+    const nextDateKey = nextDate.toISOString().slice(0, 10);
+    const [nextYear, nextMonth, nextDay] = nextDateKey.split("-").map(Number);
+    if (nextYear !== year || nextMonth - 1 !== monthIndex) {
+      changeMonthTo(nextYear, nextMonth - 1);
+      setSelectedDay(nextDay);
+      window.requestAnimationFrame(() => {
+        document
+          .querySelector(`[data-calendar-date="${nextDateKey}"]`)
+          ?.focus();
+      });
+      return;
+    }
+    setSelectedDay(nextDay);
+    document
+      .querySelector(`[data-calendar-date="${nextDateKey}"]`)
+      ?.focus();
+  };
+
   const changeMonthTo = (nextYear, nextMonthIndex) => {
+    clearCalendarRange();
     const baseYear = monthCarouselMotion?.year ?? year;
     const baseMonthIndex = monthCarouselMotion?.monthIndex ?? monthIndex;
     const offset = (nextYear - baseYear) * 12 + nextMonthIndex - baseMonthIndex;
@@ -2369,6 +2631,7 @@ export default function App() {
   };
 
   const changeYear = (nextYear) => {
+    clearCalendarRange();
     window.clearTimeout(monthCarouselTimer.current);
     setMonthCarouselMotion(null);
     setYear(nextYear);
@@ -2376,6 +2639,7 @@ export default function App() {
   };
 
   const resetCalendar = () => {
+    clearCalendarRange();
     const today = getManilaDateTime().date;
     window.clearTimeout(monthCarouselTimer.current);
     setMonthCarouselMotion(null);
@@ -2716,6 +2980,10 @@ export default function App() {
 
     let nextHistory;
     try {
+      const settings = getPayrollSettingsAtDate(
+        selectedPayslipPeriod.endDate,
+      );
+      const deductionSettings = getPayrollDeductionSettingsDefaults(settings);
       const snapshot = createPayslipSnapshot({
         employeeId: user.id,
         employeeName:
@@ -2728,11 +2996,11 @@ export default function App() {
         deductions: selectedPayslipDeductions,
         netPay: selectedPayslipNetPay,
         settings: {
-          dailyWage,
-          dailyAllowance,
-          overtimeMultiplier,
-          nightDifferential,
-          payrollDeductions: payrollDeductionSettings,
+          dailyWage: settings.dailyWage,
+          dailyAllowance: settings.dailyAllowance,
+          overtimeMultiplier: settings.overtimeMultiplier,
+          nightDifferential: settings.nightDifferential,
+          payrollDeductions: deductionSettings,
         },
       });
       nextHistory = appendPayslipSnapshot(
@@ -3012,23 +3280,9 @@ export default function App() {
     else if (action === "openManualEntryModal()")
       setActiveModal("manualEntryModal");
     else if (action === "clearSelectedShift()") {
-      const currentRecord = attendance[selectedDate] || defaultAttendance;
-      if (
-        !isShiftClearable(currentRecord) ||
-        activeTimeEntry?.date === selectedDate
-      ) {
-        showToast(
-          "A shift can only be cleared when assigned and no Time In is currently active.",
-          "warning",
-        );
-        return;
-      }
-      setAttendance((state) => ({
-        ...state,
-        [selectedDate]: { ...defaultAttendance },
-      }));
-      showToast(`Shift cleared for ${selectedDate}.`, "success");
+      void clearAttendanceDates([selectedDate]);
     } else if (action === "openAssignShiftModal()") {
+      clearCalendarRange();
       setCustomShiftName("");
       setSelectedShiftTemplate("rest-day");
       setActiveModal("assignShiftModal");
@@ -3055,6 +3309,15 @@ export default function App() {
       event.preventDefault();
       const name = customShiftName.trim();
       if (!name) return;
+      const startTime = normalizeTwelveHourShiftTime(customShiftStart);
+      const endTime = normalizeTwelveHourShiftTime(customShiftEnd);
+      if (startTime === null || endTime === null) {
+        showToast(
+          "Enter valid custom shift times in 12-hour format, such as 10:00 PM.",
+          "warning",
+        );
+        return;
+      }
       let iconColor = "text-teal-600";
       if (selectedIcon.includes("sun") && !selectedIcon.includes("cloud"))
         iconColor = "text-amber-500";
@@ -3071,10 +3334,10 @@ export default function App() {
           id,
           name,
           label: name,
-          range: `${formatTime(customShiftStart)} - ${formatTime(customShiftEnd)}`,
-          assigned: `${formatTime(customShiftStart)} - ${formatTime(customShiftEnd)}`,
-          startTime: customShiftStart,
-          endTime: customShiftEnd,
+          range: `${formatTime(startTime)} - ${formatTime(endTime)}`,
+          assigned: `${formatTime(startTime)} - ${formatTime(endTime)}`,
+          startTime,
+          endTime,
           icon: selectedIcon,
           iconColor,
         },
@@ -3287,22 +3550,37 @@ export default function App() {
     if (action.startsWith("handleManualEntrySubmit")) {
       const entryType = data.get("manualEntryType");
       const isAbsentEntry = entryType === "Absent";
-      const targetDate = String(data.get("manualEntryDate") || "");
-      const [targetYear, targetMonth, targetDay] = targetDate
-        .split("-")
-        .map(Number);
-      const parsedTargetDate = new Date(`${targetDate}T00:00:00Z`);
-      const isValidTargetDate =
-        /^\d{4}-\d{2}-\d{2}$/.test(targetDate) &&
-        !Number.isNaN(parsedTargetDate.getTime()) &&
-        parsedTargetDate.toISOString().slice(0, 10) === targetDate;
+      const targetDate = String(
+        data.get("manualEntryDate") || selectedCalendarRange?.startDate || "",
+      );
+      const targetDates = selectedCalendarRange
+        ? getInclusiveDateKeys(
+            selectedCalendarRange.startDate,
+            selectedCalendarRange.endDate,
+          )
+        : getInclusiveDateKeys(targetDate, targetDate);
+      const isRangeEntry = Boolean(selectedCalendarRange);
       const manualTimeIn = String(data.get("manualTimeIn") || "");
       const manualTimeOut = String(data.get("manualTimeOut") || "");
       const manualInMinutes = parseTimeMinutes(manualTimeIn);
       const manualOutMinutes = parseTimeMinutes(manualTimeOut);
-      if (!isValidTargetDate) {
+      if (!targetDates.length) {
         showToast("Choose a valid target date.", "warning");
         return;
+      }
+      if (isRangeEntry) {
+        const conflictingDates = getManualEntryRangeConflicts(
+          attendance,
+          targetDates,
+          activeTimeEntry?.date,
+        );
+        if (conflictingDates.length) {
+          showToast(
+            `Manual entry was not applied. Attendance already exists or Time In is active on: ${conflictingDates.join(", ")}.`,
+            "warning",
+          );
+          return;
+        }
       }
       if (
         !isAbsentEntry &&
@@ -3316,150 +3594,162 @@ export default function App() {
         );
         return;
       }
-      const assignedRecord = attendance[targetDate] || defaultAttendance;
+      const isOvertimeClaim = entryType === "Overtime";
+      const configuredOvertimeMultiplier = Number(overtimeMultiplier);
       if (
-        assignedRecord.hasAssignedShift !== true &&
-        !(assignedRecord.shiftStartTime && assignedRecord.shiftEndTime)
+        isOvertimeClaim &&
+        (!Number.isFinite(configuredOvertimeMultiplier) ||
+          configuredOvertimeMultiplier <= 0)
       ) {
         showToast(
-          "Assign a shift to the target date before adding a manual attendance entry.",
+          "Enter a valid overtime multiplier in Settings before recording overtime.",
           "warning",
         );
         return;
       }
-      if (assignedRecord.type !== "Regular") {
-        showToast(
-          `Manual attendance cannot replace a ${assignedRecord.type.toLowerCase()} date without an eligible scheduled shift.`,
-          "warning",
-        );
-        return;
-      }
-      const scheduledStart = parseTimeMinutes(assignedRecord.shiftStartTime);
-      const scheduledEndOfDay = parseTimeMinutes(assignedRecord.shiftEndTime);
-      if (scheduledStart === null || scheduledEndOfDay === null) {
-        showToast(
-          "The assigned shift has invalid scheduled times. Update the shift before entering attendance.",
-          "warning",
-        );
-        return;
-      }
-      const overnightShift = scheduledEndOfDay <= scheduledStart;
-      const scheduledEnd = overnightShift
-        ? scheduledEndOfDay + 1440
-        : scheduledEndOfDay;
-      const manualStart =
-        overnightShift && manualInMinutes < scheduledEndOfDay
-          ? manualInMinutes + 1440
-          : manualInMinutes;
-      const manualEnd =
-        overnightShift &&
-        (manualOutMinutes <= manualInMinutes || manualStart >= 1440)
-          ? manualOutMinutes + 1440
-          : manualOutMinutes;
-      const isOvertimeClaim = entryType === "Overtime";
-      if (!isAbsentEntry) {
-        const invalidShiftTimes =
-          manualStart < scheduledStart - earlyPunchWindowMinutes ||
-          manualStart > scheduledEnd ||
-          manualEnd <= manualStart ||
-          manualEnd > manualStart + 1440 ||
-          (isOvertimeClaim
-            ? manualEnd <= scheduledEnd
-            : manualEnd > scheduledEnd);
-        if (invalidShiftTimes) {
-          showToast(
-            isOvertimeClaim
-              ? "An overtime claim must end after the assigned shift. Time In must fall within the assigned shift and its allowed early-punch window."
-              : "Time In and Time Out must fall within the assigned shift and its allowed early-punch window.",
-            "warning",
-          );
-          return;
-        }
-      }
-      let badges = [
-        { text: "Present", color: "bg-emerald-100 text-emerald-800" },
-      ];
-      let dots = [{ title: "Present", color: "bg-emerald-500" }];
-      let shift = "Manual Entry Adjustment";
-      let base = assignedRecord.base || "P0.00";
-      let ot = "P0.00";
-      let est = `${base} PHP`;
-      let overtimeAmount = 0;
-      let overtimeMinutes = 0;
-      let inValue = formatTime(manualTimeIn);
-      let outValue = formatTime(manualTimeOut);
-      const rawTimingFlags = isAbsentEntry
-        ? { late: false, lateMinutes: 0, undertime: false, undertimeMinutes: 0 }
-        : getAttendanceTimingFlags(
-            assignedRecord,
-            manualTimeIn,
-            manualTimeOut,
-            lateGracePeriodMinutes,
-          );
-      const timingFlags =
-        entryType === "Half-day"
-          ? { ...rawTimingFlags, undertime: false, undertimeMinutes: 0 }
-          : rawTimingFlags;
-      const timingIndicators = getTimingIndicators(timingFlags);
-      if (entryType === "Half-day") {
-        const scheduledShiftMinutes = scheduledEnd - scheduledStart;
-        const hourlyBase =
-          getAmount(assignedRecord.base) / (scheduledShiftMinutes / 60);
-        base = formatPayAmount(hourlyBase * 4);
-        est = `${base} PHP`;
-        shift = "Half-day";
-        badges = [{ text: "Half-day", color: "bg-amber-100 text-amber-800" }];
-        dots = [{ title: "Half-day", color: "bg-amber-500" }];
-      } else if (entryType === "Overtime") {
-        const scheduledShiftMinutes = scheduledEnd - scheduledStart;
-        overtimeMinutes = manualEnd - scheduledEnd;
-        const hourlyBase =
-          getAmount(assignedRecord.base) / (scheduledShiftMinutes / 60);
-        const configuredOvertimeMultiplier = Number(overtimeMultiplier);
+
+      const attendanceUpdates = {};
+      for (const targetDate of targetDates) {
+        const assignedRecord = attendance[targetDate] || defaultAttendance;
         if (
-          !Number.isFinite(configuredOvertimeMultiplier) ||
-          configuredOvertimeMultiplier <= 0
+          assignedRecord.hasAssignedShift !== true &&
+          !(assignedRecord.shiftStartTime && assignedRecord.shiftEndTime)
         ) {
           showToast(
-            "Enter a valid overtime multiplier in Settings before recording overtime.",
+            `Assign a shift to ${targetDate} before adding a manual attendance entry.`,
             "warning",
           );
           return;
         }
-        overtimeAmount =
-          hourlyBase * (overtimeMinutes / 60) * configuredOvertimeMultiplier;
-        const overtimeDurationLabel = formatDuration(overtimeMinutes);
-        badges.push({
-          text: "Overtime Claim",
-          color: "bg-purple-100 text-purple-800",
-          title: `Overtime: ${overtimeDurationLabel}`,
-        });
-        dots.push({
-          title: `Overtime: ${overtimeDurationLabel}`,
-          color: "bg-purple-500",
-        });
-        shift = "Overtime Claim";
-        est = formatPayAmount(getAmount(base) + overtimeAmount) + " PHP";
-        ot = `${formatPayAmount(overtimeAmount)} (${formatDuration(overtimeMinutes)} OT)`;
-      } else if (isAbsentEntry) {
-        badges = [{ text: "Absent", color: "bg-red-100 text-red-800" }];
-        dots = [];
-        shift = "Absent";
-        base = "P0.00";
-        ot = "P0.00";
-        est = "P0.00 PHP";
-        inValue = "—";
-        outValue = "—";
-      } else if (entryType === "Official Business") {
-        badges = [
-          { text: "Official Business", color: "bg-teal-100 text-teal-800" },
+        if (assignedRecord.type !== "Regular") {
+          showToast(
+            `Manual attendance cannot replace a ${assignedRecord.type.toLowerCase()} date on ${targetDate} without an eligible scheduled shift.`,
+            "warning",
+          );
+          return;
+        }
+        const scheduledStart = parseTimeMinutes(assignedRecord.shiftStartTime);
+        const scheduledEndOfDay = parseTimeMinutes(assignedRecord.shiftEndTime);
+        if (scheduledStart === null || scheduledEndOfDay === null) {
+          showToast(
+            `The assigned shift on ${targetDate} has invalid scheduled times. Update the shift before entering attendance.`,
+            "warning",
+          );
+          return;
+        }
+        const overnightShift = scheduledEndOfDay <= scheduledStart;
+        const scheduledEnd = overnightShift
+          ? scheduledEndOfDay + 1440
+          : scheduledEndOfDay;
+        const manualStart =
+          overnightShift && manualInMinutes < scheduledEndOfDay
+            ? manualInMinutes + 1440
+            : manualInMinutes;
+        const manualEnd =
+          overnightShift &&
+          (manualOutMinutes <= manualInMinutes || manualStart >= 1440)
+            ? manualOutMinutes + 1440
+            : manualOutMinutes;
+        if (!isAbsentEntry) {
+          const invalidShiftTimes =
+            manualStart < scheduledStart - earlyPunchWindowMinutes ||
+            manualStart > scheduledEnd ||
+            manualEnd <= manualStart ||
+            manualEnd > manualStart + 1440 ||
+            (isOvertimeClaim
+              ? manualEnd <= scheduledEnd
+              : manualEnd > scheduledEnd);
+          if (invalidShiftTimes) {
+            showToast(
+              isOvertimeClaim
+                ? `An overtime claim on ${targetDate} must end after the assigned shift. Time In must fall within the shift and its allowed early-punch window.`
+                : `Time In and Time Out on ${targetDate} must fall within the assigned shift and its allowed early-punch window.`,
+              "warning",
+            );
+            return;
+          }
+        }
+
+        let badges = [
+          { text: "Present", color: "bg-emerald-100 text-emerald-800" },
         ];
-        shift = "Official Business / Field Work";
-      }
-      const key = getAttendanceKey(targetMonth - 1, targetDay, targetYear);
-      setAttendance((state) => ({
-        ...state,
-        [key]: applyAttendanceTiming(
+        let dots = [{ title: "Present", color: "bg-emerald-500" }];
+        let shift = "Manual Entry Adjustment";
+        let base = assignedRecord.base || "P0.00";
+        let ot = "P0.00";
+        let est = `${base} PHP`;
+        let overtimeAmount = 0;
+        let overtimeMinutes = 0;
+        let inValue = formatTime(manualTimeIn);
+        let outValue = formatTime(manualTimeOut);
+        const rawTimingFlags = isAbsentEntry
+          ? {
+              late: false,
+              lateMinutes: 0,
+              undertime: false,
+              undertimeMinutes: 0,
+            }
+          : getAttendanceTimingFlags(
+              assignedRecord,
+              manualTimeIn,
+              manualTimeOut,
+              lateGracePeriodMinutes,
+            );
+        const timingFlags =
+          entryType === "Half-day"
+            ? { ...rawTimingFlags, undertime: false, undertimeMinutes: 0 }
+            : rawTimingFlags;
+        const timingIndicators = getTimingIndicators(timingFlags);
+        if (entryType === "Half-day") {
+          const scheduledShiftMinutes = scheduledEnd - scheduledStart;
+          const hourlyBase =
+            getAmount(assignedRecord.base) / (scheduledShiftMinutes / 60);
+          base = formatPayAmount(hourlyBase * 4);
+          est = `${base} PHP`;
+          shift = "Half-day";
+          badges = [
+            { text: "Half-day", color: "bg-amber-100 text-amber-800" },
+          ];
+          dots = [{ title: "Half-day", color: "bg-amber-500" }];
+        } else if (isOvertimeClaim) {
+          const scheduledShiftMinutes = scheduledEnd - scheduledStart;
+          overtimeMinutes = manualEnd - scheduledEnd;
+          const hourlyBase =
+            getAmount(assignedRecord.base) / (scheduledShiftMinutes / 60);
+          overtimeAmount =
+            hourlyBase *
+            (overtimeMinutes / 60) *
+            configuredOvertimeMultiplier;
+          const overtimeDurationLabel = formatDuration(overtimeMinutes);
+          badges.push({
+            text: "Overtime Claim",
+            color: "bg-purple-100 text-purple-800",
+            title: `Overtime: ${overtimeDurationLabel}`,
+          });
+          dots.push({
+            title: `Overtime: ${overtimeDurationLabel}`,
+            color: "bg-purple-500",
+          });
+          shift = "Overtime Claim";
+          est = formatPayAmount(getAmount(base) + overtimeAmount) + " PHP";
+          ot = `${formatPayAmount(overtimeAmount)} (${formatDuration(overtimeMinutes)} OT)`;
+        } else if (isAbsentEntry) {
+          badges = [{ text: "Absent", color: "bg-red-100 text-red-800" }];
+          dots = [];
+          shift = "Absent";
+          base = "P0.00";
+          ot = "P0.00";
+          est = "P0.00 PHP";
+          inValue = "—";
+          outValue = "—";
+        } else if (entryType === "Official Business") {
+          badges = [
+            { text: "Official Business", color: "bg-teal-100 text-teal-800" },
+          ];
+          shift = "Official Business / Field Work";
+        }
+
+        attendanceUpdates[targetDate] = applyAttendanceTiming(
           {
             ...assignedRecord,
             type: isAbsentEntry ? "Absent" : "Regular",
@@ -3503,102 +3793,58 @@ export default function App() {
           isAbsentEntry ? "" : manualTimeIn,
           isAbsentEntry ? "" : manualTimeOut,
           lateGracePeriodMinutes,
-        ),
-      }));
+        );
+      }
+      setAttendance((state) => ({ ...state, ...attendanceUpdates }));
+      const [targetYear, targetMonth, targetDay] = targetDates[0]
+        .split("-")
+        .map(Number);
       changeMonthTo(targetYear, targetMonth - 1);
       setSelectedDay(targetDay);
-      if (activeTimeEntry?.date === targetDate) setActiveTimeEntry(null);
+      if (targetDates.includes(activeTimeEntry?.date)) setActiveTimeEntry(null);
       setActiveModal(null);
-      showToast("Manual entry applied successfully!", "success");
+      showToast(
+        isRangeEntry
+          ? `Manual entry applied to ${targetDates.length} day(s).`
+          : "Manual entry applied successfully!",
+        "success",
+      );
     } else if (action.startsWith("handleAssignShiftSubmit")) {
-      const startValue = String(data.get("assignStartDate") || "");
-      const endValue = String(data.get("assignEndDate") || "");
-      const startDate = new Date(`${startValue}T00:00:00`);
-      const endDate = new Date(`${endValue}T00:00:00`);
-      if (
-        !startValue ||
-        !endValue ||
-        Number.isNaN(startDate.valueOf()) ||
-        Number.isNaN(endDate.valueOf())
-      ) {
+      const startValue = String(
+        data.get("assignStartDate") || selectedCalendarRange?.startDate || "",
+      );
+      const endValue = String(
+        data.get("assignEndDate") || selectedCalendarRange?.endDate || "",
+      );
+      if (!startValue || !endValue) {
         showToast("Please select both start and end dates.", "warning");
         return;
       }
-      if (startDate > endDate) {
+      if (startValue > endValue) {
         showToast("Start date cannot be after end date.", "warning");
+        return;
+      }
+      const dateKeys = getInclusiveDateKeys(startValue, endValue);
+      if (!dateKeys.length) {
+        showToast("Please select valid start and end dates.", "warning");
         return;
       }
       const template =
         shiftTemplates.find((item) => item.id === selectedShiftTemplate) ||
         shiftTemplates.find((item) => item.id === "rest-day");
-      const updates = {};
-      const day = new Date(startDate);
-      const configuredWage = Number(dailyWage);
-      const shiftPay =
-        Number.isFinite(configuredWage) && configuredWage > 0
-          ? formatPayAmount(configuredWage)
-          : "P0.00";
-      let assigned = 0;
-      while (day <= endDate) {
-        const key = getAttendanceKey(
-          day.getMonth(),
-          day.getDate(),
-          day.getFullYear(),
-        );
-        updates[key] =
-          template.id === "rest-day"
-            ? {
-                type: "Rest Day",
-                shift: "Rest Day",
-                wageRate: "0%",
-                base: "P0.00",
-                ot: "P0.00",
-                penalty: "P0.00",
-                est: "P0.00 PHP",
-                assigned: "Rest Day",
-                in: "—",
-                out: "—",
-                workStartTime: "",
-                workEndTime: "",
-                dots: [],
-                badges: [
-                  { text: "Rest Day", color: "bg-slate-200 text-slate-700" },
-                ],
-              }
-            : {
-                type: "Regular",
-                shift: template.label || template.name,
-                wageRate: "100%",
-                base: shiftPay,
-                ot: "P0.00",
-                penalty: "P0.00",
-                est: `${shiftPay} PHP`,
-                assigned: template.assigned,
-                workStartTime: "",
-                workEndTime: "",
-                shiftStartTime: template.startTime || "",
-                shiftEndTime: template.endTime || "",
-                assignedShiftTemplateId: template.id,
-                hasAssignedShift: true,
-                in: "—",
-                out: "—",
-                customIcon: template.icon,
-                customIconColor: template.iconColor,
-                dots: [],
-                badges: [
-                  {
-                    text: template.label || template.name,
-                    color: "bg-teal-100 text-teal-800",
-                  },
-                ],
-              };
-        assigned += 1;
-        day.setDate(day.getDate() + 1);
-      }
-      setAttendance((state) => ({ ...state, ...updates }));
+      setAttendance((state) => ({
+        ...state,
+        ...createShiftAssignmentUpdates(
+          state,
+          dateKeys,
+          template,
+          dailyWage,
+          shiftTemplates,
+        ),
+      }));
       setActiveModal(null);
       showToast(
-        `Shift "${template.name}" assigned to ${assigned} day(s).`,
+        `Shift "${template.name}" assigned to ${dateKeys.length} day(s).`,
         "success",
       );
     } else if (action.startsWith("handleGrantLeaveSubmit")) {
@@ -3725,6 +3971,15 @@ export default function App() {
     });
   }, [monthIndex, monthCarouselMotion, year]);
 
+  const activeCalendarRange =
+    calendarRangePreview || selectedCalendarRange;
+  const calendarRangeStatus = calendarRangePreview
+    ? `Selecting: ${formatCalendarRangeDate(calendarRangePreview.startDate)} – ${formatCalendarRangeDate(calendarRangePreview.endDate)} (${calendarRangePreview.dayCount} day${calendarRangePreview.dayCount === 1 ? "" : "s"})`
+    : calendarRangeMode
+      ? calendarRangeAnchor
+        ? `Select an end date after ${formatCalendarRangeDate(calendarRangeAnchor)}`
+        : "Select a start date"
+      : "Single-click any day to inspect";
   const calendarCells = useMemo(() => {
     const firstDay = new Date(year, monthIndex, 1).getDay();
     const totalDays = new Date(year, monthIndex + 1, 0).getDate();
@@ -3748,48 +4003,61 @@ export default function App() {
       );
     }
     for (let day = 1; day <= totalDays; day += 1) {
+      const date = formatDate(year, monthIndex, day);
+      const calendarRecord = applyHoliday(
+        applyConfiguredAttendanceTiming(
+          getAutomaticAttendanceStatus(
+            getRecord(attendance, monthIndex, day, year),
+            date,
+            manilaNow,
+          ),
+          lateGracePeriodMinutes,
+        ),
+        getHolidayForDate(holidays, date, selectedLocality),
+      );
+      const payrollCalculation = getPayrollRecordCalculation(
+        calendarRecord,
+        date,
+      );
       cells.push(
         <CalendarDay
           key={`${year}-${monthIndex}-${day}`}
           day={day}
           year={year}
           monthIndex={monthIndex}
+          dateKey={date}
           shiftTemplates={shiftTemplates}
-          record={applyNightDifferential(
-            applyHoliday(
-              applyConfiguredAttendanceTiming(
-                getAutomaticAttendanceStatus(
-                  getRecord(attendance, monthIndex, day, year),
-                  formatDate(year, monthIndex, day),
-                  manilaNow,
-                ),
-                lateGracePeriodMinutes,
-              ),
-              getHolidayForDate(
-                holidays,
-                formatDate(year, monthIndex, day),
-                selectedLocality,
-              ),
-            ),
-            nightDifferential,
-            dailyWage,
-          )}
-          selected={day === selectedDay}
-          hasIncentive={incentiveDates.has(formatDate(year, monthIndex, day))}
-          onSelect={() => setSelectedDay(day)}
+          record={applyNightDifferential(calendarRecord, payrollCalculation)}
+          selected={day === selectedDay && !activeCalendarRange}
+          hasIncentive={incentiveDates.has(date)}
+          rangePosition={getDateRangePosition(date, activeCalendarRange)}
+          rangeMode={calendarRangeMode}
+          onSelect={(event) => handleCalendarDateClick(date, event)}
+          onRangePointerStart={handleRangePointerStart}
+          onRangePointerMove={handleRangePointerMove}
+          onRangePointerEnd={handleRangePointerEnd}
+          onRangePointerCancel={handleRangePointerCancel}
+          onNavigate={handleCalendarDayNavigate}
         />,
       );
     }
     return cells;
   }, [
     attendance,
+    activeCalendarRange,
     availableEmployeeIncentives,
-    dailyWage,
+    calendarRangeMode,
+    getPayrollRecordCalculation,
+    handleCalendarDateClick,
+    handleCalendarDayNavigate,
+    handleRangePointerCancel,
+    handleRangePointerEnd,
+    handleRangePointerMove,
+    handleRangePointerStart,
     holidays,
     lateGracePeriodMinutes,
     manilaNow,
     monthIndex,
-    nightDifferential,
     selectedDay,
     selectedLocality,
     shiftTemplates,
@@ -4050,6 +4318,9 @@ export default function App() {
               yearOptions={yearOptions}
               onYearChange={changeYear}
               calendarCells={calendarCells}
+              calendarRangeMode={calendarRangeMode}
+              calendarRangeStatus={calendarRangeStatus}
+              onCalendarRangeModeToggle={handleCalendarRangeModeToggle}
               monthLabel={monthLabel}
               monthValue={calendarPayrollMonth}
               year={year}
@@ -4067,12 +4338,12 @@ export default function App() {
               estimatedEarnings={selectedEstimatedEarnings}
               selectedDateIncentives={selectedDateIncentives}
               onAddIncentive={addEmployeeIncentive}
-              dailyAllowance={dailyAllowance}
+              dailyAllowance={selectedPayrollSettings.dailyAllowance}
               holidayWorkedHours={selectedWorkedHours}
               nightDifferentialPay={selectedNightDifferentialPay}
               overtimePay={selectedOvertimePay}
               overtimeCalculation={selectedOvertimeCalculation}
-              configuredDailyWage={dailyWage}
+              configuredDailyWage={selectedPayrollSettings.dailyWage}
               onOpenHolidayPaySettings={() => {
                 setActiveSettingsTab("earnings");
                 setActiveModal("settingsModal");
@@ -4084,6 +4355,7 @@ export default function App() {
               totalExpenses={financeTotalExpenses}
               grossPay={financeGrossPay}
               payrollDeductions={financePayrollDeductions}
+              pendingPayrollRecords={financePendingPayrollCount}
               remaining={financeRemaining}
               percentage={financePercentage}
               netPay={financeNetPay}
@@ -4129,10 +4401,18 @@ export default function App() {
               onUpdateTravelExpense={updateTravelExpense}
               onDeleteTravelExpense={deleteTravelExpense}
             />
+            <CalendarRangeActionsModal
+              open={activeModal === "calendarRangeActionsModal"}
+              range={selectedCalendarRange}
+              onAssignShift={openRangeAssignShift}
+              onClearShifts={clearSelectedShiftRange}
+              onManualEntry={openRangeManualEntry}
+            />
             <ManualEntryModal
-              key={`manual-${selectedDate}`}
+              key={`manual-${selectedDate}-${selectedCalendarRange?.startDate || ""}-${selectedCalendarRange?.endDate || ""}`}
               open={activeModal === "manualEntryModal"}
               selectedDate={selectedDate}
+              selectedRange={selectedCalendarRange}
               initialTimeIn={
                 selectedAttendanceRecord.shiftStartTime ||
                 selectedAttendanceRecord.workStartTime ||
@@ -4145,12 +4425,17 @@ export default function App() {
               }
             />
             <AssignShiftModal
-              key={`shift-${selectedDate}`}
+              key={`shift-${selectedDate}-${selectedCalendarRange?.startDate || ""}-${selectedCalendarRange?.endDate || ""}`}
               open={activeModal === "assignShiftModal"}
               selectedDate={selectedDate}
+              selectedRange={selectedCalendarRange}
               shiftTemplateCards={shiftTemplateCards}
               customShiftName={customShiftName}
               setCustomShiftName={setCustomShiftName}
+              customShiftStart={customShiftStart}
+              setCustomShiftStart={setCustomShiftStart}
+              customShiftEnd={customShiftEnd}
+              setCustomShiftEnd={setCustomShiftEnd}
               selectedIcon={selectedIcon}
             />
             <GrantLeaveModal
@@ -4180,6 +4465,7 @@ export default function App() {
               payrollPeriodEarningsAvailable={isPayrollPeriodEarningsAvailable(
                 privateFinancialDataStatus,
               )}
+              pendingPayrollRecords={selectedPayslipPendingCount}
               dailyWage={dailyWage}
               formatCurrency={formatCurrency}
               canSavePayslip={privateFinancialDataStatus === "ready"}
@@ -4207,6 +4493,7 @@ export default function App() {
                 payrollSettings={privateFinancialSettings}
                 payrollDeductions={payrollDeductions}
                 nightDifferential={nightDifferential}
+                payrollEffectiveDate={manilaNow.date}
                 onDeleteAccount={deleteAccount}
                 accountDeletionLoading={accountDeletionLoading}
                 privateFinancialDataStatus={privateFinancialDataStatus}
@@ -4248,30 +4535,60 @@ export default function App() {
                     );
                     privateFinancialDataSyncTimerRef.current = null;
                     try {
+                      const currentPayrollSettings = {
+                        ...privateFinancialSettings,
+                        dailyWage,
+                        dailyAllowance,
+                        overtimeMultiplier,
+                        nightDifferential,
+                      };
+                      const nextPayrollSettings = {
+                        ...currentPayrollSettings,
+                        dailyWage: draft.dailyWage,
+                        dailyAllowance: draft.dailyAllowance,
+                        overtimeMultiplier: draft.overtimeMultiplier,
+                        nightDifferential: draft.nightDifferential,
+                        ...Object.fromEntries(
+                          payrollDeductionSettingKeys.map((key) => [
+                            key,
+                            draft[key],
+                          ]),
+                        ),
+                      };
+                      const payrollUpdate = createPayrollSettingsUpdate({
+                        currentSettings: currentPayrollSettings,
+                        nextSettings: nextPayrollSettings,
+                        effectiveDate: draft.payrollEffectiveDate,
+                        attendance,
+                        holidays: draft.holidays,
+                        selectedLocality: draft.selectedLocality,
+                        holidayEligibilityConfirmed:
+                          draft.holidayEligibilityConfirmed,
+                      });
                       await persistPrivateFinancialData({
-                        settings: {
-                          ...privateFinancialSettings,
-                          dailyWage: draft.dailyWage,
-                          dailyAllowance: draft.dailyAllowance,
-                          overtimeMultiplier: draft.overtimeMultiplier,
-                          nightDifferential: draft.nightDifferential,
-                          ...Object.fromEntries(
-                            payrollDeductionSettingKeys.map((key) => [
-                              key,
-                              draft[key],
-                            ]),
-                          ),
-                        },
-                        attendance:
-                          extractPrivateFinancialAttendance(attendance),
+                        settings: payrollUpdate.settings,
+                        attendance: payrollUpdate.attendance,
                         payslips: historicalPayslipsRef.current,
                       });
                       privateFinancialDataSkipNextSyncRef.current = true;
+                      setPrivateFinancialSettings((current) => ({
+                        ...current,
+                        ...Object.fromEntries(
+                          payrollDeductionSettingKeys.map((key) => [
+                            key,
+                            draft[key],
+                          ]),
+                        ),
+                        payrollSettingsHistory:
+                          payrollUpdate.settings.payrollSettingsHistory,
+                      }));
                     } catch (error) {
                       const conflict = error?.code === "REVISION_CONFLICT";
                       const message = conflict
                         ? "Private financial data changed on another device. Reload before saving."
-                        : "Salary settings could not be saved. Your settings were not confirmed as saved.";
+                        : error instanceof Error
+                          ? error.message
+                          : "Salary settings could not be saved. Your settings were not confirmed as saved.";
                       setPrivateFinancialDataError(message);
                       addToast(message, "error");
                       return false;
@@ -4286,15 +4603,6 @@ export default function App() {
                   setDailyAllowance(draft.dailyAllowance);
                   setOvertimeMultiplier(draft.overtimeMultiplier);
                   setNightDifferential(draft.nightDifferential);
-                  setPrivateFinancialSettings((current) => ({
-                    ...current,
-                    ...Object.fromEntries(
-                      payrollDeductionSettingKeys.map((key) => [
-                        key,
-                        draft[key],
-                      ]),
-                    ),
-                  }));
                   setSettingsBalances(draft.settingsBalances);
                   setLeaveBalances({
                     VL: Number(draft.settingsBalances.VL) || 0,

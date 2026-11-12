@@ -216,7 +216,13 @@ export function summarizePayrollPeriod(
       if (dateIsInPeriod) recordedEarnings += getAmount(record.est);
       continue;
     }
-    if (["Absent", "Rest Day", "Unassigned"].includes(record.type)) continue;
+    if (record.type === "Absent") {
+      if (dateIsInPeriod) {
+        recordedEarnings += getAmount(getEarningsForRecord(record, dateKey));
+      }
+      continue;
+    }
+    if (["Rest Day", "Unassigned"].includes(record.type)) continue;
 
     const interval = getAttendanceInterval(dateKey, record);
     if (!interval) continue;

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   extractPrivateFinancialData,
+  extractPrivateFinancialAttendance,
   extractPrivateFinancialSettings,
   mergeAttendancePunches,
   mergeLocalPrivateAttendance,
@@ -92,6 +93,10 @@ test("travel plans and their separate expense history remain in cloud workspace 
 
 test("payroll deduction settings stay private in server-managed financial data", () => {
   const payrollSettings = {
+    payrollSettingsHistory: [{
+      effectiveDate: "2026-10-01",
+      settings: { dailyWage: "1200", nightDifferential: "10" },
+    }],
     payrollDeductionMode: "manual",
     manualSssPerPaycheck: "125.50",
     manualPhilHealthPerPaycheck: "200",
@@ -112,6 +117,7 @@ test("payroll deduction settings stay private in server-managed financial data",
     dailyAllowance: "0",
     overtimeMultiplier: "1.25",
     nightDifferential: "10",
+    payrollSettingsHistory: [],
     ...payrollSettings,
   });
   assert.deepEqual(workspaceData, {});
@@ -137,10 +143,12 @@ test("private settings provide defaults for older financial records", () => {
     dailyAllowance: "0",
     overtimeMultiplier: "1.25",
     nightDifferential: "10",
+    payrollSettingsHistory: [],
     payrollDeductionMode: "automatic",
     manualSssPerPaycheck: "0",
     manualPhilHealthPerPaycheck: "0",
     manualPagIbigPerPaycheck: "0",
+  });
   });
 
   test("extracts legacy workspace financial data before stripping it from workspace saves", () => {
@@ -151,7 +159,7 @@ test("private settings provide defaults for older financial records", () => {
           type: "Regular",
           base: "P1800.00",
           est: "P1800.00 PHP",
-        },
+      },
       },
     };
     const legacyData = extractPrivateFinancialData(legacyWorkspace);
@@ -160,7 +168,7 @@ test("private settings provide defaults for older financial records", () => {
     assert.equal(legacyData.data.settings.dailyWage, "1800");
     assert.deepEqual(legacyData.data.attendance, {
       "2026-10-28": { base: "P1800.00", est: "P1800.00 PHP" },
-    });
+  });
     assert.deepEqual(serializeWorkspaceForCloud(legacyWorkspace), {
       attendance: { "2026-10-28": { type: "Regular" } },
     });
@@ -207,7 +215,6 @@ test("private settings provide defaults for older financial records", () => {
       ["current", "current-only"],
     );
   });
-});
 
 test("device-only financial fields merge back into local attendance", () => {
   const attendance = mergeLocalPrivateAttendance({
@@ -215,13 +222,46 @@ test("device-only financial fields merge back into local attendance", () => {
   }, {
     "2026-10-28": { base: "P2500.00", est: "P2500.00 PHP" },
   });
-
   assert.deepEqual(attendance["2026-10-28"], {
     type: "Regular",
     shift: "Morning",
     base: "P2500.00",
     est: "P2500.00 PHP",
   });
+});
+
+test("payroll calculations persist separately from source attendance", () => {
+  const attendance = {
+    "2026-10-05": {
+      type: "Regular",
+      base: "P0.00",
+      est: "P0.00 PHP",
+      workStartTime: "22:00",
+      workEndTime: "06:00",
+      payrollCalculation: {
+        status: "ready",
+        earnings: 1100,
+        breakdown: { basicPay: 1000, shiftDifferentials: 100 },
+      },
+    },
+  };
+  const privateAttendance = extractPrivateFinancialAttendance(attendance);
+  const cloudWorkspace = serializeWorkspaceForCloud({ attendance });
+
+  assert.equal(privateAttendance["2026-10-05"].base, "P0.00");
+  assert.equal(privateAttendance["2026-10-05"].est, "P0.00 PHP");
+  assert.equal(
+    privateAttendance["2026-10-05"].payrollCalculation.earnings,
+    1100,
+  );
+  assert.equal(
+    cloudWorkspace.attendance["2026-10-05"].payrollCalculation,
+    undefined,
+  );
+  assert.equal(
+    cloudWorkspace.attendance["2026-10-05"].workStartTime,
+    "22:00",
+  );
 });
 
 test("manual corrections remain visible over their original punch record", () => {

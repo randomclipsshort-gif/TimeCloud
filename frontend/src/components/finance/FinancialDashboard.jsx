@@ -32,6 +32,7 @@ export default function FinancialDashboard({
   netPay,
   grossPay,
   payrollDeductions,
+  pendingPayrollRecords = 0,
   totalHours,
   formatCurrency,
   monthValue,
@@ -288,6 +289,15 @@ export default function FinancialDashboard({
         </div>
         {activeTab === "expenses" ? (
           <>
+            {privateFinancialDataStatus === "ready" &&
+              pendingPayrollRecords > 0 && (
+                <p
+                  className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900"
+                  role="status"
+                >
+                  {`${pendingPayrollRecords} attendance record(s) in this finance period still need payroll settings or complete time data. Those records are excluded from calculated totals until resolved.`}
+                </p>
+              )}
             <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <div className="rounded-xl border border-slate-200 bg-white p-3.5">
                 <div className="flex items-center justify-between gap-2">

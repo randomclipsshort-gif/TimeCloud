@@ -17,6 +17,7 @@ export default function PayslipModal({
   cutoffPayrollDeductions,
   payrollPeriodNetPay,
   payrollPeriodEarningsAvailable,
+  pendingPayrollRecords = 0,
   dailyWage,
   formatCurrency,
   canSavePayslip,
@@ -203,6 +204,17 @@ export default function PayslipModal({
               </div>
             )}
           </div>
+
+          {!historicalPayslip &&
+            payrollPeriodEarningsAvailable &&
+            pendingPayrollRecords > 0 && (
+              <p
+                className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900"
+                role="status"
+              >
+                {`${pendingPayrollRecords} attendance record(s) in this cutoff are incomplete and excluded from the estimate. Configure the required payroll settings or complete attendance before relying on this total.`}
+              </p>
+            )}
 
           {/* Employee Meta Grid */}
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">

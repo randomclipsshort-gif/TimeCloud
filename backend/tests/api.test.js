@@ -602,3 +602,73 @@ test("ordinary punch endpoints enforce schedule, uniqueness, and server timestam
   assert.equal(duplicateClockOut.statusCode, 409);
   assert.equal(duplicateClockOut.body.error.code, "ACTIVE_PUNCH_REQUIRED");
 });
+
+test("clearing a completed punch deletes only the authenticated user's record", async () => {
+  const database = createMemoryDatabase();
+  const punches = database.collection("attendance_punches");
+  await punches.insertOne({
+    userId: "alice",
+    shiftDate: "2026-11-12",
+    timeOut: new Date("2026-11-12T08:00:00.000Z"),
+    attendanceRecord: { type: "Regular", clockedIn: false },
+  });
+  await punches.insertOne({
+    userId: "bob",
+    shiftDate: "2026-11-12",
+    timeOut: new Date("2026-11-12T08:00:00.000Z"),
+    attendanceRecord: { type: "Regular", clockedIn: false },
+  });
+
+  const cleared = await callApi(
+    database,
+    createRequest("alice", "DELETE", "/api/punches", {
+      shiftDate: "2026-11-12",
+      expectedUserId: "alice",
+    }),
+  );
+  const missing = await callApi(
+    database,
+    createRequest("alice", "DELETE", "/api/punches", {
+      shiftDate: "2026-11-12",
+      expectedUserId: "alice",
+    }),
+  );
+  const wrongOwner = await callApi(
+    database,
+    createRequest("alice", "DELETE", "/api/punches", {
+      shiftDate: "2026-11-12",
+      expectedUserId: "bob",
+    }),
+  );
+
+  assert.equal(cleared.statusCode, 200);
+  assert.deepEqual(cleared.body.data, { deleted: true });
+  assert.equal(missing.statusCode, 200);
+  assert.deepEqual(missing.body.data, { deleted: false });
+  assert.equal(wrongOwner.statusCode, 409);
+  assert.equal(wrongOwner.body.error.code, "ACCOUNT_CHANGED");
+  assert.ok(await punches.findOne({ userId: "bob", shiftDate: "2026-11-12" }));
+});
+
+test("clearing an active punch is rejected without deleting its record", async () => {
+  const database = createMemoryDatabase();
+  const punches = database.collection("attendance_punches");
+  await punches.insertOne({
+    userId: "alice",
+    shiftDate: "2026-11-12",
+    timeOut: null,
+    attendanceRecord: { type: "Regular", clockedIn: true },
+  });
+
+  const response = await callApi(
+    database,
+    createRequest("alice", "DELETE", "/api/punches", {
+      shiftDate: "2026-11-12",
+      expectedUserId: "alice",
+    }),
+  );
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.body.error.code, "ACTIVE_PUNCH_REQUIRED");
+  assert.ok(await punches.findOne({ userId: "alice", shiftDate: "2026-11-12" }));
+});

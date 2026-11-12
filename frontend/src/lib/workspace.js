@@ -275,3 +275,17 @@ export function clockInForShift(shiftDate, expectedUserId) {
 export function clockOutForShift(shiftDate, expectedUserId) {
   return callPunchOperation("/punches/clock-out", shiftDate, expectedUserId);
 }
+
+export async function clearPunchForShift(shiftDate, expectedUserId) {
+  if (!expectedUserId) {
+    throw new Error("An authenticated account is required to clear attendance.");
+  }
+  const result = await apiRequest("/punches", {
+    method: "DELETE",
+    body: { shiftDate, expectedUserId },
+  });
+  if (typeof result?.deleted !== "boolean") {
+    throw new Error("The attendance clearing operation returned no saved result.");
+  }
+  return result.deleted;
+}

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  clearPunchForShift,
   normalizeWorkspace,
   resolveOptionalWorkspaceLoads,
 } from "./workspace.js";
@@ -107,4 +108,32 @@ test("invalid punch rows disable punches instead of being silently merged", () =
 
   assert.equal(result.punchRows.length, 1);
   assert.match(result.attendancePunchLoadError.message, /malformed punch records/);
+});
+
+test("clearing an ordinary punch uses the authenticated owner-scoped API", async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, options) => {
+    request = { url, options };
+    return {
+      ok: true,
+      json: async () => ({ data: { deleted: true } }),
+    };
+  };
+
+  try {
+    assert.equal(
+      await clearPunchForShift("2026-11-13", "employee-1"),
+      true,
+    );
+    assert.equal(request.url, "/api/punches");
+    assert.equal(request.options.method, "DELETE");
+    assert.equal(request.options.credentials, "include");
+    assert.deepEqual(JSON.parse(request.options.body), {
+      shiftDate: "2026-11-13",
+      expectedUserId: "employee-1",
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

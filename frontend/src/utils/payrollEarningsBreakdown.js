@@ -133,6 +133,26 @@ export function summarizePayrollEarningsBreakdown(
       continue;
     }
 
+    if (record.type === "Absent") {
+      if (dateOrdinal < startOrdinal || dateOrdinal > endOrdinal) continue;
+      for (const { id, unit } of categoryDefinitions) {
+        const amount = Number(values[id]);
+        if (!Number.isFinite(amount) || amount <= 0) continue;
+        const aggregate = categories.get(id);
+        aggregate.total += amount;
+        if (unit === "hours") {
+          const minutes = Number(values.overtimeMinutes);
+          const hours = Number.isFinite(minutes) && minutes > 0
+            ? minutes / 60
+            : Number(values.overtimeHours) || 0;
+          aggregate.units += hours;
+        } else {
+          aggregate.units += 1;
+        }
+      }
+      continue;
+    }
+
     const interval = getAttendanceInterval(dateKey, record);
     if (
       !interval ||
