@@ -283,11 +283,7 @@ export default function AttendanceDashboard({
             }`}
           >
             <div
-              className={`flex items-center justify-between ${
-                isPayComponentsExpanded
-                  ? "mb-2 border-b border-slate-100 pb-2"
-                  : "mb-0"
-              }`}
+              className="flex min-h-6 items-center justify-between"
             >
               <button
                 type="button"
@@ -330,7 +326,9 @@ export default function AttendanceDashboard({
             </div>
 
             <div
-              className="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out"
+              className={`grid transition-[grid-template-rows,opacity,margin] duration-300 ease-in-out ${
+                isPayComponentsExpanded ? "mt-2" : "mt-0"
+              }`}
               style={{
                 gridTemplateRows: isPayComponentsExpanded ? "1fr" : "0fr",
                 opacity: isPayComponentsExpanded ? 1 : 0,
@@ -339,7 +337,11 @@ export default function AttendanceDashboard({
             >
               <div
                 id="payComponentsDetails"
-                className="min-h-0 overflow-hidden"
+                className={`min-h-0 overflow-hidden ${
+                  isPayComponentsExpanded
+                    ? "border-t border-slate-100 pt-2"
+                    : ""
+                }`}
               >
                 {/* Pay Components Borderless List */}
                 <div className="divide-y divide-slate-100 text-[11px]">
