@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowDownRight,
   CarFront,
@@ -244,7 +250,8 @@ function AnimatedCategoryShare({
   activeSelection,
   formatCurrency,
 }) {
-  const [isFadeActive, setIsFadeActive] = useState(true);
+  const rowRef = useRef(null);
+  const previousRectRef = useRef(null);
   const previousSelectionRef = useRef(activeSelection);
   const share = total > 0 ? (category.amount / total) * 100 : 0;
   const staggerDelay = index * CATEGORY_SHARE_STAGGER_MS;
@@ -255,22 +262,51 @@ function AnimatedCategoryShare({
     staggerDelay,
   );
 
-  useEffect(() => {
-    if (previousSelectionRef.current === activeSelection) return undefined;
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    if (!row) return undefined;
+
+    const currentRect = row.getBoundingClientRect();
+    const previousRect = previousRectRef.current;
+    const selectionChanged = previousSelectionRef.current !== activeSelection;
+    previousRectRef.current = currentRect;
     previousSelectionRef.current = activeSelection;
-    setIsFadeActive(false);
-    const frameId = window.requestAnimationFrame(() =>
-      setIsFadeActive(true),
+    if (
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return undefined;
+    }
+
+    const deltaX =
+      selectionChanged && previousRect
+        ? previousRect.left - currentRect.left
+        : 0;
+    const deltaY =
+      selectionChanged && previousRect
+        ? previousRect.top - currentRect.top
+        : 0;
+    const animation = row.animate(
+      [
+        {
+          opacity: 0,
+          transform: `translate(${deltaX}px, ${deltaY + 8}px)`,
+        },
+        { opacity: 1, transform: "translate(0, 0)" },
+      ],
+      {
+        duration: CATEGORY_SHARE_TRANSITION_DURATION_MS,
+        delay: staggerDelay,
+        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+        fill: "both",
+      },
     );
-    return () => window.cancelAnimationFrame(frameId);
-  }, [activeSelection]);
+    return () => animation.cancel();
+  }, [activeSelection, staggerDelay]);
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[10px] text-slate-600 ${
-        isFadeActive ? "budget-category-fade" : ""
-      }`}
-      style={{ animationDelay: `${staggerDelay}ms` }}
+      ref={rowRef}
+      className="inline-flex items-center gap-1.5 whitespace-nowrap text-[10px] text-slate-600"
     >
       <span
         className={`h-2 w-2 shrink-0 rounded-full ${category.color}`}
@@ -648,6 +684,24 @@ export default function FinancialDashboard({
     privateFinancialDataHidden || categorySpendingTotal <= 0
       ? 0
       : Math.min(Math.max(percentage, 0), 100);
+  const utilizationCategoryOrder = useMemo(() => {
+    if (expensesHidden) return [];
+    const categories = new Set(
+      validExpenses.map((expense) =>
+        typeof expense.category === "string" && expense.category.trim()
+          ? expense.category
+          : "Other",
+      ),
+    );
+    const presentationOrder = Object.keys(EXPENSE_CATEGORY_PRESENTATION);
+    return [...categories].sort((left, right) => {
+      const leftIndex = presentationOrder.indexOf(left);
+      const rightIndex = presentationOrder.indexOf(right);
+      if (leftIndex < 0) return rightIndex < 0 ? left.localeCompare(right) : 1;
+      if (rightIndex < 0) return -1;
+      return leftIndex - rightIndex;
+    });
+  }, [expensesHidden, validExpenses]);
   const previousUtilizationWidthRef = useRef(utilizationBarWidth);
   const previousFinancePeriodRef = useRef(activeFinancePeriodSelection);
   const [ghostPercent, setGhostPercent] = useState(null);
@@ -676,12 +730,23 @@ export default function FinancialDashboard({
   }, [activeFinancePeriodSelection, utilizationBarWidth]);
   const utilizationBarSegments = useMemo(() => {
     let left = 0;
-    const segments = expenseCategoryShares.map((category) => {
+    const categoryAmounts = new Map(
+      expenseCategoryShares.map(({ category, amount }) => [category, amount]),
+    );
+    const segments = utilizationCategoryOrder.map((category) => {
+      const amount = categoryAmounts.get(category) ?? 0;
       const width =
         categorySpendingTotal > 0
-          ? utilizationBarWidth * (category.amount / categorySpendingTotal)
+          ? utilizationBarWidth * (amount / categorySpendingTotal)
           : 0;
-      const segment = { ...category, left, width };
+      const segment = {
+        category,
+        amount,
+        color:
+          EXPENSE_CATEGORY_PRESENTATION[category]?.color ?? "bg-slate-400",
+        left,
+        width,
+      };
       left += width;
       return segment;
     });
@@ -701,7 +766,12 @@ export default function FinancialDashboard({
               ? "0 9999px 9999px 0"
               : "0",
     }));
-  }, [categorySpendingTotal, expenseCategoryShares, utilizationBarWidth]);
+  }, [
+    categorySpendingTotal,
+    expenseCategoryShares,
+    utilizationBarWidth,
+    utilizationCategoryOrder,
+  ]);
   const cutoffHistoryCards = useMemo(
     () =>
       (financeCutoffHistory || []).map((item) => {
@@ -1170,7 +1240,6 @@ export default function FinancialDashboard({
                             left: `${segment.left}%`,
                             width: `${segment.width}%`,
                             borderRadius: segment.borderRadius,
-                            opacity: segment.width > 0 ? 1 : 0,
                           }}
                           title={`${segment.category}: ${formatCurrency(segment.amount)}`}
                         />
@@ -1181,9 +1250,8 @@ export default function FinancialDashboard({
                         className="budget-utilization-ghost pointer-events-none absolute inset-y-0"
                         aria-hidden="true"
                         style={{
-                          "--ghost-from": `${ghostPercent}%`,
-                          "--ghost-to": `${utilizationBarWidth}%`,
-                          width: `${ghostPercent}%`,
+                          left: `${Math.min(ghostPercent, utilizationBarWidth)}%`,
+                          width: `${Math.abs(ghostPercent - utilizationBarWidth)}%`,
                         }}
                       />
                     )}
