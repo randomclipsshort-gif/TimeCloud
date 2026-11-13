@@ -88,7 +88,7 @@ import {
 import {
   getCalendarPayrollPeriod,
   formatPayrollPeriod,
-  getPayrollCutoffPeriodsForDate,
+  getPreviousPayrollPeriod,
   getPayrollPeriodForDate,
   getPayrollPeriodForMonth,
   isPayrollPeriodEarningsAvailable,
@@ -988,12 +988,11 @@ export default function App() {
   }
   const calendarRangePreviewRef = useRef(null);
   const calendarRangePointerRef = useRef(null);
-  const [financeTrackingScope, setFinanceTrackingScope] = useState(() =>
-    Number(initialCalendarDate.slice(8, 10)) >= 11 &&
-    Number(initialCalendarDate.slice(8, 10)) <= 25
-      ? "cutoff-25"
-      : "cutoff-10",
-  );
+  const [financeTrackingScope, setFinanceTrackingScope] = useState("current");
+  const [financeCustomRange, setFinanceCustomRange] = useState({
+    startDate: "",
+    endDate: "",
+  });
   const [attendance, setAttendance] = useState({});
   const [activeTimeEntry, setActiveTimeEntry] = useState(null);
   const [holidays, setHolidays] = useState(() =>
@@ -1021,6 +1020,9 @@ export default function App() {
     () => getManilaDateTime().date,
   );
   const [expenseCategory, setExpenseCategory] = useState("Utilities");
+  const [expensePaymentMethod, setExpensePaymentMethod] = useState("GCash");
+  const [expenseNote, setExpenseNote] = useState("");
+  const [editingExpenseId, setEditingExpenseId] = useState(null);
   const [toasts, setToasts] = useState([]);
   const timers = useRef(new Map());
   const confirmationResolver = useRef(null);
@@ -1117,9 +1119,7 @@ export default function App() {
       : selectedDate;
   useEffect(() => {
     const activePeriod = getPayrollPeriodForDate(financeAnchorDate);
-    setFinanceTrackingScope(
-      activePeriod?.endDate.endsWith("-25") ? "cutoff-25" : "cutoff-10",
-    );
+    setFinanceTrackingScope(activePeriod ? `period:${activePeriod.endDate}` : "current");
   }, [financeAnchorDate]);
   const currentPayrollPeriod = useMemo(
     () => getPayrollPeriodForDate(manilaNow.date),
@@ -1567,99 +1567,247 @@ export default function App() {
     0,
   );
   const { remaining, percentage } = getBudgetUtilization(netPay, totalExpenses);
-  const financeCutoffPeriods = useMemo(
-    () => {
-      if (financeTrackingScope === "month") {
-        return [10, 25].map((cutoffDay) =>
-          getPayrollPeriodForMonth(calendarPayrollMonth, cutoffDay),
+  const financePayrollHistory = useMemo(() => {
+    let period = getPayrollPeriodForDate(financeAnchorDate);
+    if (!period) return [];
+    const anchorPeriod = period;
+
+    const sourceDates = [
+      ...Object.keys(attendance),
+      ...expenses.map(getExpenseDate).filter(Boolean),
+      ...availableEmployeeIncentives.map((incentive) => incentive.date),
+      ...historicalPayslips
+        .map((snapshot) => snapshot?.period?.startDate)
+        .filter(Boolean),
+    ].filter((date) => typeof date === "string" && date <= financeAnchorDate);
+    const sourcePeriods = sourceDates
+      .map((date) => getPayrollPeriodForDate(date))
+      .filter(Boolean);
+    let earliestPeriod =
+      sourcePeriods.reduce(
+        (earliest, candidate) =>
+          candidate.endDate < earliest.endDate ? candidate : earliest,
+        period,
+      ) || period;
+    for (let index = 0; index < 3; index += 1) {
+      earliestPeriod = getPreviousPayrollPeriod(earliestPeriod) || earliestPeriod;
+    }
+
+    const history = [];
+    while (
+      period &&
+      period.endDate >= earliestPeriod.endDate &&
+      history.length < 500
+    ) {
+      const summary = summarizePayrollPeriod(
+        attendance,
+        period,
+        getPayrollRecordEarnings,
+        availableEmployeeIncentives,
+      );
+      const payrollMonth = period.endDate.slice(0, 7);
+      const monthlyGrossPay = [10, 25].reduce((total, cutoffDay) => {
+        const monthPeriod = getPayrollPeriodForMonth(payrollMonth, cutoffDay);
+        return (
+          total +
+          summarizePayrollPeriod(
+            attendance,
+            monthPeriod,
+            getPayrollRecordEarnings,
+            availableEmployeeIncentives,
+          ).recordedEarnings
         );
-      }
-      const periods = getPayrollCutoffPeriodsForDate(financeAnchorDate);
-      return periods ? [periods.firstCutoff, periods.secondCutoff] : [];
+      }, 0);
+      const settings = getPayrollDeductionSettingsDefaults(
+        getPayrollSettingsAtDate(period.endDate),
+      );
+      const deductions = calculateCutoffPayrollDeductions({
+        period,
+        mode: settings.payrollDeductionMode,
+        monthlyGrossPay,
+        manualPerPaycheck: {
+          sss: settings.manualSssPerPaycheck,
+          philHealth: settings.manualPhilHealthPerPaycheck,
+          pagIbig: settings.manualPagIbigPerPaycheck,
+        },
+        settings,
+      });
+      const savedPayslip = historicalPayslips.find(
+        (snapshot) =>
+          period.endDate < anchorPeriod.endDate &&
+          snapshot?.period?.startDate === period.startDate &&
+          snapshot?.period?.endDate === period.endDate,
+      );
+      history.push({
+        period,
+        summary: savedPayslip?.summary ?? summary,
+        grossPay:
+          savedPayslip?.summary?.recordedEarnings ?? summary.recordedEarnings,
+        deductions: savedPayslip?.deductions ?? deductions,
+        netPay:
+          savedPayslip?.netPay ??
+          Math.max(0, summary.recordedEarnings - deductions.total),
+        pendingCount: savedPayslip ? 0 : countPendingPayrollRecords(period),
+        isCurrent:
+          period.startDate === anchorPeriod.startDate &&
+          period.endDate === anchorPeriod.endDate,
+      });
+      period = getPreviousPayrollPeriod(period);
+    }
+
+    return history;
+  }, [
+    attendance,
+    availableEmployeeIncentives,
+    countPendingPayrollRecords,
+    expenses,
+    financeAnchorDate,
+    getPayrollRecordEarnings,
+    getPayrollSettingsAtDate,
+    historicalPayslips,
+  ]);
+  const financePeriodSelection =
+    financeTrackingScope === "current"
+      ? `period:${getPayrollPeriodForDate(financeAnchorDate)?.endDate}`
+      : financeTrackingScope;
+  const selectedFinanceData = financePayrollHistory.find(
+    (item) => financePeriodSelection === `period:${item.period.endDate}`,
+  );
+  const isAllHistorySelected = financePeriodSelection === "all-history";
+  const isCustomRangeSelected = financePeriodSelection === "custom-range";
+  const customRangeIsValid =
+    /^\d{4}-\d{2}-\d{2}$/.test(financeCustomRange.startDate) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(financeCustomRange.endDate) &&
+    financeCustomRange.startDate <= financeCustomRange.endDate;
+  const customRangeSummary = customRangeIsValid
+    ? summarizePayrollPeriod(
+        attendance,
+        financeCustomRange,
+        getPayrollRecordEarnings,
+        availableEmployeeIncentives,
+      )
+    : null;
+  const customRangeOverlappingPeriods = customRangeIsValid
+    ? financePayrollHistory.filter(
+        (item) =>
+          item.period.endDate >= financeCustomRange.startDate &&
+          item.period.startDate <= financeCustomRange.endDate,
+      )
+    : [];
+  const customRangePayrollDeductions = customRangeOverlappingPeriods.reduce(
+    (total, item) => {
+      const overlapPeriod = {
+        startDate:
+          item.period.startDate > financeCustomRange.startDate
+            ? item.period.startDate
+            : financeCustomRange.startDate,
+        endDate:
+          item.period.endDate < financeCustomRange.endDate
+            ? item.period.endDate
+            : financeCustomRange.endDate,
+      };
+      const overlapSummary = summarizePayrollPeriod(
+        attendance,
+        overlapPeriod,
+        getPayrollRecordEarnings,
+        availableEmployeeIncentives,
+      );
+      const ratio =
+        item.grossPay > 0
+          ? Math.min(overlapSummary.recordedEarnings / item.grossPay, 1)
+          : 0;
+      return total + item.deductions.total * ratio;
     },
-    [calendarPayrollMonth, financeAnchorDate, financeTrackingScope],
-  );
-  const financeCutoffSummaries = useMemo(
-    () =>
-      financeCutoffPeriods.map((period) =>
-        summarizePayrollPeriod(
-          attendance,
-          period,
-          getPayrollRecordEarnings,
-          availableEmployeeIncentives,
-        ),
-      ),
-    [attendance, availableEmployeeIncentives, financeCutoffPeriods, getPayrollRecordEarnings],
-  );
-  const financeCutoffMonthlyGross = financeCutoffSummaries.reduce(
-    (sum, summary) => sum + summary.recordedEarnings,
     0,
   );
-  const financeCutoffDeductions = useMemo(
-    () =>
-      financeCutoffPeriods.map((period) => {
-        const settings = getPayrollDeductionSettingsDefaults(
-          getPayrollSettingsAtDate(period.endDate),
-        );
-        return calculateCutoffPayrollDeductions({
-          period,
-          mode: settings.payrollDeductionMode,
-          monthlyGrossPay: financeCutoffMonthlyGross,
-          manualPerPaycheck: {
-            sss: settings.manualSssPerPaycheck,
-            philHealth: settings.manualPhilHealthPerPaycheck,
-            pagIbig: settings.manualPagIbigPerPaycheck,
-          },
-          settings,
-        });
+  const customRangePendingCount = customRangeOverlappingPeriods.reduce(
+    (total, item) =>
+      total +
+      countPendingPayrollRecords({
+        startDate:
+          item.period.startDate > financeCustomRange.startDate
+            ? item.period.startDate
+            : financeCustomRange.startDate,
+        endDate:
+          item.period.endDate < financeCustomRange.endDate
+            ? item.period.endDate
+            : financeCustomRange.endDate,
       }),
-    [financeCutoffMonthlyGross, financeCutoffPeriods, getPayrollSettingsAtDate],
+    0,
   );
-  const selectedFinanceCutoffIndex =
-    financeTrackingScope === "cutoff-25" ? 1 : 0;
-  const selectedFinancePeriod =
-    financeCutoffPeriods[selectedFinanceCutoffIndex];
-  const financePendingPayrollCount =
-    financeTrackingScope === "month"
-      ? financeCutoffPeriods.reduce(
-          (count, period) => count + countPendingPayrollRecords(period),
-          0,
-        )
-      : countPendingPayrollRecords(selectedFinancePeriod);
-  const financeExpenses =
-    financeTrackingScope === "month"
-      ? monthExpenses
-      : getExpensesForPeriod(expenses, selectedFinancePeriod);
+  const allHistorySummary = financePayrollHistory.reduce(
+    (total, item) => ({
+      grossPay: total.grossPay + item.grossPay,
+      deductions: total.deductions + item.deductions.total,
+      netPay: total.netPay + item.netPay,
+      hours:
+        total.hours +
+        item.summary.regularHours +
+        item.summary.overtimeHours,
+      pendingCount: total.pendingCount + item.pendingCount,
+    }),
+    { grossPay: 0, deductions: 0, netPay: 0, hours: 0, pendingCount: 0 },
+  );
+  const financeExpenses = isAllHistorySelected
+    ? expenses.filter((expense) => getExpenseDate(expense))
+    : isCustomRangeSelected
+      ? customRangeIsValid
+        ? getExpensesForPeriod(expenses, financeCustomRange)
+        : []
+      : getExpensesForPeriod(
+          expenses,
+          selectedFinanceData?.period ||
+            financePayrollHistory[0]?.period,
+        );
   const financeTotalExpenses = financeExpenses.reduce(
     (sum, item) => sum + Number(item.amount || 0),
     0,
   );
-  const financeGrossPay =
-    financeTrackingScope === "month"
-      ? financeCutoffMonthlyGross
-      : financeCutoffSummaries[selectedFinanceCutoffIndex].recordedEarnings;
-  const financePayrollDeductions =
-    financeTrackingScope === "month"
-      ? sumCutoffPayrollDeductions(...financeCutoffDeductions)
-      : financeCutoffDeductions[selectedFinanceCutoffIndex];
-  const financeNetPay = Math.max(
-    0,
-    financeGrossPay - financePayrollDeductions.total,
-  );
-  const financeTotalHours =
-    financeTrackingScope === "month"
-      ? financeCutoffSummaries.reduce(
-          (sum, summary) => sum + summary.regularHours + summary.overtimeHours,
-          0,
-        )
-      : financeCutoffSummaries[selectedFinanceCutoffIndex].regularHours +
-        financeCutoffSummaries[selectedFinanceCutoffIndex].overtimeHours;
-  const financePeriodLabel =
-    financeTrackingScope === "month"
-      ? `Full month · ${monthLabel}`
-      : formatPayrollPeriod(selectedFinancePeriod);
+  const financeGrossPay = isAllHistorySelected
+    ? allHistorySummary.grossPay
+    : isCustomRangeSelected
+      ? customRangeSummary?.recordedEarnings || 0
+      : selectedFinanceData?.grossPay || 0;
+  const financePayrollDeductions = {
+    total: isAllHistorySelected
+      ? allHistorySummary.deductions
+      : isCustomRangeSelected
+        ? customRangePayrollDeductions
+        : selectedFinanceData?.deductions.total || 0,
+  };
+  const financeNetPay = isAllHistorySelected
+    ? allHistorySummary.netPay
+    : isCustomRangeSelected
+      ? Math.max(0, financeGrossPay - financePayrollDeductions.total)
+      : selectedFinanceData?.netPay || 0;
+  const financePendingPayrollCount = isAllHistorySelected
+    ? allHistorySummary.pendingCount
+    : isCustomRangeSelected
+      ? customRangePendingCount
+      : selectedFinanceData?.pendingCount || 0;
+  const financeTotalHours = isAllHistorySelected
+    ? allHistorySummary.hours
+    : isCustomRangeSelected
+      ? (customRangeSummary?.regularHours || 0) +
+        (customRangeSummary?.overtimeHours || 0)
+      : (selectedFinanceData?.summary.regularHours || 0) +
+        (selectedFinanceData?.summary.overtimeHours || 0);
+  const financePeriodLabel = isAllHistorySelected
+    ? "All history"
+    : isCustomRangeSelected
+      ? customRangeIsValid
+        ? formatPayrollPeriod(financeCustomRange)
+        : "Select a custom date range"
+      : formatPayrollPeriod(
+          selectedFinanceData?.period || financePayrollHistory[0]?.period,
+        );
   const { remaining: financeRemaining, percentage: financePercentage } =
     getBudgetUtilization(financeNetPay, financeTotalExpenses);
+  const financeCutoffHistory = financePayrollHistory.slice(0, 4).map((item) => ({
+    ...item,
+    isSelected:
+      financePeriodSelection === `period:${item.period.endDate}`,
+  }));
   const workspaceData = useMemo(
     () => ({
       attendance: serializeWorkspaceForCloud({ attendance }).attendance,
@@ -2341,6 +2489,7 @@ export default function App() {
             pendingExpenseClearRef.current = false;
             setExpenseName("");
             setExpenseAmount("");
+            setExpenseNote("");
           }
           const savedMessages = pendingSuccessToasts.current.splice(0);
           savedMessages.forEach((message) => addToast(message, "success"));
@@ -2751,6 +2900,7 @@ export default function App() {
   const addExpense = () => {
     const name = expenseName.trim();
     const amount = Number(expenseAmount);
+    const isEditing = editingExpenseId !== null;
     if (!name)
       return showToast(
         "Please provide a valid expense description.",
@@ -2765,18 +2915,40 @@ export default function App() {
         "warning",
       );
     }
-    setExpenses((current) => [
-      {
-        id:
-          globalThis.crypto?.randomUUID?.() ||
-          `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        name,
-        category: expenseCategory,
-        amount,
-        date: expenseDate,
-      },
-      ...current,
-    ]);
+    if (isEditing) {
+      setExpenses((current) =>
+        current.map((expense) =>
+          String(expense.id) === String(editingExpenseId)
+            ? {
+                ...expense,
+                name,
+                category: expenseCategory,
+                amount,
+                date: expenseDate,
+                method: expensePaymentMethod,
+                notes: expenseNote.trim(),
+              }
+            : expense,
+        ),
+      );
+      setEditingExpenseId(null);
+    } else {
+      setExpenses((current) => [
+        {
+          id:
+            globalThis.crypto?.randomUUID?.() ||
+            `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          name,
+          category: expenseCategory,
+          amount,
+          date: expenseDate,
+          method: expensePaymentMethod,
+          notes: expenseNote.trim(),
+          createdAt: new Date().toISOString(),
+        },
+        ...current,
+      ]);
+    }
     const [expenseYear, expenseMonth, expenseDay] = expenseDate
       .split("-")
       .map(Number);
@@ -2789,7 +2961,36 @@ export default function App() {
       ),
     );
     pendingExpenseClearRef.current = true;
-    showToast("Expense record added successfully.", "success");
+    showToast(
+      isEditing
+        ? "Expense record updated successfully."
+        : "Expense record added successfully.",
+      "success",
+    );
+  };
+
+  const prepareExpenseForm = (expense, isEditing) => {
+    setEditingExpenseId(isEditing ? String(expense.id) : null);
+    setExpenseName(expense.name || "");
+    setExpenseAmount(String(expense.amount ?? ""));
+    setExpenseDate(getExpenseDate(expense) || getManilaDateTime().date);
+    setExpenseCategory(expense.category || "Utilities");
+    setExpensePaymentMethod(
+      expense.method || expense.paymentMethod || "GCash",
+    );
+    setExpenseNote(expense.notes || expense.note || "");
+    document
+      .getElementById("expenseName")
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  const editExpense = (expense) => prepareExpenseForm(expense, true);
+  const duplicateExpense = (expense) => prepareExpenseForm(expense, false);
+  const cancelExpenseEdit = () => {
+    setEditingExpenseId(null);
+    setExpenseName("");
+    setExpenseAmount("");
+    setExpenseNote("");
   };
 
   const addEmployeeIncentive = ({
@@ -2858,6 +3059,12 @@ export default function App() {
   };
 
   const deleteExpense = (id) => {
+    if (
+      editingExpenseId !== null &&
+      String(editingExpenseId) === String(id)
+    ) {
+      cancelExpenseEdit();
+    }
     setExpenses((current) => current.filter((item) => item.id !== id));
     showToast("Expense item removed.", "success");
   };
@@ -3221,6 +3428,7 @@ export default function App() {
         pendingExpenseClearRef.current = false;
         setExpenseName("");
         setExpenseAmount("");
+        setExpenseNote("");
       }
       pendingSuccessToasts.current
         .splice(0)
@@ -4510,7 +4718,10 @@ export default function App() {
               totalHours={financeTotalHours}
               financeTrackingScope={financeTrackingScope}
               setFinanceTrackingScope={setFinanceTrackingScope}
+              financeCustomRange={financeCustomRange}
+              setFinanceCustomRange={setFinanceCustomRange}
               financePeriodLabel={financePeriodLabel}
+              financeCutoffHistory={financeCutoffHistory}
               formatCurrency={formatCurrency}
               expenseName={expenseName}
               setExpenseName={setExpenseName}
@@ -4520,6 +4731,14 @@ export default function App() {
               setExpenseDate={setExpenseDate}
               expenseCategory={expenseCategory}
               setExpenseCategory={setExpenseCategory}
+              expensePaymentMethod={expensePaymentMethod}
+              setExpensePaymentMethod={setExpensePaymentMethod}
+              expenseNote={expenseNote}
+              setExpenseNote={setExpenseNote}
+              editingExpenseId={editingExpenseId}
+              onEditExpense={editExpense}
+              onDuplicateExpense={duplicateExpense}
+              onCancelExpenseEdit={cancelExpenseEdit}
               onDeleteExpense={deleteExpense}
               employeeIncentives={availableEmployeeIncentives}
               onDeleteIncentive={deleteEmployeeIncentive}

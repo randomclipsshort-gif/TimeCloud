@@ -21,6 +21,163 @@ body {
   background-color: #f8fafc;
 }
 
+.budget-track {
+  --budget-progress: 0%;
+  position: relative;
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background-color: #f1f5f9;
+  transition:
+    --budget-progress 520ms cubic-bezier(0.34, 1.36, 0.64, 1),
+    background-color 520ms cubic-bezier(0.34, 1.36, 0.64, 1);
+}
+
+@property --budget-progress {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 0%;
+}
+
+.budget-track::before {
+  position: absolute;
+  z-index: 10;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: var(--budget-progress);
+  border-radius: 9999px;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.22));
+  content: "";
+  pointer-events: none;
+}
+
+.cat-segment {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  height: 100%;
+  transition:
+    width 520ms cubic-bezier(0.34, 1.36, 0.64, 1),
+    left 520ms cubic-bezier(0.34, 1.36, 0.64, 1),
+    border-radius 240ms ease,
+    opacity 240ms ease;
+}
+
+@keyframes budget-utilization-ghost-trail {
+  from {
+    width: var(--ghost-from);
+    opacity: 0.2;
+  }
+
+  to {
+    width: var(--ghost-to);
+    opacity: 0;
+  }
+}
+
+.budget-utilization-ghost {
+  z-index: 1;
+  left: 0;
+  height: 100%;
+  border-radius: 9999px;
+  background-color: rgb(16 185 129);
+  animation: budget-utilization-ghost-trail 650ms
+    cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes budget-category-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.budget-category-fade {
+  animation: budget-category-fade 260ms ease-out both;
+}
+
+@keyframes budget-period-date-slide {
+  from {
+    opacity: 0;
+    transform: translateX(var(--period-slide-offset, 0));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.budget-period-date-slide {
+  animation: budget-period-date-slide 280ms ease-out both;
+}
+
+.accordion-wrapper {
+  display: grid;
+  grid-template-rows: 1fr;
+  margin-top: 0.75rem;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    grid-template-rows 350ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 350ms ease,
+    transform 350ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-top 350ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.accordion-wrapper.is-collapsed {
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+}
+
+.accordion-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cutoff-card {
+  transition:
+    border-color 240ms ease,
+    box-shadow 240ms ease,
+    background-color 240ms ease;
+}
+
+.cutoff-card:hover:not(.is-selected) {
+  border-color: #6ee7b7;
+  background-color: #ecfdf5;
+}
+
+.cutoff-card.is-selected {
+  border-color: #00b86b;
+  box-shadow:
+    0 0 0 1px #00b86b,
+    0 4px 14px -2px rgb(0 184 107 / 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .budget-track,
+  .budget-track::before,
+  .cat-segment,
+  .budget-utilization-ghost,
+  .budget-category-fade,
+  .budget-period-date-slide,
+  .accordion-wrapper,
+  .cutoff-card {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
 @media print {
   @page {
     margin: 14mm;

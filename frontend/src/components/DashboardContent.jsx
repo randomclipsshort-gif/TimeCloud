@@ -38,7 +38,10 @@ export default function DashboardContent(props) {
     expenses,
     financeTrackingScope,
     setFinanceTrackingScope,
+    financeCustomRange,
+    setFinanceCustomRange,
     financePeriodLabel,
+    financeCutoffHistory,
     totalExpenses,
     remaining,
     percentage,
@@ -56,6 +59,14 @@ export default function DashboardContent(props) {
     setExpenseDate,
     expenseCategory,
     setExpenseCategory,
+    expensePaymentMethod,
+    setExpensePaymentMethod,
+    expenseNote,
+    setExpenseNote,
+    editingExpenseId,
+    onEditExpense,
+    onDuplicateExpense,
+    onCancelExpenseEdit,
     onDeleteExpense,
     employeeIncentives,
     onAddIncentive,
@@ -163,7 +174,10 @@ export default function DashboardContent(props) {
               expenses={expenses}
               financeTrackingScope={financeTrackingScope}
               setFinanceTrackingScope={setFinanceTrackingScope}
+              financeCustomRange={financeCustomRange}
+              setFinanceCustomRange={setFinanceCustomRange}
               financePeriodLabel={financePeriodLabel}
+              financeCutoffHistory={financeCutoffHistory}
               totalExpenses={totalExpenses}
               remaining={remaining}
               percentage={percentage}
@@ -182,6 +196,14 @@ export default function DashboardContent(props) {
               setExpenseDate={setExpenseDate}
               expenseCategory={expenseCategory}
               setExpenseCategory={setExpenseCategory}
+              expensePaymentMethod={expensePaymentMethod}
+              setExpensePaymentMethod={setExpensePaymentMethod}
+              expenseNote={expenseNote}
+              setExpenseNote={setExpenseNote}
+              editingExpenseId={editingExpenseId}
+              onEditExpense={onEditExpense}
+              onDuplicateExpense={onDuplicateExpense}
+              onCancelExpenseEdit={onCancelExpenseEdit}
               onDeleteExpense={onDeleteExpense}
               employeeIncentives={employeeIncentives}
               onAddIncentive={onAddIncentive}
