@@ -48,6 +48,8 @@ const EXPENSE_CATEGORY_PRESENTATION = {
 
 const FINANCE_TRANSITION_DURATION_MS = 520;
 const GHOST_TRAIL_DURATION_MS = 650;
+const CATEGORY_SHARE_TRANSITION_DURATION_MS = 650;
+const CATEGORY_SHARE_STAGGER_MS = 90;
 
 const EXPENSE_LEDGER_CATEGORIES = [
   {
@@ -127,10 +129,18 @@ function formatExpenseLedgerTime(expense) {
   return typeof expense.time === "string" ? expense.time : "";
 }
 
-function useAnimatedNumber(value, duration = FINANCE_TRANSITION_DURATION_MS) {
+function useAnimatedNumber(
+  value,
+  duration = FINANCE_TRANSITION_DURATION_MS,
+  initialValue,
+  delay = 0,
+) {
   const targetValue = Number.isFinite(Number(value)) ? Number(value) : 0;
-  const displayValueRef = useRef(targetValue);
-  const [displayValue, setDisplayValue] = useState(targetValue);
+  const startingValue = Number.isFinite(Number(initialValue))
+    ? Number(initialValue)
+    : targetValue;
+  const displayValueRef = useRef(startingValue);
+  const [displayValue, setDisplayValue] = useState(startingValue);
 
   useEffect(() => {
     const startValue = displayValueRef.current;
@@ -141,34 +151,150 @@ function useAnimatedNumber(value, duration = FINANCE_TRANSITION_DURATION_MS) {
       return undefined;
     }
 
-    const startTime = window.performance.now();
     let frameId;
-    const animate = (timestamp) => {
-      const progress = Math.min(
-        (timestamp - startTime) / duration,
-        1,
-      );
-      const easedProgress = 1 - (1 - progress) ** 3;
-      const nextValue =
-        startValue + (targetValue - startValue) * easedProgress;
-      displayValueRef.current = nextValue;
-      setDisplayValue(nextValue);
-      if (progress < 1) {
-        frameId = window.requestAnimationFrame(animate);
-      } else {
-        displayValueRef.current = targetValue;
-      }
+    let timeoutId;
+    const startAnimation = () => {
+      const startTime = window.performance.now();
+      const animate = (timestamp) => {
+        const progress = Math.min((timestamp - startTime) / duration, 1);
+        const easedProgress = 1 - (1 - progress) ** 3;
+        const nextValue =
+          startValue + (targetValue - startValue) * easedProgress;
+        displayValueRef.current = nextValue;
+        setDisplayValue(nextValue);
+        if (progress < 1) {
+          frameId = window.requestAnimationFrame(animate);
+        } else {
+          displayValueRef.current = targetValue;
+        }
+      };
+
+      frameId = window.requestAnimationFrame(animate);
     };
 
-    frameId = window.requestAnimationFrame(animate);
-    return () => window.cancelAnimationFrame(frameId);
-  }, [duration, targetValue]);
+    if (delay > 0) {
+      timeoutId = window.setTimeout(startAnimation, delay);
+    } else {
+      startAnimation();
+    }
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [delay, duration, targetValue]);
 
   return displayValue;
 }
 
-function AnimatedCurrency({ value, formatCurrency }) {
-  return formatCurrency(useAnimatedNumber(value));
+function AnimatedCurrency({
+  value,
+  formatCurrency,
+  initialValue,
+  duration = FINANCE_TRANSITION_DURATION_MS,
+  delay = 0,
+}) {
+  return formatCurrency(
+    useAnimatedNumber(value, duration, initialValue, delay),
+  );
+}
+
+function StableAnimatedCurrency({
+  value,
+  formatCurrency,
+  initialValue,
+  duration,
+  delay,
+}) {
+  const previousValueRef = useRef(value);
+  const previousValue = previousValueRef.current;
+  const startingValue = initialValue ?? value;
+
+  useEffect(() => {
+    previousValueRef.current = value;
+  }, [value]);
+
+  return (
+    <span className="inline-grid align-baseline whitespace-nowrap tabular-nums">
+      {[previousValue, startingValue, value].map((reservedValue, index) => (
+        <span
+          key={index}
+          aria-hidden="true"
+          className="invisible col-start-1 row-start-1"
+        >
+          {formatCurrency(reservedValue)}
+        </span>
+      ))}
+      <span className="col-start-1 row-start-1">
+        <AnimatedCurrency
+          value={value}
+          formatCurrency={formatCurrency}
+          initialValue={initialValue}
+          duration={duration}
+          delay={delay}
+        />
+      </span>
+    </span>
+  );
+}
+
+function AnimatedCategoryShare({
+  category,
+  index,
+  total,
+  activeSelection,
+  formatCurrency,
+}) {
+  const [isFadeActive, setIsFadeActive] = useState(true);
+  const previousSelectionRef = useRef(activeSelection);
+  const share = total > 0 ? (category.amount / total) * 100 : 0;
+  const staggerDelay = index * CATEGORY_SHARE_STAGGER_MS;
+  const animatedShare = useAnimatedNumber(
+    share,
+    CATEGORY_SHARE_TRANSITION_DURATION_MS,
+    0,
+    staggerDelay,
+  );
+
+  useEffect(() => {
+    if (previousSelectionRef.current === activeSelection) return undefined;
+    previousSelectionRef.current = activeSelection;
+    setIsFadeActive(false);
+    const frameId = window.requestAnimationFrame(() =>
+      setIsFadeActive(true),
+    );
+    return () => window.cancelAnimationFrame(frameId);
+  }, [activeSelection]);
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[10px] text-slate-600 ${
+        isFadeActive ? "budget-category-fade" : ""
+      }`}
+      style={{ animationDelay: `${staggerDelay}ms` }}
+    >
+      <span
+        className={`h-2 w-2 shrink-0 rounded-full ${category.color}`}
+        aria-hidden="true"
+      />
+      <span>
+        {EXPENSE_CATEGORY_PRESENTATION[category.category]?.label ??
+          category.category}
+        :
+      </span>
+      <strong className="font-bold tabular-nums text-slate-800">
+        <StableAnimatedCurrency
+          value={category.amount}
+          formatCurrency={formatCurrency}
+          initialValue={0}
+          duration={CATEGORY_SHARE_TRANSITION_DURATION_MS}
+          delay={staggerDelay}
+        />
+      </strong>
+      <span className="inline-block min-w-[4ch] text-right tabular-nums text-slate-400">
+        {`${Math.round(animatedShare)}%`}
+      </span>
+    </span>
+  );
 }
 
 function formatCutoffHistoryPeriod(period) {
@@ -1062,48 +1188,27 @@ export default function FinancialDashboard({
                       />
                     )}
                   </div>
-                  <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                    <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
+                  <div className="mt-2 flex min-h-6 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                    <div className="flex min-h-6 min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
                       {expenseCategoryShares.length > 0 ? (
                         expenseCategoryShares.map((category, index) => (
-                          <span
+                          <AnimatedCategoryShare
                             key={category.category}
-                            className="inline-flex items-center gap-1.5 whitespace-nowrap text-[10px] text-slate-600"
-                          >
-                            <span
-                              key={`${activeFinancePeriodSelection}-${category.category}`}
-                              className="budget-category-fade inline-flex items-center gap-1.5"
-                              style={{ animationDelay: `${index * 40}ms` }}
-                            >
-                              <span
-                                className={`h-2 w-2 shrink-0 rounded-full ${category.color}`}
-                                aria-hidden="true"
-                              />
-                              <span>
-                                {EXPENSE_CATEGORY_PRESENTATION[
-                                  category.category
-                                ]?.label ?? category.category}
-                                :
-                              </span>
-                            </span>
-                            <strong className="font-bold text-slate-800">
-                              <AnimatedCurrency
-                                value={category.amount}
-                                formatCurrency={formatCurrency}
-                              />
-                            </strong>
-                            <span className="text-slate-400">
-                              {categorySpendingTotal > 0
-                                ? `${Math.round((category.amount / categorySpendingTotal) * 100)}%`
-                                : "0%"}
-                            </span>
-                          </span>
+                            category={category}
+                            index={index}
+                            total={categorySpendingTotal}
+                            activeSelection={activeFinancePeriodSelection}
+                            formatCurrency={formatCurrency}
+                          />
                         ))
                       ) : (
-                        <span className="text-[10px] text-slate-400">
+                        <span
+                          key={activeFinancePeriodSelection}
+                          className="budget-category-fade text-[10px] text-slate-400"
+                        >
                           {privateFinancialDataHidden
                             ? "Private category data"
-                            : "No expenses in this period"}
+                            : "No spending recorded for this cutoff"}
                         </span>
                       )}
                     </div>
