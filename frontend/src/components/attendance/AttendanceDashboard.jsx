@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MousePointerClick, RotateCcw } from "lucide-react";
 import ShiftIcon from "../ui/ShiftIcon.jsx";
 import { groupIncentiveEarningsItems } from "../../utils/payrollEarningsBreakdown.js";
@@ -10,8 +10,10 @@ import {
 export default function AttendanceDashboard({
   record,
   selectedDate,
+  selectedRange,
+  leaveBalances = {},
   canClearShift,
-  canRecordAttendance,
+  canMarkAbsent,
   privateFinancialDataStatus,
   holidayPayEstimate,
   estimatedEarnings,
@@ -21,6 +23,7 @@ export default function AttendanceDashboard({
   nightDifferentialPay,
   overtimePay,
   overtimeCalculation,
+  workHours,
   configuredDailyWage,
   monthTabs,
   monthCarouselOffset,
@@ -37,11 +40,15 @@ export default function AttendanceDashboard({
   const [isYearPickerOpen, setIsYearPickerOpen] = useState(false);
   const [resetAnimationKey, setResetAnimationKey] = useState(0);
   const [isPayComponentsExpanded, setIsPayComponentsExpanded] = useState(false);
-  const [isTimeAttendanceExpanded, setIsTimeAttendanceExpanded] =
+  const [isLeaveTypeSelectorOpen, setIsLeaveTypeSelectorOpen] =
     useState(false);
   const [isIncentiveFormOpen, setIsIncentiveFormOpen] = useState(false);
   const [newIncentiveName, setNewIncentiveName] = useState("");
   const [newIncentiveAmount, setNewIncentiveAmount] = useState("");
+  useEffect(() => {
+    setIsLeaveTypeSelectorOpen(false);
+  }, [selectedDate]);
+
   const salaryDataPrivate = privateFinancialDataStatus !== "ready";
   const resolvedBasePay = getAttendanceBasePay(record, configuredDailyWage);
   const useConfiguredBasePay =
@@ -122,13 +129,6 @@ export default function AttendanceDashboard({
     record.shift === "Manual Entry Adjustment"
       ? record.assignedShiftName || "Assigned Shift"
       : record.shift;
-  const breakdownTitle =
-    record.holidayName ||
-    (record.type === "Rest Day"
-      ? "Scheduled Rest Day"
-      : record.type === "Regular"
-        ? "Regular Work Day"
-        : shiftTitle);
   const shiftSubtitle = record.holidayName
     ? `${record.holidayDutyLabel === "Holiday Duty" ? record.assignedShiftName || record.shift : record.holidayDutyLabel} · ${record.shift}${record.holidayDescription ? ` · ${record.holidayDescription}` : ""}`
     : record.type === "Rest Day"
@@ -143,17 +143,6 @@ export default function AttendanceDashboard({
             .filter(Boolean)
             .join(" · ")
         : null;
-  const wageRateIndicator = (
-    <span
-      id="wageRateText"
-      className={`inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold ${
-        record.type === "Absent" ? "text-rose-600" : "text-teal-700"
-      }`}
-    >
-      <i className="fa-solid fa-percent text-[9px]" aria-hidden="true"></i>
-      {`Wage Rate: ${holidayRateLabel}`}
-    </span>
-  );
   const allowanceAmount = Number(dailyAllowance);
   const hasAllowance =
     !["Absent", "Rest Day"].includes(record.type) &&
@@ -186,72 +175,214 @@ export default function AttendanceDashboard({
   ]
     .filter(Boolean)
     .join(" · ");
-  const entryButtonDisabled = !canRecordAttendance;
   const isAbsent = record.type === "Absent";
-  const canMarkAbsent =
-    !isAbsent &&
-    !record.clockedIn &&
-    ["Unassigned", "Regular"].includes(record.type);
-  const breakdownCardStyle = isAbsent
-    ? "border-rose-200 bg-rose-50/70"
-    : record.type === "Leave"
-      ? "border-amber-200 bg-amber-50/60"
-      : "border-slate-200 bg-slate-50";
+  const formatClockTime = (value) => {
+    if (typeof value !== "string" || !value.trim() || value === "—") return "—";
+    const match = value.trim().match(/^(\d{1,2}):([0-5]\d)\s*(AM|PM)?$/i);
+    if (!match) return value;
+    let hour = Number(match[1]);
+    const minute = match[2];
+    const meridiem = match[3]?.toUpperCase();
+    if (meridiem) {
+      if (hour < 1 || hour > 12) return value;
+    } else {
+      if (hour > 23) return value;
+      const period = hour >= 12 ? "PM" : "AM";
+      hour = hour % 12 || 12;
+      return `${String(hour).padStart(2, "0")}:${minute} ${period}`;
+    }
+    return `${String(hour).padStart(2, "0")}:${minute} ${meridiem}`;
+  };
+  const formatCompactHours = (minutes) =>
+    Number.isFinite(minutes)
+      ? `${Number((minutes / 60).toFixed(2))}h`
+      : "—";
+  const scheduledStartTime = formatClockTime(
+    record.assignedShiftSnapshot?.startTime || record.shiftStartTime,
+  );
+  const scheduledEndTime = formatClockTime(
+    record.assignedShiftSnapshot?.endTime || record.shiftEndTime,
+  );
+  const hasScheduledTime =
+    scheduledStartTime !== "—" && scheduledEndTime !== "—";
+  const breakSummary =
+    !Number.isFinite(workHours?.breakDurationMinutes) || !workHours?.breakType
+      ? "Break settings unavailable"
+      : workHours.breakDurationMinutes === 0
+        ? workHours.breakType === "unpaid"
+          ? "No unpaid break"
+          : "No break"
+        : `${workHours.breakDurationMinutes % 60 === 0 ? `${workHours.breakDurationMinutes / 60}h` : `${workHours.breakDurationMinutes}m`} ${workHours.breakType} break`;
+  const dtrStart = formatClockTime(record.workStartTime || record.in);
+  const dtrEnd = record.clockedIn
+    ? "Clocked in"
+    : formatClockTime(record.workEndTime || record.out);
+  const actualDtrSummary =
+    dtrStart === "—"
+      ? record.clockedIn
+        ? "Clocked in"
+        : "No DTR recorded"
+      : `${dtrStart} – ${dtrEnd}`;
+  const shiftCardTitle = isAbsent
+    ? "Marked Absent"
+    : record.type === "Rest Day"
+      ? "Rest Day"
+      : record.assignedShiftSnapshot?.name ||
+        record.assignedShiftName ||
+        shiftTitle;
+  const shiftCardSubtitle = record.holidayName
+    ? record.holidayClassification || shiftSubtitle
+    : shiftSubtitle;
+  const shiftIcon = isAbsent
+    ? "fa-user-xmark"
+    : record.type === "Rest Day"
+      ? "fa-calendar-xmark"
+      : record.assignedShiftSnapshot?.icon ||
+        record.customIcon ||
+        "fa-clock";
 
   return (
     <div className="w-full shrink-0 grid grid-cols-1 items-start md:grid-cols-12 gap-6">
-      <section className="md:col-span-4 flex flex-col justify-between rounded-2xl border border-slate-200 bg-cardBg p-5 shadow-sm">
+      <section className="md:col-span-4 flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div>
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div className="flex min-w-0 items-center gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
                 <i
-                  className="fa-regular fa-file-lines text-lg"
+                  className="fa-regular fa-file-lines text-base"
                   aria-hidden="true"
                 ></i>
               </span>
               <div className="min-w-0">
-                <h2 className="text-base font-bold text-textMain">
+                <h2 className="text-sm font-bold text-textMain sm:text-base">
                   Attendance Breakdown
                 </h2>
                 <p className="mt-0.5 text-[11px] text-textMuted">
-                  Selected day summary
+                  {selectedRange?.dayCount > 1
+                    ? `Range selected · daily details for ${selectedDate}`
+                    : "Daily shift & pay ledger"}
                 </p>
               </div>
             </div>
             <span
               id="selectedDateBadge"
-              className="shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700"
+              title={
+                selectedRange?.dayCount > 1
+                  ? `${selectedRange.startDate} – ${selectedRange.endDate}`
+                  : selectedDate
+              }
+              className="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700"
             >
-              {selectedDate}
+              {selectedRange?.dayCount > 1
+                ? `${selectedRange.dayCount} days selected`
+                : selectedDate}
             </span>
           </div>
 
-          <div className={`mb-3 flex min-h-[76px] flex-col justify-center rounded-xl border p-4 ${breakdownCardStyle}`}>
-            <div className="flex items-start justify-between gap-2">
-              <div
-                id="shiftTitle"
-                className={`min-w-0 text-sm font-bold ${shiftTitleColor}`}
-              >
-                {isAbsent ? "Marked Absent" : breakdownTitle}
-              </div>
-              {wageRateIndicator}
+          {record.holidayName && (
+            <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-2.5 text-[11px] text-indigo-800">
+              <span className="flex min-w-0 items-center gap-2 font-medium">
+                <i className="fa-solid fa-sparkles shrink-0 text-indigo-500" aria-hidden="true" />
+                <span className="truncate">{record.holidayName}</span>
+              </span>
+              <span className="shrink-0 rounded-md bg-white/80 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-indigo-700">
+                {holidayRateLabel || "—"} Rate
+              </span>
             </div>
-            {isAbsent ? (
-              <div className="mt-1 text-[11px] leading-relaxed text-rose-700">
-                {record.holidayName
-                  ? `${record.holidayName} · No attendance recorded`
-                  : "Unexcused Absence — No Basic Pay"}
+          )}
+
+          <section
+            aria-label="Assigned shift summary"
+            className={`mb-3 rounded-xl border p-3.5 ${
+              isAbsent
+                ? "border-rose-200 bg-rose-50/70"
+                : record.type === "Leave"
+                  ? "border-amber-200 bg-amber-50/60"
+                  : "border-slate-200 bg-white"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                <ShiftIcon
+                  icon={shiftIcon}
+                  size={17}
+                  className={record.customIconColor || record.assignedShiftSnapshot?.iconColor || ""}
+                />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <h3
+                    id="shiftTitle"
+                    className={`truncate text-sm font-bold ${shiftTitleColor}`}
+                  >
+                    {shiftCardTitle}
+                  </h3>
+                  {!record.holidayName && (
+                    <span
+                      id="wageRateText"
+                      className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[8px] font-bold text-slate-600"
+                    >
+                      {holidayRateLabel} Rate
+                    </span>
+                  )}
+                </div>
+                <p
+                  id="shiftSubTitle"
+                  className="mt-0.5 truncate text-[10px] text-textMuted"
+                >
+                  {isAbsent
+                    ? record.holidayName
+                      ? "No attendance recorded"
+                      : "Unexcused absence — no basic pay"
+                    : shiftCardSubtitle || "No shift assigned"}
+                </p>
               </div>
-            ) : shiftSubtitle ? (
-              <div
-                id="shiftSubTitle"
-                className="mt-1 text-[11px] leading-relaxed text-textMuted"
+              <button
+                type="button"
+                data-action="openAssignShiftModal()"
+                className="shrink-0 cursor-pointer rounded-lg bg-slate-100 px-3 py-2 text-[10px] font-semibold text-slate-700 transition hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
               >
-                {shiftSubtitle}
-              </div>
-            ) : null}
-          </div>
+                Change
+              </button>
+            </div>
+
+            <div className="mt-3 flex items-center justify-between gap-3 text-[10px] font-bold text-slate-800">
+              <span>{hasScheduledTime ? scheduledStartTime : "—"}</span>
+              <span className="text-right">
+                {formatCompactHours(workHours?.expectedPaidMinutes)} paid
+                <span className="ml-1 font-medium text-slate-500">
+                  · {breakSummary}
+                </span>
+              </span>
+              <span className="text-right">
+                {hasScheduledTime ? scheduledEndTime : "—"}
+              </span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className={`h-full rounded-full ${
+                  isAbsent ? "bg-rose-400" : "bg-emerald-500"
+                }`}
+                style={{
+                  width:
+                    Number.isFinite(workHours?.actualPaidMinutes) &&
+                    Number.isFinite(workHours?.expectedPaidMinutes) &&
+                    workHours.expectedPaidMinutes > 0
+                      ? `${Math.min(100, (workHours.actualPaidMinutes / workHours.expectedPaidMinutes) * 100)}%`
+                      : "0%",
+                }}
+              />
+            </div>
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-1.5 text-[10px]">
+              <span className="font-medium text-slate-500">
+                <i className="fa-regular fa-clock mr-1 text-slate-400" aria-hidden="true" />
+                Actual DTR Log:
+              </span>
+              <span className="font-bold tabular-nums text-slate-700">
+                {actualDtrSummary}
+              </span>
+            </div>
+          </section>
 
           {!salaryDataPrivate && record.payrollCalculationNotice && (
             <p
@@ -273,6 +404,122 @@ export default function AttendanceDashboard({
                   "required payroll settings are incomplete."}
               </p>
             )}
+
+          <section aria-label="Attendance status" className="mb-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                Attendance Status
+              </h3>
+              <span className="text-[9px] font-medium text-slate-500">
+                {selectedRange?.dayCount > 1
+                  ? `Apply status to ${selectedRange.dayCount} selected days`
+                  : `Span: ${formatCompactHours(workHours?.scheduledMinutes)} · Potential OT: ${formatCompactHours(workHours?.potentialOvertimeMinutes)}`}
+              </span>
+            </div>
+            <div
+              role="group"
+              aria-label="Set attendance status"
+              className="grid grid-cols-4 rounded-xl border border-slate-200 bg-slate-100 p-1"
+            >
+              {[
+                {
+                  label: "Present",
+                  action: "openManualEntryModal()",
+                  selected:
+                    hasWorkedAttendance &&
+                    !isAbsent &&
+                    record.type !== "Leave",
+                  selectedClass: "bg-emerald-600 text-white shadow-sm",
+                  idleClass: "text-slate-600 hover:bg-white",
+                },
+                {
+                  label: "Leave",
+                  selected:
+                    record.type === "Leave" || isLeaveTypeSelectorOpen,
+                  disabled: false,
+                  selectedClass: "bg-amber-500 text-white shadow-sm",
+                  idleClass: "text-slate-600 hover:bg-white",
+                },
+                {
+                  label: "Absent",
+                  action: "markSelectedDateAbsent()",
+                  selected: isAbsent,
+                  disabled: !canMarkAbsent && !isAbsent,
+                  selectedClass: "bg-rose-600 text-white shadow-sm",
+                  idleClass: "text-slate-600 hover:bg-white",
+                },
+                {
+                  label: "Clear",
+                  action: "clearSelectedShift()",
+                  selected: false,
+                  disabled: !canClearShift,
+                  selectedClass: "bg-slate-200 text-slate-700",
+                  idleClass: "text-slate-600 hover:bg-white",
+                },
+              ].map((status) => (
+                <button
+                  key={status.label}
+                  type="button"
+                  data-action={status.action || undefined}
+                  aria-pressed={status.selected}
+                  disabled={status.disabled}
+                  onClick={() => {
+                    if (status.label === "Leave") {
+                      if (record.type !== "Leave") {
+                        setIsLeaveTypeSelectorOpen(true);
+                      }
+                    } else {
+                      setIsLeaveTypeSelectorOpen(false);
+                    }
+                  }}
+                  className={`min-w-0 cursor-pointer rounded-lg px-1 py-2 text-[10px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-40 ${
+                    status.selected
+                      ? status.selectedClass
+                      : status.idleClass
+                  }`}
+                >
+                  {status.label}
+                </button>
+              ))}
+            </div>
+            {isLeaveTypeSelectorOpen && record.type !== "Leave" && (
+              <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50/40 p-2.5">
+                <p className="mb-2 text-[9px] font-bold uppercase tracking-wide text-amber-800">
+                  Select Leave Type (Paid 8h)
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[
+                    { code: "SL", label: "Sick" },
+                    { code: "VL", label: "Vacation" },
+                    { code: "EL", label: "Emergency" },
+                  ].map((leaveType) => {
+                    const remainingDays = Number(
+                      leaveBalances[leaveType.code],
+                    );
+                    const balanceLabel =
+                      Number.isFinite(remainingDays) && remainingDays >= 0
+                        ? `${remainingDays} ${remainingDays === 1 ? "day" : "days"} left`
+                        : "Balance unavailable";
+                    return (
+                      <button
+                        key={leaveType.code}
+                        type="button"
+                        data-action={`grantSelectedDateLeave('${leaveType.code}')`}
+                        aria-label={`${leaveType.label}, ${balanceLabel}`}
+                        onClick={() => setIsLeaveTypeSelectorOpen(false)}
+                        className="flex cursor-pointer flex-col items-center rounded-lg border border-slate-200 bg-white px-2 py-2 text-[10px] font-semibold text-slate-700 transition hover:border-amber-300 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                      >
+                        <span>{leaveType.label}</span>
+                        <span className="mt-0.5 text-[9px] font-medium text-slate-500">
+                          {balanceLabel}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </section>
 
           {/* Earnings and pay components */}
           <div
@@ -621,168 +868,28 @@ export default function AttendanceDashboard({
             </div>
           </div>
 
-          <div className="min-h-[46px] rounded-xl border border-slate-200 bg-white p-3">
-            <div
-              className={`flex items-center gap-2 transition-[margin] duration-300 ease-in-out ${
-                isTimeAttendanceExpanded ? "mb-3" : ""
-              }`}
-            >
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center text-slate-400">
-                <i className="fa-regular fa-clock text-sm" aria-hidden="true"></i>
-              </span>
-              <button
-                type="button"
-                aria-expanded={isTimeAttendanceExpanded}
-                aria-controls="timeAttendanceDetails"
-                onClick={() =>
-                  setIsTimeAttendanceExpanded((expanded) => !expanded)
-                }
-                className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-700"
-              >
-                <span>Time &amp; Attendance</span>
-                <i
-                  className={`fa-solid fa-chevron-right text-[9px] transition-transform duration-300 ${
-                    isTimeAttendanceExpanded ? "rotate-90" : ""
-                  }`}
-                  aria-hidden="true"
-                ></i>
-              </button>
-              <span className={`ml-auto shrink-0 text-right text-[10px] font-bold ${isAbsent ? "text-rose-700" : "text-textMain"}`}>
-                {isAbsent
-                  ? "ABSENT"
-                  : record.type === "Rest Day"
-                    ? "--:-- -- - --:-- --"
-                    : record.assigned}
-              </span>
-            </div>
-            <div
-              className="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out"
-              style={{
-                gridTemplateRows: isTimeAttendanceExpanded ? "1fr" : "0fr",
-                opacity: isTimeAttendanceExpanded ? 1 : 0,
-              }}
-              aria-hidden={!isTimeAttendanceExpanded}
-            >
-              <div
-                id="timeAttendanceDetails"
-                className="min-h-0 overflow-hidden space-y-2.5 text-[11px]"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-textMuted">First Time In</span>
-                  <span
-                    id="firstTimeIn"
-                    className="text-right font-semibold text-teal-700"
-                  >
-                    {record.in}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-textMuted">Last Time Out</span>
-                  <span
-                    id="lastTimeOut"
-                    className="text-right font-semibold text-teal-700"
-                  >
-                    {record.clockedIn ? "Tracking" : record.out}
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
-                  <span className="text-textMuted">Status</span>
-                  <div
-                    id="statusBadgesContainer"
-                    className="flex flex-wrap justify-end gap-1.5"
-                  >
-                    {record.badges.map((badge) => (
-                      <span
-                        key={badge.text}
-                        title={badge.title}
-                        className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${badge.color}`}
-                      >
-                        {badge.text}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
-        <div className="mt-4 space-y-2.5 border-t border-slate-100 pt-3">
-          <div className="grid grid-cols-1 gap-2">
-            <button
-              type="button"
-              data-action="openManualEntryModal()"
-              disabled={entryButtonDisabled}
-              title={
-                entryButtonDisabled
-                  ? "Assign a shift to enable manual attendance entry"
-                  : undefined
-              }
-              className="group flex min-h-[38px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none disabled:hover:border-slate-200 disabled:hover:bg-slate-100"
-            >
-              <i className="fa-solid fa-pen-to-square text-slate-400 group-hover:text-teal-600" aria-hidden="true"></i>
-              <span>Manual Entry</span>
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-2.5">
+        <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
             <button
               type="button"
               data-action="openAssignShiftModal()"
-              className="flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-2 text-[11px] font-semibold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+              className="flex min-h-[40px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
             >
               <i
-                className="fa-regular fa-calendar-days text-teal-600"
+                className="fa-regular fa-calendar-days text-white"
                 aria-hidden="true"
               ></i>
               <span>Assign Shift</span>
             </button>
             <button
               type="button"
-              data-action="clearSelectedShift()"
-              disabled={!canClearShift}
-              title={
-                canClearShift
-                  ? `Clear the shift, attendance, and leave for ${selectedDate}`
-                  : "Clear is available for dates with a shift, attendance, or leave record and no active Time In"
-              }
-              className="flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-[11px] font-semibold text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none disabled:hover:bg-slate-50"
+              data-action="openManualEntryModal()"
+              className="flex min-h-[40px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
             >
-              <i
-                className="fa-regular fa-circle-xmark"
-                aria-hidden="true"
-              ></i>
-              <span>Clear Shift</span>
+              <i className="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+              <span>Manual DTR</span>
             </button>
-            <button
-              type="button"
-              data-action="openModal('grantLeaveModal')"
-              className="flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-2 py-2 text-[11px] font-semibold text-amber-800 transition hover:border-amber-300 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
-            >
-              <i
-                className="fa-solid fa-umbrella-beach text-amber-600"
-                aria-hidden="true"
-              ></i>
-              <span>Grant Leave</span>
-            </button>
-            <button
-              type="button"
-              data-action="openMarkAbsentModal()"
-              disabled={!canMarkAbsent}
-              title={
-                canMarkAbsent
-                  ? `Mark ${selectedDate} absent`
-                  : "This date cannot be marked absent"
-              }
-              className="flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-2 py-2 text-[11px] font-semibold text-rose-600 transition hover:border-rose-300 hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:hover:bg-slate-50"
-            >
-              <ShiftIcon
-                icon="fa-user-xmark"
-                size={14}
-                className="text-rose-600"
-              />
-              <span>Mark Absent</span>
-            </button>
-          </div>
         </div>
       </section>
 

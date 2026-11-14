@@ -5,7 +5,6 @@ import AuthPage from "./components/AuthPage.jsx";
 import DashboardContent from "./components/DashboardContent.jsx";
 import ManualEntryModal from "./components/modals/ManualEntryModal.jsx";
 import AssignShiftModal from "./components/modals/AssignShiftModal.jsx";
-import CalendarRangeActionsModal from "./components/modals/CalendarRangeActionsModal.jsx";
 import GrantLeaveModal from "./components/modals/GrantLeaveModal.jsx";
 import PayslipModal from "./components/modals/PayslipModal.jsx";
 import SettingsModal from "./components/modals/SettingsModal.jsx";
@@ -22,6 +21,7 @@ import {
   calculateHolidayPay,
   getAttendanceHours,
   hasAttendanceTimeData,
+  holidayPayRules,
 } from "./utils/holidayPay.js";
 import { getAttendancePunchAvailability } from "./utils/attendancePunchRules.js";
 import {
@@ -55,6 +55,8 @@ import {
 import {
   clearShiftAndAttendanceRecord,
   createShiftAssignmentUpdates,
+  getExpectedPaidMinutes,
+  getShiftDurationMinutes,
   getManualEntryRangeConflicts,
   normalizeTwelveHourShiftTime,
 } from "./utils/shiftAssignment.js";
@@ -562,12 +564,28 @@ function actionArgument(action) {
 }
 
 function getMatchingShiftTemplate(record, shiftTemplates) {
+  if (record.assignedShiftSnapshot?.id) {
+    return record.assignedShiftSnapshot;
+  }
   const assignedTemplate = record.assignedShiftTemplateId
     ? shiftTemplates.find(
         (template) => template.id === record.assignedShiftTemplateId,
       )
     : null;
-  if (assignedTemplate) return assignedTemplate;
+  if (assignedTemplate) {
+    return {
+      ...assignedTemplate,
+      label:
+        record.assignedShiftName ||
+        (record.shift === "Manual Entry Adjustment"
+          ? assignedTemplate.label
+          : record.shift) ||
+        assignedTemplate.label,
+      range: record.assigned || assignedTemplate.range,
+      startTime: record.shiftStartTime || assignedTemplate.startTime,
+      endTime: record.shiftEndTime || assignedTemplate.endTime,
+    };
+  }
   if (!record.shiftStartTime || !record.shiftEndTime) return null;
   return shiftTemplates.find(
     (template) =>
@@ -577,6 +595,9 @@ function getMatchingShiftTemplate(record, shiftTemplates) {
 }
 
 function getAssignedShiftName(record, shiftTemplates) {
+  if (record.assignedShiftSnapshot?.name) {
+    return record.assignedShiftSnapshot.name;
+  }
   const matchingTemplate = getMatchingShiftTemplate(record, shiftTemplates);
   if (matchingTemplate?.label) return matchingTemplate.label;
   if (
@@ -1044,6 +1065,9 @@ export default function App() {
   const [customShiftName, setCustomShiftName] = useState("");
   const [customShiftStart, setCustomShiftStart] = useState("10:00 PM");
   const [customShiftEnd, setCustomShiftEnd] = useState("06:00 AM");
+  const [customBreakDuration, setCustomBreakDuration] = useState("0");
+  const [customBreakType, setCustomBreakType] = useState("paid");
+  const [editingShiftTemplateId, setEditingShiftTemplateId] = useState(null);
   const [selectedIcon, setSelectedIcon] = useState("fa-moon");
   const [leaveBalances, setLeaveBalances] = useState(
     emptyWorkspace.leaveBalances,
@@ -1170,9 +1194,24 @@ export default function App() {
     ),
     selectedHoliday,
   );
+  const selectedRangeDates = selectedCalendarRange
+    ? getInclusiveDateKeys(
+        selectedCalendarRange.startDate,
+        selectedCalendarRange.endDate,
+      )
+    : [selectedDate];
+  const selectedRangeAttendanceConflicts = selectedCalendarRange
+    ? getManualEntryRangeConflicts(
+        attendance,
+        selectedRangeDates,
+        activeTimeEntry?.date,
+      )
+    : [];
   const canClearSelectedShift =
-    isAttendanceClearable(selectedAttendanceRecord) &&
-    activeTimeEntry?.date !== selectedDate;
+    selectedRangeDates.some((date) =>
+      isAttendanceClearable(attendance[date] || defaultAttendance),
+    ) &&
+    !selectedRangeDates.some((date) => activeTimeEntry?.date === date);
   const payrollSettingsHistory = Array.isArray(
     privateFinancialSettings.payrollSettingsHistory,
   )
@@ -1208,6 +1247,10 @@ export default function App() {
       getPayrollRecordCalculation(record, date).breakdown,
     [getPayrollRecordCalculation],
   );
+  const getPayrollRecordHours = useCallback(
+    (record, date) => getPayrollRecordCalculation(record, date).hours,
+    [getPayrollRecordCalculation],
+  );
   const getPayrollRecordEarnings = useCallback(
     (record, date) => getPayrollRecordCalculation(record, date).earnings,
     [getPayrollRecordCalculation],
@@ -1231,8 +1274,9 @@ export default function App() {
         payrollPeriod,
         getPayrollRecordEarnings,
         availableEmployeeIncentives,
+        getPayrollRecordHours,
       ),
-    [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, payrollPeriod],
+    [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, getPayrollRecordHours, payrollPeriod],
   );
   const payrollEarningsBreakdown = useMemo(
     () =>
@@ -1262,11 +1306,12 @@ export default function App() {
           period,
           getPayrollRecordEarnings,
           availableEmployeeIncentives,
+          getPayrollRecordHours,
         )
           .recordedEarnings
       );
     }, 0);
-  }, [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, payrollPeriod]);
+  }, [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, getPayrollRecordHours, payrollPeriod]);
   const cutoffPayrollDeductions = useMemo(
     () =>
       calculateCutoffPayrollDeductions({
@@ -1302,8 +1347,9 @@ export default function App() {
       selectedPayslipPeriod,
       getPayrollRecordEarnings,
       availableEmployeeIncentives,
+      getPayrollRecordHours,
     ),
-    [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, selectedPayslipPeriod],
+    [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, getPayrollRecordHours, selectedPayslipPeriod],
   );
   const selectedPayslipPendingCount =
     countPendingPayrollRecords(selectedPayslipPeriod);
@@ -1326,10 +1372,11 @@ export default function App() {
           period,
           getPayrollRecordEarnings,
           availableEmployeeIncentives,
+          getPayrollRecordHours,
         ).recordedEarnings,
       0,
     ),
-    [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, monthlyPayslipPeriods],
+    [attendance, availableEmployeeIncentives, getPayrollRecordEarnings, getPayrollRecordHours, monthlyPayslipPeriods],
   );
   const monthlyPayslipDeductions = useMemo(
     () => sumCutoffPayrollDeductions(
@@ -1410,7 +1457,13 @@ export default function App() {
             classification: getHolidayClassification(selectedHoliday),
           },
           dailyWage: Number(selectedPayrollSettings.dailyWage),
-          hoursWorked: getAttendanceHours(selectedRecord),
+          hoursWorked: Math.min(
+            selectedPayrollCalculation.hours?.actualPaidMinutes === null ||
+              selectedPayrollCalculation.hours?.actualPaidMinutes === undefined
+              ? getAttendanceHours(selectedRecord) ?? 0
+              : selectedPayrollCalculation.hours.actualPaidMinutes / 60,
+            holidayPayRules.standardHours,
+          ),
           hasSchedule:
             selectedRecord.type === "Rest Day" ||
             (selectedRecord.hasAssignedShift === true &&
@@ -1454,7 +1507,10 @@ export default function App() {
       if (shiftStart === null || shiftEndOfDay === null) return null;
       const shiftEnd =
         shiftEndOfDay <= shiftStart ? shiftEndOfDay + 1440 : shiftEndOfDay;
-      const scheduledHours = (shiftEnd - shiftStart) / 60;
+      const expectedPaidMinutes =
+        selectedPayrollCalculation.hours?.expectedPaidMinutes;
+      const scheduledHours =
+        (expectedPaidMinutes ?? (shiftEnd - shiftStart)) / 60;
       const hourlyRate = Number(selectedPayrollSettings.dailyWage) / scheduledHours;
       return `${formatDuration(selectedAttendanceRecord.overtimeMinutes)} × ₱${hourlyRate.toFixed(2)}/hr × ${multiplier}x`;
     }
@@ -1477,12 +1533,21 @@ export default function App() {
     selectedPayrollCalculation,
     selectedDailyIncentiveTotal,
   );
-  const canRecordAttendance =
-    selectedAttendanceRecord.hasAssignedShift === true ||
-    Boolean(
-      selectedAttendanceRecord.shiftStartTime &&
-      selectedAttendanceRecord.shiftEndTime,
+  const canMarkAbsent = selectedRangeDates.every((date) => {
+    const record = attendance[date] || defaultAttendance;
+    const hasAssignedShift =
+      record.hasAssignedShift === true ||
+      Boolean(record.shiftStartTime && record.shiftEndTime);
+    const isShiftlessAbsence =
+      !hasAssignedShift && ["Unassigned", "Regular"].includes(record.type);
+    return (
+      record.type !== "Absent" &&
+      !record.clockedIn &&
+      activeTimeEntry?.date !== date &&
+      (record.type === "Regular" || isShiftlessAbsence) &&
+      (!selectedCalendarRange || !selectedRangeAttendanceConflicts.length)
     );
+  });
   const punchRecord = activeTimeEntry
     ? attendance[activeTimeEntry.date] || defaultAttendance
     : selectedAttendanceRecord;
@@ -1530,6 +1595,7 @@ export default function App() {
     calendarPayrollPeriod,
     getPayrollRecordEarnings,
     availableEmployeeIncentives,
+    getPayrollRecordHours,
   ).recordedEarnings;
   const payrollDeductions = sumCutoffPayrollDeductions(
     ...[10, 25].map((cutoffDay) =>
@@ -1556,9 +1622,12 @@ export default function App() {
   const totalHours = Object.entries(attendance)
     .filter(([date]) => date.startsWith(currentMonthPrefix))
     .reduce(
-      (sum, [, record]) =>
+      (sum, [date, record]) =>
         sum +
-        (hasValidAttendanceRecord(record) ? getAttendanceHours(record) : 0),
+          (hasValidAttendanceRecord(record)
+            ? (getPayrollRecordHours(record, date)?.actualPaidMinutes ??
+              getAttendanceHours(record) * 60) / 60
+            : 0),
       0,
     );
   const monthExpenses = getExpensesForMonth(expenses, calendarPayrollMonth);
@@ -1604,6 +1673,7 @@ export default function App() {
         period,
         getPayrollRecordEarnings,
         availableEmployeeIncentives,
+        getPayrollRecordHours,
       );
       const payrollMonth = period.endDate.slice(0, 7);
       const monthlyGrossPay = [10, 25].reduce((total, cutoffDay) => {
@@ -1615,6 +1685,7 @@ export default function App() {
             monthPeriod,
             getPayrollRecordEarnings,
             availableEmployeeIncentives,
+            getPayrollRecordHours,
           ).recordedEarnings
         );
       }, 0);
@@ -1663,6 +1734,7 @@ export default function App() {
     expenses,
     financeAnchorDate,
     getPayrollRecordEarnings,
+    getPayrollRecordHours,
     getPayrollSettingsAtDate,
     historicalPayslips,
   ]);
@@ -1685,6 +1757,7 @@ export default function App() {
         financeCustomRange,
         getPayrollRecordEarnings,
         availableEmployeeIncentives,
+        getPayrollRecordHours,
       )
     : null;
   const customRangeOverlappingPeriods = customRangeIsValid
@@ -1711,6 +1784,7 @@ export default function App() {
         overlapPeriod,
         getPayrollRecordEarnings,
         availableEmployeeIncentives,
+        getPayrollRecordHours,
       );
       const ratio =
         item.grossPay > 0
@@ -1742,8 +1816,9 @@ export default function App() {
       netPay: total.netPay + item.netPay,
       hours:
         total.hours +
-        item.summary.regularHours +
-        item.summary.overtimeHours,
+        (Number.isFinite(item.summary.actualPaidHours)
+          ? item.summary.actualPaidHours
+          : item.summary.regularHours + item.summary.overtimeHours),
       pendingCount: total.pendingCount + item.pendingCount,
     }),
     { grossPay: 0, deductions: 0, netPay: 0, hours: 0, pendingCount: 0 },
@@ -1788,10 +1863,11 @@ export default function App() {
   const financeTotalHours = isAllHistorySelected
     ? allHistorySummary.hours
     : isCustomRangeSelected
-      ? (customRangeSummary?.regularHours || 0) +
-        (customRangeSummary?.overtimeHours || 0)
-      : (selectedFinanceData?.summary.regularHours || 0) +
-        (selectedFinanceData?.summary.overtimeHours || 0);
+      ? customRangeSummary?.actualPaidHours || 0
+      : Number.isFinite(selectedFinanceData?.summary.actualPaidHours)
+        ? selectedFinanceData.summary.actualPaidHours
+        : (selectedFinanceData?.summary.regularHours || 0) +
+          (selectedFinanceData?.summary.overtimeHours || 0);
   const financePeriodLabel = isAllHistorySelected
     ? "All history"
     : isCustomRangeSelected
@@ -2564,19 +2640,6 @@ export default function App() {
     };
   }, [activeModal]);
 
-  useEffect(() => {
-    if (
-      ![
-        "calendarRangeActionsModal",
-        "assignShiftModal",
-        "manualEntryModal",
-      ].includes(activeModal) &&
-      selectedCalendarRange
-    ) {
-      setSelectedCalendarRange(null);
-    }
-  }, [activeModal, selectedCalendarRange]);
-
   const clearCalendarRange = () => {
     const pointer = calendarRangePointerRef.current;
     if (pointer?.target?.hasPointerCapture?.(pointer.pointerId)) {
@@ -2622,19 +2685,6 @@ export default function App() {
     setCustomShiftName("");
     setSelectedShiftTemplate("rest-day");
     setIsCustomShiftActive(false);
-    setActiveModal("calendarRangeActionsModal");
-  };
-
-  const openRangeAssignShift = () => {
-    setCustomShiftName("");
-    setSelectedShiftTemplate("rest-day");
-    setIsCustomShiftActive(false);
-    setActiveModal("assignShiftModal");
-  };
-
-  const openRangeManualEntry = () => {
-    setManualEntryInitialType("Present");
-    setActiveModal("manualEntryModal");
   };
 
   const clearAttendanceDates = async (dates) => {
@@ -2719,20 +2769,12 @@ export default function App() {
       );
       return;
     }
+    setSelectedCalendarRange(null);
     const skippedCount = dates.length - clearedDates.length;
     showToast(
       `Cleared shifts and attendance on ${clearedDates.length} day(s)${skippedCount ? `; ${skippedCount} had no records to clear` : ""}.`,
       "success",
     );
-  };
-
-  const clearSelectedShiftRange = () => {
-    if (!selectedCalendarRange) return;
-    const dates = getInclusiveDateKeys(
-      selectedCalendarRange.startDate,
-      selectedCalendarRange.endDate,
-    );
-    void clearAttendanceDates(dates);
   };
 
   const handleCalendarDateClick = (date, event) => {
@@ -3561,6 +3603,99 @@ export default function App() {
     }
   };
 
+  const buildShiftTemplateDraft = () => {
+    const name = customShiftName.trim();
+    if (!name) {
+      showToast("Enter a shift name before saving the template.", "warning");
+      return null;
+    }
+
+    const startTime = normalizeTwelveHourShiftTime(customShiftStart);
+    const endTime = normalizeTwelveHourShiftTime(customShiftEnd);
+    if (startTime === null || endTime === null) {
+      showToast(
+        "Enter valid custom shift times in 12-hour format, such as 10:00 PM.",
+        "warning",
+      );
+      return null;
+    }
+
+    const breakDurationMinutes = Number(customBreakDuration);
+    const scheduledMinutes = getShiftDurationMinutes(startTime, endTime);
+    const expectedPaidMinutes = getExpectedPaidMinutes({
+      startTime,
+      endTime,
+      breakDurationMinutes,
+      breakType: customBreakType,
+    });
+    if (
+      customBreakDuration.trim() === "" ||
+      !Number.isInteger(breakDurationMinutes) ||
+      breakDurationMinutes < 0 ||
+      scheduledMinutes === null ||
+      breakDurationMinutes > scheduledMinutes ||
+      !["paid", "unpaid"].includes(customBreakType) ||
+      expectedPaidMinutes === null ||
+      expectedPaidMinutes <= 0
+    ) {
+      showToast(
+        "Enter valid shift times, a break duration within the shift, and a paid or unpaid break type.",
+        "warning",
+      );
+      return null;
+    }
+
+    const editingTemplate = shiftTemplates.find(
+      (template) => template.id === editingShiftTemplateId,
+    );
+    let iconColor =
+      editingTemplate?.icon === selectedIcon
+        ? editingTemplate.iconColor
+        : "text-teal-600";
+    if (selectedIcon.includes("sun") && !selectedIcon.includes("cloud"))
+      iconColor = "text-amber-500";
+    else if (selectedIcon.includes("moon")) iconColor = "text-indigo-600";
+    else if (selectedIcon.includes("cloud-sun"))
+      iconColor = "text-orange-500";
+    else if (selectedIcon.includes("shield")) iconColor = "text-rose-600";
+    else if (selectedIcon.includes("bolt")) iconColor = "text-amber-500";
+    else if (selectedIcon.includes("clock")) iconColor = "text-slate-600";
+
+    const range = `${formatTime(startTime)} - ${formatTime(endTime)}`;
+    const id = editingTemplate?.id || `custom-${crypto.randomUUID()}`;
+    return {
+      isNew: !editingTemplate,
+      template: {
+        ...editingTemplate,
+        id,
+        name,
+        label: name,
+        range,
+        assigned: range,
+        startTime,
+        endTime,
+        breakDurationMinutes,
+        breakType: customBreakType,
+        expectedPaidMinutes,
+        icon: selectedIcon,
+        iconColor,
+      },
+    };
+  };
+
+  const saveShiftTemplateDraft = (template) => {
+    setShiftTemplates((current) => {
+      const exists = current.some((item) => item.id === template.id);
+      return exists
+        ? current.map((item) =>
+            item.id === template.id ? template : item,
+          )
+        : [...current, template];
+    });
+    setSelectedShiftTemplate(template.id);
+    setEditingShiftTemplateId(template.id);
+  };
+
   const handleClick = (event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
@@ -3590,14 +3725,44 @@ export default function App() {
     } else if (action === "openMarkAbsentModal()") {
       setManualEntryInitialType("Absent");
       setActiveModal("manualEntryModal");
+    } else if (action === "markSelectedDateAbsent()") {
+      markSelectedDateAbsent();
+    } else if (action.startsWith("grantSelectedDateLeave(")) {
+      const startDate = selectedCalendarRange?.startDate || selectedDate;
+      const endDate = selectedCalendarRange?.endDate || selectedDate;
+      grantLeaveForDateRange(
+        actionArgument(action),
+        startDate,
+        endDate,
+      );
     } else if (action === "clearSelectedShift()") {
-      void clearAttendanceDates([selectedDate]);
+      const dates = selectedCalendarRange
+        ? getInclusiveDateKeys(
+            selectedCalendarRange.startDate,
+            selectedCalendarRange.endDate,
+          )
+        : [selectedDate];
+      void clearAttendanceDates(dates);
     } else if (action === "openAssignShiftModal()") {
-      clearCalendarRange();
       setCustomShiftName("");
       setSelectedShiftTemplate("rest-day");
       setIsCustomShiftActive(false);
+      setEditingShiftTemplateId(null);
+      setCustomBreakDuration("0");
+      setCustomBreakType("paid");
       setActiveModal("assignShiftModal");
+    } else if (action === "openNewShiftTemplate()") {
+      setCustomShiftName("");
+      setCustomShiftStart("10:00 PM");
+      setCustomShiftEnd("06:00 AM");
+      setCustomBreakDuration("0");
+      setCustomBreakType("paid");
+      setSelectedIcon("fa-moon");
+      setEditingShiftTemplateId(null);
+      setIsCustomShiftActive(true);
+    } else if (action === "closeShiftTemplateBuilder()") {
+      setIsCustomShiftActive(false);
+      setEditingShiftTemplateId(null);
     } else if (action === "addExpense()") addExpense();
     else if (action.startsWith("switchSettingsTab("))
       setActiveSettingsTab(actionArgument(action));
@@ -3611,6 +3776,25 @@ export default function App() {
       setSelectedShiftTemplate(actionArgument(action));
       setCustomShiftName("");
       setIsCustomShiftActive(false);
+      setEditingShiftTemplateId(null);
+    } else if (action.startsWith("editShiftTemplate(")) {
+      const id = actionArgument(action);
+      const template = shiftTemplates.find((item) => item.id === id);
+      if (!template || !template.startTime || !template.endTime) return;
+      setSelectedShiftTemplate(id);
+      setCustomShiftName(template.label || template.name || "");
+      setCustomShiftStart(formatTime(template.startTime));
+      setCustomShiftEnd(formatTime(template.endTime));
+      setCustomBreakDuration(
+        template.breakDurationMinutes === null ||
+          template.breakDurationMinutes === undefined
+          ? ""
+          : String(template.breakDurationMinutes),
+      );
+      setCustomBreakType(template.breakType || "");
+      setSelectedIcon(template.icon || "fa-moon");
+      setEditingShiftTemplateId(id);
+      setIsCustomShiftActive(true);
     } else if (action.startsWith("deleteShiftTemplate(")) {
       const id = actionArgument(action);
       const template = shiftTemplates.find((item) => item.id === id);
@@ -3621,45 +3805,53 @@ export default function App() {
       showToast(`"${template.label}" template deleted.`, "success");
     } else if (action.startsWith("handleSaveCustomShift(")) {
       event.preventDefault();
-      const name = customShiftName.trim();
-      if (!name) return;
-      const startTime = normalizeTwelveHourShiftTime(customShiftStart);
-      const endTime = normalizeTwelveHourShiftTime(customShiftEnd);
-      if (startTime === null || endTime === null) {
-        showToast(
-          "Enter valid custom shift times in 12-hour format, such as 10:00 PM.",
-          "warning",
-        );
+      const draft = buildShiftTemplateDraft();
+      if (!draft) return;
+      saveShiftTemplateDraft(draft.template);
+      showToast(
+        draft.isNew
+          ? `Custom shift "${draft.template.name}" saved to options.`
+          : `Shift "${draft.template.name}" updated. Existing assignments are unchanged.`,
+        "success",
+      );
+    } else if (action === "handleSaveAndAssignShiftTemplate(event)") {
+      event.preventDefault();
+      const form = actionElement.closest("form");
+      const data = form ? new FormData(form) : null;
+      const startValue = String(data?.get("assignStartDate") || "");
+      const endValue = String(data?.get("assignEndDate") || "");
+      if (!startValue || !endValue || startValue > endValue) {
+        showToast("Choose a valid start and end date range.", "warning");
         return;
       }
-      let iconColor = "text-teal-600";
-      if (selectedIcon.includes("sun") && !selectedIcon.includes("cloud"))
-        iconColor = "text-amber-500";
-      else if (selectedIcon.includes("moon")) iconColor = "text-indigo-600";
-      else if (selectedIcon.includes("cloud-sun"))
-        iconColor = "text-orange-500";
-      else if (selectedIcon.includes("shield")) iconColor = "text-rose-600";
-      else if (selectedIcon.includes("bolt")) iconColor = "text-amber-500";
-      else if (selectedIcon.includes("clock")) iconColor = "text-slate-600";
-      const id = `custom-${crypto.randomUUID()}`;
-      setShiftTemplates((current) => [
-        ...current,
-        {
-          id,
-          name,
-          label: name,
-          range: `${formatTime(startTime)} - ${formatTime(endTime)}`,
-          assigned: `${formatTime(startTime)} - ${formatTime(endTime)}`,
-          startTime,
-          endTime,
-          icon: selectedIcon,
-          iconColor,
-        },
-      ]);
-      setSelectedShiftTemplate(id);
-      setCustomShiftName("");
-      setIsCustomShiftActive(false);
-      showToast(`Custom shift "${name}" saved to options.`, "success");
+      const dateKeys = getInclusiveDateKeys(startValue, endValue);
+      if (!dateKeys.length) {
+        showToast("Choose a valid start and end date range.", "warning");
+        return;
+      }
+      const draft = buildShiftTemplateDraft();
+      if (!draft) return;
+      const nextTemplates = [
+        ...shiftTemplates.filter((item) => item.id !== draft.template.id),
+        draft.template,
+      ];
+      saveShiftTemplateDraft(draft.template);
+      setAttendance((state) => ({
+        ...state,
+        ...createShiftAssignmentUpdates(
+          state,
+          dateKeys,
+          draft.template,
+          dailyWage,
+          nextTemplates,
+        ),
+      }));
+      setActiveModal(null);
+      setSelectedCalendarRange(null);
+      showToast(
+        `Shift "${draft.template.name}" assigned to ${dateKeys.length} day(s).`,
+        "success",
+      );
     }
   };
 
@@ -3854,6 +4046,247 @@ export default function App() {
     if (id === "customShiftName") setCustomShiftName(value);
     else if (id === "customShiftStart") setCustomShiftStart(value);
     else if (id === "customShiftEnd") setCustomShiftEnd(value);
+    else if (id === "customBreakDuration") setCustomBreakDuration(value);
+    else if (id === "customBreakType") setCustomBreakType(value);
+  };
+
+  const createAbsentAttendanceRecord = (assignedRecord) => {
+    const timingIndicators = getTimingIndicators({
+      late: false,
+      lateMinutes: 0,
+      undertime: false,
+      undertimeMinutes: 0,
+    });
+    const hasAssignedShift =
+      assignedRecord.hasAssignedShift === true ||
+      Boolean(assignedRecord.shiftStartTime && assignedRecord.shiftEndTime);
+
+    return applyAttendanceTiming(
+      {
+        ...assignedRecord,
+        type: "Absent",
+        punchSource: "manual",
+        assignedShiftName: getAssignedShiftName(assignedRecord, shiftTemplates),
+        shift: "Absent",
+        wageRate: "0%",
+        base: "P0.00",
+        ot: "P0.00",
+        penalty: `-${formatPayAmount(getAmount(assignedRecord.base))} (Absence)`,
+        est: "P0.00 PHP",
+        assigned: "— - —",
+        in: "—",
+        out: "—",
+        hasAssignedShift,
+        clockedIn: false,
+        workStartTime: "",
+        workEndTime: "",
+        manualTimeInAt: null,
+        manualTimeOutAt: null,
+        timeZone: "Asia/Manila",
+        isHalfDay: false,
+        overtimeAmount: 0,
+        overtimeMinutes: 0,
+        dots: [...timingIndicators.dots],
+        badges: [
+          { text: "Absent", color: "bg-red-100 text-red-800" },
+          ...timingIndicators.badges,
+        ],
+      },
+      "",
+      "",
+      lateGracePeriodMinutes,
+    );
+  };
+
+  const markSelectedDateAbsent = () => {
+    const targetDates = selectedCalendarRange
+      ? getInclusiveDateKeys(
+          selectedCalendarRange.startDate,
+          selectedCalendarRange.endDate,
+        )
+      : selectedDate
+        ? [selectedDate]
+        : [];
+    if (!targetDates.length) {
+      showToast("Choose a date before marking attendance absent.", "warning");
+      return;
+    }
+
+    if (selectedCalendarRange) {
+      const conflictingDates = getManualEntryRangeConflicts(
+        attendance,
+        targetDates,
+        activeTimeEntry?.date,
+      );
+      if (conflictingDates.length) {
+        showToast(
+          `Absent was not applied. Attendance already exists or Time In is active on: ${conflictingDates.join(", ")}.`,
+          "warning",
+        );
+        return;
+      }
+    }
+
+    for (const date of targetDates) {
+      const assignedRecord = attendance[date] || defaultAttendance;
+      if (assignedRecord.type === "Absent") {
+        showToast(
+          selectedCalendarRange
+            ? `${date} is already marked absent. No dates were changed.`
+            : "This date is already marked absent.",
+          "info",
+        );
+        return;
+      }
+      if (assignedRecord.clockedIn || activeTimeEntry?.date === date) {
+        showToast(
+          "Cannot mark attendance absent while Time In is active.",
+          "warning",
+        );
+        return;
+      }
+
+      const hasAssignedShift =
+        assignedRecord.hasAssignedShift === true ||
+        Boolean(assignedRecord.shiftStartTime && assignedRecord.shiftEndTime);
+      const isShiftlessAbsence =
+        !hasAssignedShift &&
+        ["Unassigned", "Regular"].includes(assignedRecord.type);
+      if (!hasAssignedShift && !isShiftlessAbsence) {
+        showToast(
+          `Assign a shift to ${date} before marking it absent.`,
+          "warning",
+        );
+        return;
+      }
+      if (assignedRecord.type !== "Regular" && !isShiftlessAbsence) {
+        showToast(
+          `Attendance cannot be marked absent on a ${assignedRecord.type.toLowerCase()} date.`,
+          "warning",
+        );
+        return;
+      }
+    }
+
+    setAttendance((state) => {
+      const updated = { ...state };
+      targetDates.forEach((date) => {
+        updated[date] = createAbsentAttendanceRecord(
+          state[date] || defaultAttendance,
+        );
+      });
+      return updated;
+    });
+    setSelectedCalendarRange(null);
+    setActiveModal(null);
+    showToast(
+      targetDates.length > 1
+        ? `${targetDates.length} dates marked absent.`
+        : `${targetDates[0]} marked absent.`,
+      "success",
+    );
+  };
+
+  const grantLeaveForDateRange = (typeValue, startDateValue, endDateValue) => {
+    const type = String(typeValue || "");
+    if (!Object.hasOwn(leaveBalances, type) || !Object.hasOwn(leaveTypes, type)) {
+      showToast("Choose a valid leave type.", "warning");
+      return false;
+    }
+
+    const startDate = String(startDateValue || "");
+    const endDate = String(endDateValue || "");
+    const parsedStart = new Date(`${startDate}T00:00:00Z`);
+    const parsedEnd = new Date(`${endDate}T00:00:00Z`);
+    const isValidDate = (value, parsed) =>
+      /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+      !Number.isNaN(parsed.getTime()) &&
+      parsed.toISOString().slice(0, 10) === value;
+    if (
+      !isValidDate(startDate, parsedStart) ||
+      !isValidDate(endDate, parsedEnd)
+    ) {
+      showToast("Choose valid leave start and end dates.", "warning");
+      return false;
+    }
+    if (parsedStart > parsedEnd) {
+      showToast("Leave start date cannot be after the end date.", "warning");
+      return false;
+    }
+
+    const dayCount = Math.round((parsedEnd - parsedStart) / 86400000) + 1;
+    if (dayCount > leaveBalances[type]) {
+      showToast(
+        `Not enough ${type} credits for ${dayCount} day(s).`,
+        "warning",
+      );
+      return false;
+    }
+    const leaveDates = Array.from({ length: dayCount }, (_, index) => {
+      const date = new Date(parsedStart);
+      date.setUTCDate(date.getUTCDate() + index);
+      return date.toISOString().slice(0, 10);
+    });
+    const hasIneligibleDate = leaveDates.some((date) => {
+      const record = attendance[date] || defaultAttendance;
+      return (
+        record.type === "Leave" ||
+        record.type === "Rest Day" ||
+        record.clockedIn ||
+        (record.in && record.in !== "—")
+      );
+    });
+    if (hasIneligibleDate) {
+      showToast(
+        "The selected range includes a rest day, existing leave, or a date with attendance already recorded.",
+        "warning",
+      );
+      return false;
+    }
+
+    const leave = leaveTypes[type];
+    const leaveName = leave.name;
+    setAttendance((state) => {
+      const updated = { ...state };
+      leaveDates.forEach((date) => {
+        updated[date] = {
+          type: "Leave",
+          shift: leaveName,
+          wageRate: "100%",
+          base:
+            Number(dailyWage) > 0
+              ? formatPayAmount(Number(dailyWage))
+              : "P0.00",
+          ot: "P0.00",
+          penalty: "P0.00",
+          est: `${Number(dailyWage) > 0 ? formatPayAmount(Number(dailyWage)) : "P0.00"} PHP`,
+          assigned: "Leave",
+          in: "—",
+          out: "—",
+          dots: [],
+          leaveCode: type,
+          leaveIcon: leave.icon,
+          badges: [{ text: leaveName, color: leave.badgeColor }],
+        };
+      });
+      return updated;
+    });
+    setLeaveBalances((state) => ({
+      ...state,
+      [type]: state[type] - dayCount,
+    }));
+    const [firstYear, firstMonth, firstDay] = startDate.split("-").map(Number);
+    changeMonthTo(firstYear, firstMonth - 1);
+    setYear(firstYear);
+    setMonthIndex(firstMonth - 1);
+    setSelectedDay(firstDay);
+    setActiveModal(null);
+    setSelectedCalendarRange(null);
+    showToast(
+      `${leaveName} granted for ${dayCount} day(s). Remaining credits updated.`,
+      "success",
+    );
+    return true;
   };
 
   const handleSubmit = (event) => {
@@ -3863,7 +4296,7 @@ export default function App() {
     event.preventDefault();
     const data = new FormData(form);
     if (action.startsWith("handleManualEntrySubmit")) {
-      const entryType = data.get("manualEntryType");
+      const entryType = String(data.get("manualEntryType") || "Present");
       const isAbsentEntry = entryType === "Absent";
       const targetDate = String(
         data.get("manualEntryDate") || selectedCalendarRange?.startDate || "",
@@ -3904,6 +4337,13 @@ export default function App() {
           return;
         }
       }
+      if (entryType === "Leave") {
+        const leaveCode = String(data.get("manualLeaveType") || "");
+        const startDate = selectedCalendarRange?.startDate || targetDate;
+        const endDate = selectedCalendarRange?.endDate || targetDate;
+        grantLeaveForDateRange(leaveCode, startDate, endDate);
+        return;
+      }
       if (
         !isAbsentEntry &&
         (manualInMinutes === null ||
@@ -3916,6 +4356,43 @@ export default function App() {
         );
         return;
       }
+      const manualShiftTemplateId = String(
+        data.get("manualShiftTemplateId") || "",
+      );
+      const manualShiftTemplate = manualShiftTemplateId
+        ? shiftTemplates.find(
+            (template) => template.id === manualShiftTemplateId,
+          )
+        : null;
+      if (manualShiftTemplateId && !manualShiftTemplate) {
+        showToast(
+          "The selected quick shift is no longer available. Choose it again before applying attendance.",
+          "warning",
+        );
+        return;
+      }
+      if (
+        manualShiftTemplate &&
+        getExpectedPaidMinutes(manualShiftTemplate) === null
+      ) {
+        showToast(
+          `Edit "${manualShiftTemplate.label}" and configure its break duration and type before assigning it.`,
+          "warning",
+        );
+        return;
+      }
+      const attendanceWithQuickShift = manualShiftTemplate
+        ? {
+            ...attendance,
+            ...createShiftAssignmentUpdates(
+              attendance,
+              targetDates,
+              manualShiftTemplate,
+              dailyWage,
+              shiftTemplates,
+            ),
+          }
+        : attendance;
       const isOvertimeClaim = entryType === "Overtime";
       const configuredOvertimeMultiplier = Number(overtimeMultiplier);
       if (
@@ -3932,7 +4409,8 @@ export default function App() {
 
       const attendanceUpdates = {};
       for (const targetDate of targetDates) {
-        const assignedRecord = attendance[targetDate] || defaultAttendance;
+        const assignedRecord =
+          attendanceWithQuickShift[targetDate] || defaultAttendance;
         const hasAssignedShift =
           assignedRecord.hasAssignedShift === true ||
           Boolean(
@@ -3942,52 +4420,66 @@ export default function App() {
           isAbsentEntry &&
           !hasAssignedShift &&
           ["Unassigned", "Regular"].includes(assignedRecord.type);
-        if (!hasAssignedShift && !isShiftlessAbsence) {
+        const isShiftlessPresent =
+          entryType === "Present" &&
+          !hasAssignedShift &&
+          ["Unassigned", "Regular"].includes(assignedRecord.type);
+        if (!hasAssignedShift && !isShiftlessAbsence && !isShiftlessPresent) {
           showToast(
             `Assign a shift to ${targetDate} before adding a manual attendance entry.`,
             "warning",
           );
           return;
         }
-        if (assignedRecord.type !== "Regular" && !isShiftlessAbsence) {
+        if (
+          assignedRecord.type !== "Regular" &&
+          !isShiftlessAbsence &&
+          !isShiftlessPresent
+        ) {
           showToast(
             `Manual attendance cannot replace a ${assignedRecord.type.toLowerCase()} date on ${targetDate} without an eligible scheduled shift.`,
             "warning",
           );
           return;
         }
-        const scheduledStartValue = parseTimeMinutes(
-          assignedRecord.shiftStartTime,
-        );
-        const scheduledEndValue = parseTimeMinutes(
-          assignedRecord.shiftEndTime,
-        );
-        if (
-          !isAbsentEntry &&
-          (scheduledStartValue === null || scheduledEndValue === null)
-        ) {
-          showToast(
-            `The assigned shift on ${targetDate} has invalid scheduled times. Update the shift before entering attendance.`,
-            "warning",
-          );
-          return;
+        if (isAbsentEntry) {
+          attendanceUpdates[targetDate] =
+            createAbsentAttendanceRecord(assignedRecord);
+          continue;
         }
-        const scheduledStart = scheduledStartValue ?? 0;
-        const scheduledEndOfDay = scheduledEndValue ?? 0;
-        const overnightShift = scheduledEndOfDay <= scheduledStart;
-        const scheduledEnd = overnightShift
-          ? scheduledEndOfDay + 1440
-          : scheduledEndOfDay;
-        const manualStart =
-          overnightShift && manualInMinutes < scheduledEndOfDay
-            ? manualInMinutes + 1440
-            : manualInMinutes;
-        const manualEnd =
-          overnightShift &&
-          (manualOutMinutes <= manualInMinutes || manualStart >= 1440)
-            ? manualOutMinutes + 1440
-            : manualOutMinutes;
-        if (!isAbsentEntry) {
+        let scheduledStart = null;
+        let scheduledEnd = null;
+        let manualStart = manualInMinutes;
+        let manualEnd = manualOutMinutes;
+        if (hasAssignedShift) {
+          const scheduledStartValue = parseTimeMinutes(
+            assignedRecord.shiftStartTime,
+          );
+          const scheduledEndValue = parseTimeMinutes(
+            assignedRecord.shiftEndTime,
+          );
+          if (scheduledStartValue === null || scheduledEndValue === null) {
+            showToast(
+              `The assigned shift on ${targetDate} has invalid scheduled times. Update the shift before entering attendance.`,
+              "warning",
+            );
+            return;
+          }
+          scheduledStart = scheduledStartValue;
+          const scheduledEndOfDay = scheduledEndValue;
+          const overnightShift = scheduledEndOfDay <= scheduledStart;
+          scheduledEnd = overnightShift
+            ? scheduledEndOfDay + 1440
+            : scheduledEndOfDay;
+          manualStart =
+            overnightShift && manualInMinutes < scheduledEndOfDay
+              ? manualInMinutes + 1440
+              : manualInMinutes;
+          manualEnd =
+            overnightShift &&
+            (manualOutMinutes <= manualInMinutes || manualStart >= 1440)
+              ? manualOutMinutes + 1440
+              : manualOutMinutes;
           const invalidShiftTimes =
             manualStart < scheduledStart - earlyPunchWindowMinutes ||
             manualStart > scheduledEnd ||
@@ -4005,13 +4497,41 @@ export default function App() {
             );
             return;
           }
+        } else {
+          if (isShiftlessPresent && !isRangeEntry) {
+            const conflictingDates = getManualEntryRangeConflicts(
+              attendance,
+              [targetDate],
+              activeTimeEntry?.date,
+            );
+            if (conflictingDates.length) {
+              showToast(
+                `Manual entry was not applied. Attendance already exists or Time In is active on: ${conflictingDates.join(", ")}.`,
+                "warning",
+              );
+              return;
+            }
+          }
+          manualEnd =
+            manualOutMinutes <= manualInMinutes
+              ? manualOutMinutes + 1440
+              : manualOutMinutes;
+          if (manualEnd <= manualStart || manualEnd > manualStart + 1440) {
+            showToast(
+              `Enter a valid Time In and Time Out for ${targetDate}.`,
+              "warning",
+            );
+            return;
+          }
         }
 
         let badges = [
           { text: "Present", color: "bg-emerald-100 text-emerald-800" },
         ];
         let dots = [{ title: "Present", color: "bg-emerald-500" }];
-        let shift = "Manual Entry Adjustment";
+        let shift = manualShiftTemplate
+          ? assignedRecord.assignedShiftName || assignedRecord.shift
+          : "Manual Entry Adjustment";
         let base = assignedRecord.base || "P0.00";
         let ot = "P0.00";
         let est = `${base} PHP`;
@@ -4019,19 +4539,12 @@ export default function App() {
         let overtimeMinutes = 0;
         let inValue = formatTime(manualTimeIn);
         let outValue = formatTime(manualTimeOut);
-        const rawTimingFlags = isAbsentEntry
-          ? {
-              late: false,
-              lateMinutes: 0,
-              undertime: false,
-              undertimeMinutes: 0,
-            }
-          : getAttendanceTimingFlags(
-              assignedRecord,
-              manualTimeIn,
-              manualTimeOut,
-              lateGracePeriodMinutes,
-            );
+        const rawTimingFlags = getAttendanceTimingFlags(
+          assignedRecord,
+          manualTimeIn,
+          manualTimeOut,
+          lateGracePeriodMinutes,
+        );
         const timingFlags =
           entryType === "Half-day"
             ? { ...rawTimingFlags, undertime: false, undertimeMinutes: 0 }
@@ -4039,8 +4552,11 @@ export default function App() {
         const timingIndicators = getTimingIndicators(timingFlags);
         if (entryType === "Half-day") {
           const scheduledShiftMinutes = scheduledEnd - scheduledStart;
+            const regularPaidMinutes =
+              getExpectedPaidMinutes(assignedRecord.assignedShiftSnapshot) ||
+              scheduledShiftMinutes;
           const hourlyBase =
-            getAmount(assignedRecord.base) / (scheduledShiftMinutes / 60);
+              getAmount(assignedRecord.base) / (regularPaidMinutes / 60);
           base = formatPayAmount(hourlyBase * 4);
           est = `${base} PHP`;
           shift = "Half-day";
@@ -4050,9 +4566,12 @@ export default function App() {
           dots = [{ title: "Half-day", color: "bg-amber-500" }];
         } else if (isOvertimeClaim) {
           const scheduledShiftMinutes = scheduledEnd - scheduledStart;
+          const regularPaidMinutes =
+            getExpectedPaidMinutes(assignedRecord.assignedShiftSnapshot) ||
+            scheduledShiftMinutes;
           overtimeMinutes = manualEnd - scheduledEnd;
           const hourlyBase =
-            getAmount(assignedRecord.base) / (scheduledShiftMinutes / 60);
+            getAmount(assignedRecord.base) / (regularPaidMinutes / 60);
           overtimeAmount =
             hourlyBase *
             (overtimeMinutes / 60) *
@@ -4070,15 +4589,6 @@ export default function App() {
           shift = "Overtime Claim";
           est = formatPayAmount(getAmount(base) + overtimeAmount) + " PHP";
           ot = `${formatPayAmount(overtimeAmount)} (${formatDuration(overtimeMinutes)} OT)`;
-        } else if (isAbsentEntry) {
-          badges = [{ text: "Absent", color: "bg-red-100 text-red-800" }];
-          dots = [];
-          shift = "Absent";
-          base = "P0.00";
-          ot = "P0.00";
-          est = "P0.00 PHP";
-          inValue = "—";
-          outValue = "—";
         } else if (entryType === "Official Business") {
           badges = [
             { text: "Official Business", color: "bg-teal-100 text-teal-800" },
@@ -4089,19 +4599,17 @@ export default function App() {
         attendanceUpdates[targetDate] = applyAttendanceTiming(
           {
             ...assignedRecord,
-            type: isAbsentEntry ? "Absent" : "Regular",
+            type: "Regular",
             punchSource: "manual",
             assignedShiftName: getAssignedShiftName(
               assignedRecord,
               shiftTemplates,
             ),
             shift,
-            wageRate: isAbsentEntry ? "0%" : "100%",
+            wageRate: "100%",
             base,
             ot,
-            penalty: isAbsentEntry
-              ? `-${formatPayAmount(getAmount(assignedRecord.base))} (Absence)`
-              : "P0.00",
+            penalty: "P0.00",
             est,
             assigned: `${inValue} - ${outValue}`,
             in: inValue,
@@ -4112,14 +4620,10 @@ export default function App() {
                 assignedRecord.shiftStartTime && assignedRecord.shiftEndTime,
               ),
             clockedIn: false,
-            workStartTime: isAbsentEntry ? "" : manualTimeIn,
-            workEndTime: isAbsentEntry ? "" : manualTimeOut,
-            manualTimeInAt: isAbsentEntry
-              ? null
-              : getManilaTimestamp(targetDate, manualStart),
-            manualTimeOutAt: isAbsentEntry
-              ? null
-              : getManilaTimestamp(targetDate, manualEnd),
+            workStartTime: manualTimeIn,
+            workEndTime: manualTimeOut,
+            manualTimeInAt: getManilaTimestamp(targetDate, manualStart),
+            manualTimeOutAt: getManilaTimestamp(targetDate, manualEnd),
             timeZone: "Asia/Manila",
             isHalfDay: entryType === "Half-day",
             overtimeAmount,
@@ -4127,8 +4631,8 @@ export default function App() {
             dots: [...dots, ...timingIndicators.dots],
             badges: [...badges, ...timingIndicators.badges],
           },
-          isAbsentEntry ? "" : manualTimeIn,
-          isAbsentEntry ? "" : manualTimeOut,
+          manualTimeIn,
+          manualTimeOut,
           lateGracePeriodMinutes,
         );
       }
@@ -4140,6 +4644,7 @@ export default function App() {
       setSelectedDay(targetDay);
       if (targetDates.includes(activeTimeEntry?.date)) setActiveTimeEntry(null);
       setActiveModal(null);
+      setSelectedCalendarRange(null);
       showToast(
         isRangeEntry
           ? `Manual entry applied to ${targetDates.length} day(s).`
@@ -4169,6 +4674,16 @@ export default function App() {
       const template =
         shiftTemplates.find((item) => item.id === selectedShiftTemplate) ||
         shiftTemplates.find((item) => item.id === "rest-day");
+      if (
+        template.id !== "rest-day" &&
+        getExpectedPaidMinutes(template) === null
+      ) {
+        showToast(
+          `Edit "${template.label}" and configure its break duration and type before assigning it.`,
+          "warning",
+        );
+        return;
+      }
       setAttendance((state) => ({
         ...state,
         ...createShiftAssignmentUpdates(
@@ -4180,107 +4695,16 @@ export default function App() {
         ),
       }));
       setActiveModal(null);
+      setSelectedCalendarRange(null);
       showToast(
         `Shift "${template.name}" assigned to ${dateKeys.length} day(s).`,
         "success",
       );
     } else if (action.startsWith("handleGrantLeaveSubmit")) {
       const type = String(data.get("grantLeaveTypeSelect") || "VL");
-      if (!Object.hasOwn(leaveBalances, type)) {
-        showToast("Choose a valid leave type.", "warning");
-        return;
-      }
       const startDate = String(data.get("grantLeaveStartDate") || "");
       const endDate = String(data.get("grantLeaveEndDate") || "");
-      const parsedStart = new Date(`${startDate}T00:00:00Z`);
-      const parsedEnd = new Date(`${endDate}T00:00:00Z`);
-      const isValidDate = (value, parsed) =>
-        /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-        !Number.isNaN(parsed.getTime()) &&
-        parsed.toISOString().slice(0, 10) === value;
-      if (
-        !isValidDate(startDate, parsedStart) ||
-        !isValidDate(endDate, parsedEnd)
-      ) {
-        showToast("Choose valid leave start and end dates.", "warning");
-        return;
-      }
-      if (parsedStart > parsedEnd) {
-        showToast("Leave start date cannot be after the end date.", "warning");
-        return;
-      }
-      const dayCount = Math.round((parsedEnd - parsedStart) / 86400000) + 1;
-      if (dayCount > leaveBalances[type]) {
-        showToast(
-          `Not enough ${type} credits for ${dayCount} day(s).`,
-          "warning",
-        );
-        return;
-      }
-      const leaveDates = Array.from({ length: dayCount }, (_, index) => {
-        const date = new Date(parsedStart);
-        date.setUTCDate(date.getUTCDate() + index);
-        return date.toISOString().slice(0, 10);
-      });
-      const hasIneligibleDate = leaveDates.some((date) => {
-        const record = attendance[date] || defaultAttendance;
-        return (
-          record.type === "Leave" ||
-          record.type === "Rest Day" ||
-          record.clockedIn ||
-          (record.in && record.in !== "—")
-        );
-      });
-      if (hasIneligibleDate) {
-        showToast(
-          "The selected range includes a rest day, existing leave, or a date with attendance already recorded.",
-          "warning",
-        );
-        return;
-      }
-      const leave = leaveTypes[type];
-      const leaveName = leave.name;
-      setAttendance((state) => {
-        const updated = { ...state };
-        leaveDates.forEach((date) => {
-          updated[date] = {
-            type: "Leave",
-            shift: leaveName,
-            wageRate: "100%",
-            base:
-              Number(dailyWage) > 0
-                ? formatPayAmount(Number(dailyWage))
-                : "P0.00",
-            ot: "P0.00",
-            penalty: "P0.00",
-            est: `${Number(dailyWage) > 0 ? formatPayAmount(Number(dailyWage)) : "P0.00"} PHP`,
-            assigned: "Leave",
-            in: "—",
-            out: "—",
-            dots: [],
-            leaveCode: type,
-            leaveIcon: leave.icon,
-            badges: [{ text: leaveName, color: leave.badgeColor }],
-          };
-        });
-        return updated;
-      });
-      setLeaveBalances((state) => ({
-        ...state,
-        [type]: state[type] - dayCount,
-      }));
-      const [firstYear, firstMonth, firstDay] = startDate
-        .split("-")
-        .map(Number);
-      changeMonthTo(firstYear, firstMonth - 1);
-      setYear(firstYear);
-      setMonthIndex(firstMonth - 1);
-      setSelectedDay(firstDay);
-      setActiveModal(null);
-      showToast(
-        `${leaveName} granted for ${dayCount} day(s). Remaining credits updated.`,
-        "success",
-      );
+      grantLeaveForDateRange(type, startDate, endDate);
     }
   };
 
@@ -4402,65 +4826,133 @@ export default function App() {
     year,
   ]);
 
-  const shiftTemplateCards = shiftTemplates.map((template) => (
-    <div
-      key={template.id}
-      role="button"
-      tabIndex={0}
-      aria-pressed={selectedShiftTemplate === template.id}
-      onClick={(event) => {
-        if (event.target.closest("button")) return;
-        setSelectedShiftTemplate(template.id);
-        setCustomShiftName("");
-        setIsCustomShiftActive(false);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
+  const selectedShiftTemplateData = shiftTemplates.find(
+    (template) => template.id === selectedShiftTemplate,
+  );
+  const selectedShiftTemplatePaidMinutes = selectedShiftTemplateData
+    ? getExpectedPaidMinutes(selectedShiftTemplateData)
+    : null;
+
+  const shiftTemplateCards = shiftTemplates.map((template) => {
+    const isSelected = selectedShiftTemplate === template.id;
+    const expectedMinutes = getExpectedPaidMinutes(template);
+    const hasBreakSettings =
+      template.breakDurationMinutes !== null &&
+      template.breakDurationMinutes !== undefined &&
+      Number.isFinite(Number(template.breakDurationMinutes)) &&
+      Number(template.breakDurationMinutes) >= 0 &&
+      ["paid", "unpaid"].includes(template.breakType);
+    const breakMinutes = Number(template.breakDurationMinutes);
+    const breakLabel = !hasBreakSettings
+      ? "Break settings needed"
+      : breakMinutes === 0
+        ? "No break"
+        : `${breakMinutes % 60 === 0 ? `${breakMinutes / 60}h` : `${breakMinutes}m`} ${template.breakType} break`;
+
+    return (
+      <div
+        key={template.id}
+        role="button"
+        tabIndex={0}
+        aria-pressed={isSelected}
+        onClick={(event) => {
+          if (event.target.closest("button")) return;
           setSelectedShiftTemplate(template.id);
           setCustomShiftName("");
           setIsCustomShiftActive(false);
-        }
-      }}
-      className={`shift-card relative cursor-pointer border-2 rounded-2xl p-3.5 flex flex-col items-center text-center transition ${selectedShiftTemplate === template.id ? "border-indigo-600 bg-indigo-50/30 shadow-xs" : "border-slate-200 bg-white hover:border-slate-300"}`}
-    >
-      <span
-        className={`mb-2 flex h-8 w-8 items-center justify-center rounded-full ${
-          ["morning", "afternoon"].includes(template.label?.toLowerCase())
-            ? "bg-indigo-100 text-indigo-600"
-            : "bg-slate-100"
+          setEditingShiftTemplateId(null);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setSelectedShiftTemplate(template.id);
+            setCustomShiftName("");
+            setIsCustomShiftActive(false);
+            setEditingShiftTemplateId(null);
+          }
+        }}
+        className={`shift-card group relative flex min-h-[112px] cursor-pointer flex-col items-start rounded-xl border-2 p-3.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${
+          isSelected
+            ? "border-emerald-500 bg-emerald-50/60 shadow-sm"
+            : "border-slate-200 bg-white hover:border-slate-300"
         }`}
       >
-        <ShiftIcon
-          icon={template.icon}
-          size={16}
-          className={
-            ["morning", "afternoon"].includes(
-              template.label?.toLowerCase(),
-            )
-              ? ""
-              : template.label?.toLowerCase() === "night"
+        <span
+          className={`mb-2 flex h-8 w-8 items-center justify-center rounded-lg ${
+            isSelected ? "bg-emerald-100" : "bg-slate-100"
+          }`}
+        >
+          <ShiftIcon
+            icon={template.icon}
+            size={16}
+            className={
+              template.label?.toLowerCase() === "night"
                 ? "text-slate-600"
                 : template.iconColor
-          }
-        />
-      </span>
-      <span className="font-bold text-slate-800 text-xs">{template.label}</span>
-      <span className="text-[10px] text-slate-500 mt-0.5">
-        {template.range}
-      </span>
-      {!template.protected && (
-        <button
-          type="button"
-          data-action={`deleteShiftTemplate('${template.id}')`}
-          aria-label={`Delete ${template.label} template`}
-          className="absolute top-1 right-1 text-slate-400 hover:text-rose-600 p-1"
-        >
-          <i className="fa-solid fa-trash-can text-[10px]" />
-        </button>
-      )}
-    </div>
-  ));
+            }
+          />
+        </span>
+        <span className="pr-16 text-xs font-bold text-slate-800">
+          {template.label}
+        </span>
+        <span className="mt-0.5 text-[10px] text-slate-500">
+          {template.range}
+        </span>
+        {template.startTime && template.endTime && (
+          <span className="mt-1 text-[9px] text-slate-500">
+            {hasBreakSettings ? breakLabel : "Break settings needed"}
+            {expectedMinutes !== null && (
+              <span className="text-slate-600">
+                {" "}
+                · {(expectedMinutes / 60).toFixed(2)}h paid
+              </span>
+            )}
+          </span>
+        )}
+        {((template.startTime && template.endTime) || !template.protected) && (
+          <div
+            className={`absolute right-1.5 top-1.5 flex items-center gap-1 transition-opacity ${
+              isSelected
+                ? "opacity-100"
+                : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+            }`}
+          >
+            {template.startTime && template.endTime && (
+              <button
+                type="button"
+                data-action={`editShiftTemplate('${template.id}')`}
+                aria-label={`Edit ${template.label} template`}
+                title="Edit shift"
+                className="flex h-7 cursor-pointer items-center gap-1 rounded-lg px-1.5 text-slate-400 transition hover:bg-teal-50 hover:text-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+              >
+                <i className="fa-solid fa-pen-to-square text-[10px]" aria-hidden="true" />
+                <span className="text-[9px] font-semibold">Edit</span>
+              </button>
+            )}
+            {!template.protected && (
+              <button
+                type="button"
+                data-action={`deleteShiftTemplate('${template.id}')`}
+                aria-label={`Delete ${template.label} template`}
+                title="Delete shift"
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+              >
+                <i className="fa-solid fa-trash-can text-[10px]" aria-hidden="true" />
+              </button>
+            )}
+            {isSelected && (
+              <span
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white"
+                aria-label="Selected"
+              >
+                <i className="fa-solid fa-check text-[10px]" aria-hidden="true" />
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  });
 
   return (
     <div
@@ -4681,12 +5173,14 @@ export default function App() {
               monthValue={calendarPayrollMonth}
               year={year}
               selectedDate={selectedDate}
+              selectedCalendarRange={selectedCalendarRange}
+              leaveBalances={leaveBalances}
               canClearShift={canClearSelectedShift}
+              canMarkAbsent={canMarkAbsent}
               isTimedIn={Boolean(
                 activeTimeEntry &&
                 (activeTimeEntry.date === selectedDate || canTimeOut),
               )}
-              canRecordAttendance={canRecordAttendance}
               canTimeIn={canTimeIn}
               canTimeOut={canTimeOut}
               earlyPunchWindowMinutes={earlyPunchWindowMinutes}
@@ -4699,6 +5193,7 @@ export default function App() {
               nightDifferentialPay={selectedNightDifferentialPay}
               overtimePay={selectedOvertimePay}
               overtimeCalculation={selectedOvertimeCalculation}
+              workHours={selectedPayrollCalculation.hours}
               configuredDailyWage={selectedPayrollSettings.dailyWage}
               onOpenHolidayPaySettings={() => {
                 setActiveSettingsTab("earnings");
@@ -4768,19 +5263,15 @@ export default function App() {
               onUpdateTravelExpense={updateTravelExpense}
               onDeleteTravelExpense={deleteTravelExpense}
             />
-            <CalendarRangeActionsModal
-              open={activeModal === "calendarRangeActionsModal"}
-              range={selectedCalendarRange}
-              onAssignShift={openRangeAssignShift}
-              onClearShifts={clearSelectedShiftRange}
-              onManualEntry={openRangeManualEntry}
-            />
             <ManualEntryModal
               key={`manual-${selectedDate}-${selectedCalendarRange?.startDate || ""}-${selectedCalendarRange?.endDate || ""}`}
               open={activeModal === "manualEntryModal"}
               selectedDate={selectedDate}
               selectedRange={selectedCalendarRange}
               initialEntryType={manualEntryInitialType}
+              leaveBalances={leaveBalances}
+              leaveTypes={leaveTypes}
+              shiftTemplates={shiftTemplates}
               initialTimeIn={
                 selectedAttendanceRecord.shiftStartTime ||
                 selectedAttendanceRecord.workStartTime ||
@@ -4806,7 +5297,43 @@ export default function App() {
               setCustomShiftStart={setCustomShiftStart}
               customShiftEnd={customShiftEnd}
               setCustomShiftEnd={setCustomShiftEnd}
+              customBreakDuration={customBreakDuration}
+              setCustomBreakDuration={setCustomBreakDuration}
+              customBreakType={customBreakType}
+              setCustomBreakType={setCustomBreakType}
+              expectedPaidHours={(() => {
+                const startTime = normalizeTwelveHourShiftTime(customShiftStart);
+                const endTime = normalizeTwelveHourShiftTime(customShiftEnd);
+                if (startTime === null || endTime === null) return null;
+                const expectedPaidMinutes = getExpectedPaidMinutes({
+                  startTime,
+                  endTime,
+                  breakDurationMinutes:
+                    customBreakDuration.trim() === ""
+                      ? null
+                      : Number(customBreakDuration),
+                  breakType: customBreakType,
+                });
+                return expectedPaidMinutes === null
+                  ? null
+                  : Number((expectedPaidMinutes / 60).toFixed(2));
+              })()}
+              editingShiftTemplateId={editingShiftTemplateId}
               selectedIcon={selectedIcon}
+              setEditingShiftTemplateId={setEditingShiftTemplateId}
+              selectedShiftTemplateName={
+                selectedShiftTemplateData?.label ||
+                selectedShiftTemplateData?.name
+              }
+              selectedShiftTemplateExpectedHours={
+                selectedShiftTemplatePaidMinutes === null
+                  ? null
+                  : selectedShiftTemplatePaidMinutes / 60
+              }
+              selectedShiftTemplateIsRestDay={
+                selectedShiftTemplateData?.id === "rest-day"
+              }
+              dailyWage={selectedPayrollSettings.dailyWage}
             />
             <GrantLeaveModal
               key={`leave-${selectedDate}`}

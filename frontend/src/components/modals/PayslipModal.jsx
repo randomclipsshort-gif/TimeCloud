@@ -96,8 +96,9 @@ export default function PayslipModal({
   const netPayLabel = earningsAvailable
     ? formatCurrency(activeNetPay)
     : "Private data unavailable";
-  const recordedHours =
-    activeSummary.regularHours + activeSummary.overtimeHours;
+  const recordedHours = Number.isFinite(activeSummary.actualPaidHours)
+    ? activeSummary.actualPaidHours
+    : activeSummary.regularHours + activeSummary.overtimeHours;
   const recordedWorkdays = Number.isFinite(activeSummary.eligibleWorkdays)
     ? `${activeSummary.eligibleWorkdays} worked day${activeSummary.eligibleWorkdays === 1 ? "" : "s"} · `
     : "";

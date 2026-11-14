@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   clearShiftAndAttendanceRecord,
   createShiftAssignmentUpdates,
+  getExpectedPaidMinutes,
+  getShiftDurationMinutes,
   getManualEntryRangeConflicts,
   hasRecordedAttendance,
   normalizeTwelveHourShiftTime,
@@ -38,6 +40,31 @@ test("normalizes custom 12-hour shift times and rejects incomplete values", () =
   assert.equal(normalizeTwelveHourShiftTime("13:00 PM"), null);
 });
 
+test("calculates expected paid time for paid and unpaid breaks, including overnight shifts", () => {
+  const midShift = {
+    startTime: "12:00",
+    endTime: "21:00",
+    breakDurationMinutes: 60,
+    breakType: "unpaid",
+  };
+  assert.equal(getShiftDurationMinutes(midShift.startTime, midShift.endTime), 540);
+  assert.equal(getExpectedPaidMinutes(midShift), 480);
+  assert.equal(getExpectedPaidMinutes({ ...midShift, breakType: "paid" }), 540);
+  assert.equal(
+    getExpectedPaidMinutes({
+      startTime: "22:00",
+      endTime: "07:00",
+      breakDurationMinutes: 45,
+      breakType: "unpaid",
+    }),
+    495,
+  );
+  assert.equal(
+    getExpectedPaidMinutes({ ...midShift, breakDurationMinutes: 600 }),
+    null,
+  );
+});
+
 test("assigns the selected template to every inclusive date without duplicates", () => {
   const updates = createShiftAssignmentUpdates(
     {},
@@ -65,6 +92,35 @@ test("assigns the selected template to every inclusive date without duplicates",
   );
   assert.equal(repeated["2026-11-16"].badges.length, 1);
   assert.equal(repeated["2026-11-16"].badges[0].text, "Morning");
+});
+
+test("template edits do not mutate an already assigned shift snapshot", () => {
+  const midShift = {
+    id: "mid",
+    name: "Mid Shift",
+    label: "Mid Shift",
+    startTime: "12:00",
+    endTime: "21:00",
+    breakDurationMinutes: 60,
+    breakType: "unpaid",
+  };
+  const assignment = createShiftAssignmentUpdates(
+    {},
+    ["2026-11-16"],
+    midShift,
+    900,
+    [midShift],
+  )["2026-11-16"];
+  const editedTemplate = {
+    ...midShift,
+    breakDurationMinutes: 30,
+    breakType: "paid",
+  };
+
+  assert.equal(editedTemplate.breakDurationMinutes, 30);
+  assert.equal(assignment.assignedShiftSnapshot.breakDurationMinutes, 60);
+  assert.equal(assignment.assignedShiftSnapshot.breakType, "unpaid");
+  assert.equal(assignment.assignedShiftSnapshot.expectedPaidMinutes, 480);
 });
 
 test("assigns a night shift to each selected date", () => {

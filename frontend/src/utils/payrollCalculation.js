@@ -2,6 +2,7 @@ import {
   calculateHolidayPay,
   getAttendanceHours,
   hasAttendanceTimeData,
+  holidayPayRules,
   specialNonWorkingNoPayNotice,
 } from "./holidayPay.js";
 import { getHolidayClassification } from "./holidayUtils.js";
@@ -9,6 +10,7 @@ import {
   getPayrollDeductionSettingsDefaults,
   payrollDeductionSettingKeys,
 } from "./payrollDeductions.js";
+import { getExpectedPaidMinutes } from "./shiftAssignment.js";
 
 const DAY_MINUTES = 24 * 60;
 const payrollRateSettingKeys = [
@@ -62,11 +64,120 @@ function getNightShiftMinutes(startTime, endTime) {
 }
 
 function getScheduledMinutes(record) {
-  const start = parseTimeMinutes(record?.shiftStartTime);
-  const endOfDay = parseTimeMinutes(record?.shiftEndTime);
+  const start = parseTimeMinutes(
+    record?.assignedShiftSnapshot?.startTime || record?.shiftStartTime,
+  );
+  const endOfDay = parseTimeMinutes(
+    record?.assignedShiftSnapshot?.endTime || record?.shiftEndTime,
+  );
   if (start === null || endOfDay === null || start === endOfDay) return null;
   const end = endOfDay <= start ? endOfDay + DAY_MINUTES : endOfDay;
   return end > start && end - start <= DAY_MINUTES ? end - start : null;
+}
+
+export function getAttendanceHoursBreakdown(record) {
+  const shift = record?.assignedShiftSnapshot;
+  const scheduledStartTime = shift?.startTime || record?.shiftStartTime;
+  const scheduledEndTime = shift?.endTime || record?.shiftEndTime;
+  const scheduledStart = parseTimeMinutes(scheduledStartTime);
+  const scheduledEndOfDay = parseTimeMinutes(scheduledEndTime);
+  const scheduledMinutes = getScheduledMinutes(record);
+  const breakDurationMinutes =
+    shift?.breakDurationMinutes === null ||
+    shift?.breakDurationMinutes === undefined ||
+    shift?.breakDurationMinutes === ""
+      ? null
+      : Number(shift.breakDurationMinutes);
+  const hasBreakConfiguration =
+    getExpectedPaidMinutes(shift) !== null &&
+    scheduledMinutes !== null;
+  const expectedPaidMinutes = hasBreakConfiguration
+    ? getExpectedPaidMinutes(shift)
+    : null;
+  const validBreakDuration =
+    Number.isFinite(breakDurationMinutes) && breakDurationMinutes >= 0
+      ? breakDurationMinutes
+      : null;
+  const actualStartOfDay = parseTimeMinutes(
+    record?.workStartTime || record?.in,
+  );
+  const actualEndOfDay = parseTimeMinutes(record?.workEndTime || record?.out);
+  let actualElapsedMinutes = null;
+  let actualPaidMinutes = null;
+  let earlyArrivalMinutes = 0;
+
+  if (
+    !record?.clockedIn &&
+    scheduledStart !== null &&
+    scheduledEndOfDay !== null &&
+    actualStartOfDay !== null &&
+    actualEndOfDay !== null &&
+    actualStartOfDay !== actualEndOfDay
+  ) {
+    const overnightShift = scheduledEndOfDay <= scheduledStart;
+    const actualStart =
+      overnightShift && actualStartOfDay < scheduledEndOfDay
+        ? actualStartOfDay + DAY_MINUTES
+        : actualStartOfDay;
+    const actualEnd =
+      actualEndOfDay <= actualStartOfDay ||
+      (overnightShift && actualStart >= DAY_MINUTES)
+        ? actualEndOfDay + DAY_MINUTES
+        : actualEndOfDay;
+    const elapsedMinutes = actualEnd - actualStart;
+    if (elapsedMinutes > 0 && elapsedMinutes <= DAY_MINUTES) {
+      actualElapsedMinutes = elapsedMinutes;
+      if (hasBreakConfiguration) {
+        earlyArrivalMinutes = Math.max(0, scheduledStart - actualStart);
+        const applicableUnpaidBreakMinutes =
+          shift.breakType === "unpaid"
+            ? Math.min(validBreakDuration, elapsedMinutes)
+            : 0;
+        actualPaidMinutes = Math.max(
+          0,
+          elapsedMinutes - applicableUnpaidBreakMinutes,
+        );
+      }
+    }
+  }
+
+  const attendanceComplete = actualElapsedMinutes !== null;
+  const regularMinutes =
+    attendanceComplete && expectedPaidMinutes !== null
+      ? Math.min(actualPaidMinutes, expectedPaidMinutes)
+      : null;
+  const potentialOvertimeMinutes =
+    attendanceComplete && expectedPaidMinutes !== null
+      ? Math.max(
+          0,
+          actualPaidMinutes - expectedPaidMinutes - earlyArrivalMinutes,
+        )
+      : null;
+  const approvedOvertimeMinutes = Math.max(
+    0,
+    Number(record?.overtimeMinutes) || 0,
+  );
+
+  return {
+    assignedShiftName:
+      shift?.name ||
+      record?.assignedShiftName ||
+      (record?.shift === "Manual Entry Adjustment"
+        ? "Assigned Shift"
+        : record?.shift || "No Shift Assigned"),
+    scheduledMinutes,
+    breakDurationMinutes: validBreakDuration,
+    breakType: ["paid", "unpaid"].includes(shift?.breakType)
+      ? shift.breakType
+      : null,
+    expectedPaidMinutes,
+    actualElapsedMinutes,
+    actualPaidMinutes,
+    earlyArrivalMinutes,
+    regularMinutes,
+    potentialOvertimeMinutes,
+    approvedOvertimeMinutes,
+  };
 }
 
 function getDailyWage(settings) {
@@ -164,10 +275,11 @@ export function buildPayrollSettingsHistory({
   );
 }
 
-function getIncompleteResult(reasons) {
+function getIncompleteResult(reasons, hours = null) {
   return {
     status: "pending",
     reasons,
+    hours,
     breakdown: null,
     earnings: null,
     dailyWage: null,
@@ -204,6 +316,7 @@ export function calculateAttendancePayroll({
     return getIncompleteResult(["Attendance record is unavailable."]);
   }
 
+  const hours = getAttendanceHoursBreakdown(record);
   const type = record.type;
   if (
     ["Unassigned", "Company Break"].includes(type) ||
@@ -212,6 +325,7 @@ export function calculateAttendancePayroll({
     return {
       status: "not-applicable",
       reasons: [],
+      hours,
       breakdown: null,
       earnings: 0,
       dailyWage: null,
@@ -221,7 +335,7 @@ export function calculateAttendancePayroll({
   }
 
   if (record.clockedIn) {
-    return getIncompleteResult(["Clock out before calculating payroll."]);
+    return getIncompleteResult(["Clock out before calculating payroll."], hours);
   }
 
   const dailyWage = getDailyWage(settings);
@@ -229,12 +343,13 @@ export function calculateAttendancePayroll({
   if (dailyWage === null) reasons.push("Configure a daily wage in Settings.");
 
   if (type === "Leave") {
-    if (reasons.length) return getIncompleteResult(reasons);
+    if (reasons.length) return getIncompleteResult(reasons, hours);
     const leaveAmount = dailyWage;
     const category = record.leaveCode === "SL" ? "paidSickLeave" : "otherPaidLeave";
     return {
       status: "ready",
       reasons: [],
+      hours,
       breakdown: { [category]: leaveAmount },
       earnings: leaveAmount,
       dailyWage,
@@ -251,6 +366,7 @@ export function calculateAttendancePayroll({
     return {
       status: "ready",
       reasons: [],
+      hours,
       breakdown: {
         lateMinutes: 0,
         undertimeMinutes: 0,
@@ -291,6 +407,7 @@ export function calculateAttendancePayroll({
     return {
       status: "not-applicable",
       reasons: [],
+      hours,
       breakdown: null,
       earnings: 0,
       dailyWage,
@@ -328,17 +445,20 @@ export function calculateAttendancePayroll({
   const overtimeMultiplier = Number(settings?.overtimeMultiplier);
   let overtimePay = getAmount(record.overtimeAmount);
   const scheduledMinutes = getScheduledMinutes(record);
-  if (overtimeMinutes > 0 && scheduledMinutes) {
+  const expectedPaidMinutes = hours.expectedPaidMinutes;
+  const overtimeBasisMinutes =
+    expectedPaidMinutes ?? scheduledMinutes;
+  if (overtimeMinutes > 0 && overtimeBasisMinutes) {
     if (!Number.isFinite(overtimeMultiplier) || overtimeMultiplier <= 0) {
       reasons.push("Configure a valid overtime multiplier.");
     } else if (basePay !== null) {
       overtimePay =
-        (basePay / (scheduledMinutes / 60)) *
+        (basePay / (overtimeBasisMinutes / 60)) *
         (overtimeMinutes / 60) *
         overtimeMultiplier;
     }
   }
-  if (reasons.length) return getIncompleteResult(reasons);
+  if (reasons.length) return getIncompleteResult(reasons, hours);
 
   const timingValues = {
     lateMinutes: Number.isFinite(Number(record.lateMinutes))
@@ -350,13 +470,17 @@ export function calculateAttendancePayroll({
   };
   if (holiday) {
     const attendanceHours = getAttendanceHours(record);
+    const paidHoursForHoliday =
+      hours.actualPaidMinutes === null
+        ? attendanceHours ?? 0
+        : hours.actualPaidMinutes / 60;
     const holidayPay = calculateHolidayPay({
       holiday: {
         ...holiday,
         classification: getHolidayClassification(holiday),
       },
       dailyWage,
-      hoursWorked: attendanceHours ?? 0,
+      hoursWorked: Math.min(paidHoursForHoliday, holidayPayRules.standardHours),
       hasSchedule: hasAssignedShift,
       isRestDay: record.type === "Rest Day",
       eligibilityKnown: holidayEligibilityConfirmed,
@@ -366,7 +490,7 @@ export function calculateAttendancePayroll({
       overtimeMultiplier,
     });
     if (holidayPay.amount == null) {
-      return getIncompleteResult([holidayPay.message]);
+      return getIncompleteResult([holidayPay.message], hours);
     }
     const holidayEarningsKey =
       getHolidayClassification(holiday) === "Regular Holiday"
@@ -378,21 +502,20 @@ export function calculateAttendancePayroll({
       (Number(holidayPay.overtimePay) || 0) + overtimePay;
     const breakdown = {
       ...timingValues,
+      ...hours,
       [holidayEarningsKey]: Number.isFinite(holidayPay.regularPay)
         ? holidayPay.regularPay
         : Math.max(0, holidayPay.amount - (holidayPay.overtimePay || 0)),
       allowance: allowanceAmount,
       shiftDifferentials: nightDifferentialPay,
       overtime: holidayOvertimePay,
-      overtimeMinutes: Math.max(
-        overtimeMinutes,
-        (Number(holidayPay.overtimeHours) || 0) * 60,
-      ),
-      overtimeHours: Number(holidayPay.overtimeHours) || 0,
+      overtimeMinutes,
+      overtimeHours: overtimeMinutes / 60,
     };
     return {
       status: "ready",
       reasons: [],
+      hours,
       breakdown,
       earnings: [
         "basicPay",
@@ -413,6 +536,7 @@ export function calculateAttendancePayroll({
 
   const breakdown = {
     ...timingValues,
+    ...hours,
     basicPay: Math.max(0, (basePay || 0) + getAmount(record.penalty)),
     allowance: allowanceAmount,
     shiftDifferentials: nightDifferentialPay,
@@ -422,6 +546,7 @@ export function calculateAttendancePayroll({
   return {
     status: "ready",
     reasons: [],
+    hours,
     breakdown,
     earnings:
       breakdown.basicPay +

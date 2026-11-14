@@ -8,6 +8,48 @@ export function normalizeTwelveHourShiftTime(value) {
   return `${String(hour).padStart(2, "0")}:${match[2]}`;
 }
 
+function parseShiftTimeMinutes(value) {
+  if (typeof value !== "string") return null;
+  const match = value.trim().match(/^(\d{1,2}):([0-5]\d)(?:\s*(AM|PM))?$/i);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const meridiem = match[3]?.toUpperCase();
+  if (hour > (meridiem ? 12 : 23) || (meridiem && hour < 1)) return null;
+  if (meridiem) hour = (hour % 12) + (meridiem === "PM" ? 12 : 0);
+  return hour * 60 + Number(match[2]);
+}
+
+export function getShiftDurationMinutes(startTime, endTime) {
+  const start = parseShiftTimeMinutes(startTime);
+  const endOfDay = parseShiftTimeMinutes(endTime);
+  if (start === null || endOfDay === null || start === endOfDay) return null;
+  const end = endOfDay <= start ? endOfDay + 1440 : endOfDay;
+  return end - start <= 1440 ? end - start : null;
+}
+
+export function getExpectedPaidMinutes(shift) {
+  const scheduledMinutes = getShiftDurationMinutes(
+    shift?.startTime,
+    shift?.endTime,
+  );
+  const rawBreakMinutes = shift?.breakDurationMinutes;
+  const breakMinutes =
+    rawBreakMinutes === null || rawBreakMinutes === undefined ||
+    rawBreakMinutes === ""
+      ? null
+      : Number(rawBreakMinutes);
+  if (
+    scheduledMinutes === null ||
+    !Number.isFinite(breakMinutes) ||
+    breakMinutes < 0 ||
+    breakMinutes > scheduledMinutes ||
+    !["paid", "unpaid"].includes(shift?.breakType)
+  ) {
+    return null;
+  }
+  return scheduledMinutes - (shift.breakType === "unpaid" ? breakMinutes : 0);
+}
+
 export function hasRecordedAttendance(record) {
   return Boolean(
     record?.punchSource ||
@@ -129,6 +171,31 @@ export function createShiftAssignmentRecord(
       )
     : [];
   const isUnassigned = !hasExistingRecord || existingRecord.type === "Unassigned";
+  const breakDurationMinutes =
+    template.breakDurationMinutes === null ||
+    template.breakDurationMinutes === undefined ||
+    template.breakDurationMinutes === ""
+      ? null
+      : Number(template.breakDurationMinutes);
+  const breakType = ["paid", "unpaid"].includes(template.breakType)
+    ? template.breakType
+    : null;
+  const assignedShiftSnapshot = {
+    id: template.id,
+    name: shiftName,
+    label: shiftName,
+    range: template.range || template.assigned || "",
+    startTime: template.startTime || "",
+    endTime: template.endTime || "",
+    icon: template.icon,
+    iconColor: template.iconColor,
+    breakDurationMinutes: Number.isFinite(breakDurationMinutes)
+      ? breakDurationMinutes
+      : null,
+    breakType,
+  };
+  assignedShiftSnapshot.expectedPaidMinutes =
+    getExpectedPaidMinutes(assignedShiftSnapshot);
 
   return {
     ...(hasExistingRecord ? existingRecord : {}),
@@ -147,6 +214,7 @@ export function createShiftAssignmentRecord(
     shiftStartTime: template.startTime || "",
     shiftEndTime: template.endTime || "",
     assignedShiftTemplateId: template.id,
+    assignedShiftSnapshot,
     hasAssignedShift: true,
     customIcon: isRestDay ? existingRecord?.customIcon : template.icon,
     customIconColor: isRestDay

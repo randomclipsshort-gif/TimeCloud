@@ -17,8 +17,10 @@ export default function DashboardContent(props) {
     calendarRangeStatus,
     onCalendarRangeModeToggle,
     selectedDate,
+    selectedCalendarRange,
+    leaveBalances,
     canClearShift,
-    canRecordAttendance,
+    canMarkAbsent,
     privateFinancialDataStatus,
     holidayPayEstimate,
     estimatedEarnings,
@@ -28,6 +30,7 @@ export default function DashboardContent(props) {
     nightDifferentialPay,
     overtimePay,
     overtimeCalculation,
+    workHours,
     configuredDailyWage,
     onOpenHolidayPaySettings,
     monthLabel,
@@ -132,8 +135,10 @@ export default function DashboardContent(props) {
             <AttendanceDashboard
               record={record}
               selectedDate={selectedDate}
+              selectedRange={selectedCalendarRange}
+              leaveBalances={leaveBalances}
               canClearShift={canClearShift}
-              canRecordAttendance={canRecordAttendance}
+              canMarkAbsent={canMarkAbsent}
               privateFinancialDataStatus={privateFinancialDataStatus}
               holidayPayEstimate={holidayPayEstimate}
               estimatedEarnings={estimatedEarnings}
@@ -144,6 +149,7 @@ export default function DashboardContent(props) {
               nightDifferentialPay={nightDifferentialPay}
               overtimePay={overtimePay}
               overtimeCalculation={overtimeCalculation}
+              workHours={workHours}
               configuredDailyWage={configuredDailyWage}
               onOpenHolidayPaySettings={onOpenHolidayPaySettings}
               monthTabs={monthTabs}

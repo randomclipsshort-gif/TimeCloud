@@ -21,12 +21,30 @@ test("cloud workspace serialization excludes salary and earnings fields", () => 
       { id: "incentive-1", name: "Performance bonus", amount: 500, date: "2026-10-10" },
     ],
     leaveBalances: { VL: 4 },
-    shiftTemplates: [{ id: "morning", startTime: "06:00", hourlyRate: 42 }],
+    shiftTemplates: [{
+      id: "morning",
+      startTime: "06:00",
+      endTime: "15:00",
+      breakDurationMinutes: 30,
+      breakType: "unpaid",
+      expectedPaidMinutes: 510,
+      hourlyRate: 42,
+    }],
     attendance: {
       "2026-10-28": {
         type: "Regular",
         shift: "Morning",
         shiftStartTime: "06:00",
+        shiftEndTime: "15:00",
+        assignedShiftSnapshot: {
+          id: "morning",
+          name: "Morning",
+          startTime: "06:00",
+          endTime: "15:00",
+          breakDurationMinutes: 30,
+          breakType: "unpaid",
+          expectedPaidMinutes: 510,
+        },
         base: "P2500.00",
         wageRate: "100%",
         ot: "P0.00",
@@ -51,11 +69,25 @@ test("cloud workspace serialization excludes salary and earnings fields", () => 
     type: "Regular",
     shift: "Morning",
     shiftStartTime: "06:00",
+    shiftEndTime: "15:00",
+    assignedShiftSnapshot: {
+      id: "morning",
+      name: "Morning",
+      startTime: "06:00",
+      endTime: "15:00",
+      breakDurationMinutes: 30,
+      breakType: "unpaid",
+      expectedPaidMinutes: 510,
+    },
     overtimeMinutes: 30,
   });
   assert.deepEqual(cloudWorkspace.shiftTemplates, [{
     id: "morning",
     startTime: "06:00",
+    endTime: "15:00",
+    breakDurationMinutes: 30,
+    breakType: "unpaid",
+    expectedPaidMinutes: 510,
   }]);
 });
 

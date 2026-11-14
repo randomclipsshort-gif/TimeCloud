@@ -181,6 +181,7 @@ export function summarizePayrollPeriod(
   period,
   getEarningsForRecord = (record) => getAmount(record.est),
   incentives = [],
+  getHoursForRecord,
 ) {
   const parsedStart = period && parseDateKey(period.startDate);
   const parsedEnd = period && parseDateKey(period.endDate);
@@ -189,6 +190,8 @@ export function summarizePayrollPeriod(
       eligibleWorkdays: 0,
       regularHours: 0,
       overtimeHours: 0,
+      potentialOvertimeHours: 0,
+      actualPaidHours: 0,
       recordedEarnings: 0,
       incompleteClockOuts: 0,
     };
@@ -197,6 +200,8 @@ export function summarizePayrollPeriod(
   let eligibleWorkdays = 0;
   let regularMinutes = 0;
   let overtimeMinutes = 0;
+  let potentialOvertimeMinutes = 0;
+  let actualPaidMinutes = 0;
   let recordedEarnings = 0;
   let incompleteClockOuts = 0;
 
@@ -229,6 +234,24 @@ export function summarizePayrollPeriod(
     const workedMinutes = interval.end - interval.start;
     if (!dateIsInPeriod) continue;
 
+    const hours = getHoursForRecord?.(record, dateKey);
+    if (
+      Number.isFinite(hours?.actualPaidMinutes) &&
+      Number.isFinite(hours?.regularMinutes) &&
+      Number.isFinite(hours?.potentialOvertimeMinutes)
+    ) {
+      regularMinutes += hours.regularMinutes;
+      potentialOvertimeMinutes += hours.potentialOvertimeMinutes;
+      actualPaidMinutes += hours.actualPaidMinutes;
+      const approvedMinutes = Number(hours.approvedOvertimeMinutes);
+      overtimeMinutes += Number.isFinite(approvedMinutes)
+        ? Math.max(0, approvedMinutes)
+        : 0;
+      eligibleWorkdays += 1;
+      recordedEarnings += getAmount(getEarningsForRecord(record, dateKey));
+      continue;
+    }
+
     const claimedOvertimeMinutes = Number(record.overtimeMinutes);
     const recordOvertimeMinutes = Number.isFinite(claimedOvertimeMinutes)
       ? Math.min(Math.max(claimedOvertimeMinutes, 0), workedMinutes)
@@ -236,6 +259,7 @@ export function summarizePayrollPeriod(
     const regularEnd = interval.end - recordOvertimeMinutes;
     regularMinutes += regularEnd - interval.start;
     overtimeMinutes += interval.end - regularEnd;
+    actualPaidMinutes += workedMinutes;
     eligibleWorkdays += 1;
     recordedEarnings += getAmount(getEarningsForRecord(record, dateKey));
   }
@@ -245,6 +269,8 @@ export function summarizePayrollPeriod(
     eligibleWorkdays,
     regularHours: regularMinutes / 60,
     overtimeHours: overtimeMinutes / 60,
+    potentialOvertimeHours: potentialOvertimeMinutes / 60,
+    actualPaidHours: actualPaidMinutes / 60,
     recordedEarnings,
     incompleteClockOuts,
   };

@@ -233,6 +233,262 @@ test("later rate changes apply by effective date and recalculate overtime and ni
   assert.equal(attendance["2026-10-07"].est, "P800.00 PHP");
 });
 
+test("assigned shift snapshots drive paid hours and keep potential overtime unapproved", () => {
+  const midShift = {
+    type: "Regular",
+    hasAssignedShift: true,
+    shift: "Mid Shift",
+    shiftStartTime: "12:00",
+    shiftEndTime: "21:00",
+    assignedShiftSnapshot: {
+      name: "Mid Shift",
+      startTime: "12:00",
+      endTime: "21:00",
+      breakDurationMinutes: 60,
+      breakType: "unpaid",
+      expectedPaidMinutes: 480,
+    },
+    workStartTime: "12:00",
+    workEndTime: "21:00",
+    overtimeMinutes: 0,
+    base: "P1000.00",
+    penalty: "P0.00",
+  };
+  const calculate = (record) =>
+    calculateAttendancePayroll({
+      record,
+      date: "2026-10-05",
+      settings: configuredSettings,
+    });
+
+  const unpaidBreak = calculate(midShift);
+  assert.equal(unpaidBreak.hours.expectedPaidMinutes, 480);
+  assert.equal(unpaidBreak.hours.actualPaidMinutes, 480);
+  assert.equal(unpaidBreak.hours.potentialOvertimeMinutes, 0);
+
+  const paidBreakRecord = {
+    ...midShift,
+    assignedShiftSnapshot: {
+      ...midShift.assignedShiftSnapshot,
+      breakType: "paid",
+      expectedPaidMinutes: 540,
+    },
+  };
+  const paidBreak = calculate(paidBreakRecord);
+  assert.equal(paidBreak.hours.expectedPaidMinutes, 540);
+  assert.equal(paidBreak.hours.actualPaidMinutes, 540);
+  assert.equal(paidBreak.hours.potentialOvertimeMinutes, 0);
+
+  const overtime = calculate({ ...midShift, workEndTime: "22:00" });
+  assert.equal(overtime.hours.potentialOvertimeMinutes, 60);
+  assert.equal(overtime.hours.approvedOvertimeMinutes, 0);
+  assert.equal(overtime.breakdown.overtimeMinutes, 0);
+  assert.equal(overtime.breakdown.overtime, 0);
+  assert.equal(overtime.earnings, 1000);
+
+  const earlyArrival = calculate({
+    ...midShift,
+    workStartTime: "11:30",
+  });
+  assert.equal(earlyArrival.hours.actualPaidMinutes, 510);
+  assert.equal(earlyArrival.hours.potentialOvertimeMinutes, 0);
+});
+
+test("distinct morning, night, and overnight snapshots use their own break settings", () => {
+  const records = [
+    {
+      employeeId: "morning-worker",
+      shift: "Morning",
+      shiftStartTime: "06:00",
+      shiftEndTime: "15:00",
+      workStartTime: "06:00",
+      workEndTime: "15:00",
+      assignedShiftSnapshot: {
+        name: "Morning",
+        startTime: "06:00",
+        endTime: "15:00",
+        breakDurationMinutes: 30,
+        breakType: "unpaid",
+      },
+    },
+    {
+      employeeId: "night-worker",
+      shift: "Night",
+      shiftStartTime: "22:00",
+      shiftEndTime: "07:00",
+      workStartTime: "22:00",
+      workEndTime: "07:00",
+      assignedShiftSnapshot: {
+        name: "Night",
+        startTime: "22:00",
+        endTime: "07:00",
+        breakDurationMinutes: 75,
+        breakType: "unpaid",
+      },
+    },
+    {
+      employeeId: "overnight-worker",
+      shift: "Overnight",
+      shiftStartTime: "22:00",
+      shiftEndTime: "07:00",
+      workStartTime: "22:00",
+      workEndTime: "08:00",
+      assignedShiftSnapshot: {
+        name: "Overnight",
+        startTime: "22:00",
+        endTime: "07:00",
+        breakDurationMinutes: 45,
+        breakType: "unpaid",
+      },
+    },
+  ].map((record) => ({
+    ...nightShift,
+    ...record,
+    type: "Regular",
+    hasAssignedShift: true,
+  }));
+  const calculations = records.map((record) =>
+    calculateAttendancePayroll({
+      record,
+      date: "2026-10-05",
+      settings: configuredSettings,
+    }),
+  );
+
+  assert.deepEqual(
+    calculations.map(({ hours }) => [
+      hours.expectedPaidMinutes,
+      hours.actualPaidMinutes,
+      hours.potentialOvertimeMinutes,
+    ]),
+    [
+      [510, 510, 0],
+      [465, 465, 0],
+      [495, 555, 60],
+    ],
+  );
+});
+
+test("incomplete attendance has no actual or potential paid-hour totals", () => {
+  const result = calculateAttendancePayroll({
+    record: {
+      ...nightShift,
+      assignedShiftSnapshot: {
+        name: "Night",
+        startTime: "22:00",
+        endTime: "07:00",
+        breakDurationMinutes: 60,
+        breakType: "unpaid",
+      },
+      clockedIn: true,
+      workEndTime: "",
+      out: "—",
+    },
+    date: "2026-10-05",
+    settings: configuredSettings,
+  });
+
+  assert.equal(result.status, "pending");
+  assert.equal(result.hours.actualPaidMinutes, null);
+  assert.equal(result.hours.potentialOvertimeMinutes, null);
+});
+
+test("unscheduled manual attendance does not create scheduled payroll hours", () => {
+  const result = calculateAttendancePayroll({
+    record: {
+      type: "Regular",
+      hasAssignedShift: false,
+      shiftStartTime: "",
+      shiftEndTime: "",
+      workStartTime: "12:00",
+      workEndTime: "21:00",
+      in: "12:00 PM",
+      out: "09:00 PM",
+    },
+    date: "2026-11-25",
+    settings: configuredSettings,
+  });
+
+  assert.equal(result.status, "not-applicable");
+  assert.equal(result.hours.scheduledMinutes, null);
+  assert.equal(result.hours.expectedPaidMinutes, null);
+  assert.equal(result.hours.actualPaidMinutes, null);
+  assert.equal(result.hours.potentialOvertimeMinutes, null);
+});
+
+test("finance and payslip totals use the same approved payroll earnings without duplicate OT", () => {
+  const date = "2026-10-05";
+  const attendance = {
+    [date]: {
+      type: "Regular",
+      shift: "Mid Shift",
+      hasAssignedShift: true,
+      shiftStartTime: "12:00",
+      shiftEndTime: "21:00",
+      assignedShiftSnapshot: {
+        name: "Mid Shift",
+        startTime: "12:00",
+        endTime: "21:00",
+        breakDurationMinutes: 60,
+        breakType: "unpaid",
+      },
+      workStartTime: "12:00",
+      workEndTime: "22:00",
+      overtimeMinutes: 0,
+      overtimeAmount: 0,
+      base: "P1000.00",
+      penalty: "P0.00",
+    },
+  };
+  const calculate = (record, recordDate) =>
+    calculateAttendancePayroll({
+      record,
+      date: recordDate,
+      settings: configuredSettings,
+    });
+  const payrollPeriod = getPayrollPeriodForDate(date);
+  const financeSummary = summarizePayrollPeriod(
+    attendance,
+    payrollPeriod,
+    (record, recordDate) => calculate(record, recordDate).earnings,
+    [],
+    (record, recordDate) => calculate(record, recordDate).hours,
+  );
+  const earningsBreakdown = summarizePayrollEarningsBreakdown(
+    attendance,
+    payrollPeriod,
+    (record, recordDate) => calculate(record, recordDate).breakdown,
+  );
+  const payslip = createPayslipSnapshot({
+    employeeId: "employee-1",
+    employeeName: "Example Employee",
+    period: payrollPeriod,
+    generatedAt: "2026-10-11T00:00:00.000Z",
+    summary: financeSummary,
+    earningsBreakdown,
+    deductions: {
+      items: [],
+      total: 0,
+      employeeContributionTotal: 0,
+    },
+    netPay: financeSummary.recordedEarnings,
+    settings: configuredSettings,
+  });
+
+  assert.equal(calculate(attendance[date], date).hours.potentialOvertimeMinutes, 60);
+  assert.equal(financeSummary.regularHours, 8);
+  assert.equal(financeSummary.potentialOvertimeHours, 1);
+  assert.equal(financeSummary.overtimeHours, 0);
+  assert.equal(financeSummary.actualPaidHours, 9);
+  assert.equal(financeSummary.recordedEarnings, 1000);
+  assert.equal(payslip.summary.recordedEarnings, financeSummary.recordedEarnings);
+  assert.equal(
+    earningsBreakdown.items.some((item) => item.id === "overtime"),
+    false,
+  );
+  assert.equal(calculate(attendance[date], date).earnings, 1000);
+});
+
 test("incomplete rates leave payroll pending instead of treating zero as final", () => {
   const nightResult = calculateAttendancePayroll({
     record: nightShift,
@@ -409,6 +665,45 @@ test("holiday and both cutoff earnings use the existing payroll rules", () => {
   );
   assert.equal(firstCutoff.recordedEarnings, 1000);
   assert.equal(secondCutoff.recordedEarnings, 3000);
+});
+
+test("holiday overtime excludes the scheduled one-hour break on a nine-hour shift", () => {
+  const record = {
+    ...nightShift,
+    shift: "Day",
+    shiftStartTime: "12:00",
+    shiftEndTime: "21:00",
+    assignedShiftSnapshot: {
+      name: "Mid Shift",
+      startTime: "12:00",
+      endTime: "21:00",
+      breakDurationMinutes: 60,
+      breakType: "unpaid",
+      expectedPaidMinutes: 480,
+    },
+    workStartTime: "12:00",
+    workEndTime: "21:00",
+  };
+  const options = {
+    record,
+    date: "2026-10-11",
+    settings: configuredSettings,
+    holiday: { date: "2026-10-11", classification: "Regular Holiday" },
+    holidayEligibilityConfirmed: true,
+  };
+
+  const scheduledShift = calculateAttendancePayroll(options);
+  assert.equal(scheduledShift.breakdown.overtimeHours, 0);
+  assert.equal(scheduledShift.breakdown.overtimeMinutes, 0);
+
+  const extraHour = calculateAttendancePayroll({
+    ...options,
+    record: { ...record, workEndTime: "22:00" },
+  });
+  assert.equal(extraHour.hours.potentialOvertimeMinutes, 60);
+  assert.equal(extraHour.hours.approvedOvertimeMinutes, 0);
+  assert.equal(extraHour.breakdown.overtimeMinutes, 0);
+  assert.equal(extraHour.breakdown.overtime, 0);
 });
 
 test("unworked special non-working holidays are ready at zero while partial attendance remains pending", () => {
