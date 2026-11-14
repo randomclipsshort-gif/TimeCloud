@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  canReplaceManualAttendanceRecord,
   clearShiftAndAttendanceRecord,
   createShiftAssignmentUpdates,
   getExpectedPaidMinutes,
@@ -8,6 +9,7 @@ import {
   getManualEntryRangeConflicts,
   hasRecordedAttendance,
   normalizeTwelveHourShiftTime,
+  requiresQuickShiftForManualEntry,
 } from "./shiftAssignment.js";
 
 const morning = {
@@ -38,6 +40,65 @@ test("normalizes custom 12-hour shift times and rejects incomplete values", () =
   assert.equal(normalizeTwelveHourShiftTime("12:15 PM"), "12:15");
   assert.equal(normalizeTwelveHourShiftTime("22:00"), null);
   assert.equal(normalizeTwelveHourShiftTime("13:00 PM"), null);
+});
+
+test("manual present entries require a quick shift only when the date has no assigned shift", () => {
+  assert.equal(
+    requiresQuickShiftForManualEntry({ type: "Unassigned" }, "Present"),
+    true,
+  );
+  assert.equal(
+    requiresQuickShiftForManualEntry(
+      { type: "Regular", shiftStartTime: "06:00", shiftEndTime: "14:00" },
+      "Present",
+    ),
+    false,
+  );
+  assert.equal(
+    requiresQuickShiftForManualEntry(
+      createShiftAssignmentUpdates(
+        {},
+        ["2026-11-16"],
+        morning,
+        750,
+        [morning],
+      )["2026-11-16"],
+      "Present",
+    ),
+    false,
+  );
+  assert.equal(
+    requiresQuickShiftForManualEntry({ type: "Unassigned" }, "Absent"),
+    false,
+  );
+});
+
+test("manual attendance can replace an absent date when a shift is assigned", () => {
+  const absentRecord = {
+    type: "Absent",
+    shift: "Absent",
+    hasAssignedShift: false,
+  };
+  const assignedRecord = createShiftAssignmentUpdates(
+    { "2026-11-17": absentRecord },
+    ["2026-11-17"],
+    morning,
+    750,
+    [morning],
+  )["2026-11-17"];
+  const hasAssignedShift =
+    assignedRecord.hasAssignedShift === true ||
+    Boolean(assignedRecord.shiftStartTime && assignedRecord.shiftEndTime);
+
+  assert.equal(hasAssignedShift, true);
+  assert.equal(
+    canReplaceManualAttendanceRecord(assignedRecord, hasAssignedShift, false),
+    true,
+  );
+  assert.equal(
+    canReplaceManualAttendanceRecord(absentRecord, false, false),
+    false,
+  );
 });
 
 test("calculates expected paid time for paid and unpaid breaks, including overnight shifts", () => {

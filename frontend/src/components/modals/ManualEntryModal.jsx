@@ -98,6 +98,8 @@ export default function ManualEntryModal({
   const selectedQuickShift = quickShiftOptions.find(
     (template) => template.id === quickShiftTemplateId,
   );
+  const quickShiftRequirementMessage =
+    "Select a Quick Shift if any target date has no assigned shift.";
 
   const setQuickShift = (template) => {
     setQuickShiftTemplateId(template.id);
@@ -198,7 +200,7 @@ export default function ManualEntryModal({
                     ? `Absent status will be applied to ${selectedRange.dayCount} selected date${selectedRange.dayCount === 1 ? "" : "s"}.`
                       : selectedQuickShift
                         ? `${selectedQuickShift.label || selectedQuickShift.name} will be assigned to all ${selectedRange.dayCount} selected dates.`
-                        : `This entry will be applied to ${selectedRange.dayCount} date${selectedRange.dayCount === 1 ? "" : "s"}. Existing attendance must be clear; unscheduled dates are recorded without scheduled payroll hours.`}
+                        : `This entry will be applied to ${selectedRange.dayCount} date${selectedRange.dayCount === 1 ? "" : "s"}. ${quickShiftRequirementMessage} Existing attendance must be clear.`}
               </p>
             </div>
           ) : (
@@ -363,6 +365,16 @@ export default function ManualEntryModal({
                   )}
                 </div>
               )}
+              {!selectedRange &&
+                entryType === "Present" &&
+                !selectedQuickShift && (
+                  <p
+                    className="-mt-2 text-[10px] leading-relaxed text-slate-500"
+                    role="status"
+                  >
+                    {quickShiftRequirementMessage}
+                  </p>
+                )}
             </>
           )}
 

@@ -318,8 +318,10 @@ export function calculateAttendancePayroll({
 
   const hours = getAttendanceHoursBreakdown(record);
   const type = record.type;
+  const isRegularHoliday =
+    getHolidayClassification(holiday) === "Regular Holiday";
   if (
-    ["Unassigned", "Company Break"].includes(type) ||
+    (["Unassigned", "Company Break"].includes(type) && !isRegularHoliday) ||
     (["Absent", "Rest Day"].includes(type) && !holiday)
   ) {
     return {
@@ -339,6 +341,37 @@ export function calculateAttendancePayroll({
   }
 
   const dailyWage = getDailyWage(settings);
+  if (
+    isRegularHoliday &&
+    (type === "Absent" || !hasAttendanceTimeData(record))
+  ) {
+    if (dailyWage === null) {
+      return getIncompleteResult(
+        ["Configure a daily wage in Settings."],
+        hours,
+      );
+    }
+    return {
+      status: "ready",
+      reasons: [],
+      hours,
+      breakdown: {
+        lateMinutes: 0,
+        undertimeMinutes: 0,
+        regularHoliday: dailyWage,
+        allowance: 0,
+        shiftDifferentials: 0,
+        overtime: 0,
+        overtimeMinutes: 0,
+        overtimeHours: 0,
+      },
+      earnings: dailyWage,
+      dailyWage,
+      nightDifferentialPay: 0,
+      overtimePay: 0,
+    };
+  }
+
   const reasons = [];
   if (dailyWage === null) reasons.push("Configure a daily wage in Settings.");
 
@@ -401,8 +434,14 @@ export function calculateAttendancePayroll({
     record.type === "Rest Day" ||
     record.hasAssignedShift === true ||
     Boolean(record.shiftStartTime && record.shiftEndTime);
-  const isEligibleWork = hasAssignedShift &&
-    (["Regular", "Official Business"].includes(type) || Boolean(holiday));
+  const hasRegularHolidayAttendance =
+    isRegularHoliday &&
+    type !== "Absent" &&
+    hasAttendanceTimeData(record);
+  const isEligibleWork =
+    (hasAssignedShift &&
+      (["Regular", "Official Business"].includes(type) || Boolean(holiday))) ||
+    hasRegularHolidayAttendance;
   if (!isEligibleWork) {
     return {
       status: "not-applicable",
@@ -484,9 +523,12 @@ export function calculateAttendancePayroll({
       hasSchedule: hasAssignedShift,
       isRestDay: record.type === "Rest Day",
       eligibilityKnown: holidayEligibilityConfirmed,
-      worked: !record.clockedIn && attendanceHours !== null,
-      unworked: record.holidayUnworked || record.type === "Absent",
-      hasAttendanceTime: hasAttendanceTimeData(record),
+      worked:
+        record.type !== "Absent" &&
+        !record.clockedIn &&
+        attendanceHours !== null,
+      hasAttendanceTime:
+        record.type !== "Absent" && hasAttendanceTimeData(record),
       overtimeMultiplier,
     });
     if (holidayPay.amount == null) {

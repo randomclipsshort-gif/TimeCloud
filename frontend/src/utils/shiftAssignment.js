@@ -8,6 +8,26 @@ export function normalizeTwelveHourShiftTime(value) {
   return `${String(hour).padStart(2, "0")}:${match[2]}`;
 }
 
+export function requiresQuickShiftForManualEntry(record, entryType) {
+  return (
+    entryType === "Present" &&
+    record?.hasAssignedShift !== true &&
+    !(record?.shiftStartTime && record?.shiftEndTime)
+  );
+}
+
+export function canReplaceManualAttendanceRecord(
+  record,
+  hasAssignedShift,
+  isShiftlessAbsence,
+) {
+  return (
+    record?.type === "Regular" ||
+    isShiftlessAbsence ||
+    (record?.type === "Absent" && hasAssignedShift)
+  );
+}
+
 function parseShiftTimeMinutes(value) {
   if (typeof value !== "string") return null;
   const match = value.trim().match(/^(\d{1,2}):([0-5]\d)(?:\s*(AM|PM))?$/i);

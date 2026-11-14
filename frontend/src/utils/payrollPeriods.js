@@ -227,7 +227,12 @@ export function summarizePayrollPeriod(
       }
       continue;
     }
-    if (["Rest Day", "Unassigned"].includes(record.type)) continue;
+    if (["Rest Day", "Unassigned"].includes(record.type)) {
+      if (dateIsInPeriod) {
+        recordedEarnings += getAmount(getEarningsForRecord(record, dateKey));
+      }
+      continue;
+    }
 
     const interval = getAttendanceInterval(dateKey, record);
     if (!interval) continue;

@@ -52,8 +52,7 @@ export default function Header({ clock, user, onLogout, isSigningOut = false }) 
                 .join("")}
             </div>
             <div className="hidden min-w-0 sm:block">
-              <p className="max-w-40 truncate text-xs font-semibold text-slate-800">{user.name}</p>
-              <p className="max-w-40 truncate text-[10px] text-slate-500">{user.email}</p>
+              <p className="max-w-40 truncate text-xs font-semibold capitalize text-slate-800">{user.name}</p>
             </div>
           </div>
         )}

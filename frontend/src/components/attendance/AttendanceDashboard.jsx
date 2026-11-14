@@ -125,6 +125,18 @@ export default function AttendanceDashboard({
   const shiftTitleColor = record.holidayName
     ? holidayTextColors[record.holidayClassification]
     : "text-textMain";
+  const holidayBannerColors =
+    record.holidayClassification === "Regular Holiday"
+      ? {
+          container: "border-rose-200 bg-rose-50/30 text-rose-700",
+          icon: "text-rose-500",
+          rate: "text-rose-700",
+        }
+      : {
+          container: "border-indigo-200 bg-indigo-50/70 text-indigo-800",
+          icon: "text-indigo-500",
+          rate: "text-indigo-700",
+        };
   const shiftTitle =
     record.shift === "Manual Entry Adjustment"
       ? record.assignedShiftName || "Assigned Shift"
@@ -223,13 +235,20 @@ export default function AttendanceDashboard({
         ? "Clocked in"
         : "No DTR recorded"
       : `${dtrStart} – ${dtrEnd}`;
+  const isUnworkedRegularHolidayWithoutShift =
+    record.holidayClassification === "Regular Holiday" &&
+    record.holidayUnworked &&
+    record.hasAssignedShift !== true &&
+    !(record.shiftStartTime && record.shiftEndTime);
   const shiftCardTitle = isAbsent
     ? "Marked Absent"
-    : record.type === "Rest Day"
-      ? "Rest Day"
-      : record.assignedShiftSnapshot?.name ||
-        record.assignedShiftName ||
-        shiftTitle;
+    : isUnworkedRegularHolidayWithoutShift
+      ? "No shift needed - Paid · 100%"
+      : record.type === "Rest Day"
+        ? "Rest Day"
+        : record.assignedShiftSnapshot?.name ||
+          record.assignedShiftName ||
+          shiftTitle;
   const shiftCardSubtitle = record.holidayName
     ? record.holidayClassification || shiftSubtitle
     : shiftSubtitle;
@@ -280,12 +299,19 @@ export default function AttendanceDashboard({
           </div>
 
           {record.holidayName && (
-            <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-2.5 text-[11px] text-indigo-800">
+            <div
+              className={`mb-3 flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-[11px] ${holidayBannerColors.container}`}
+            >
               <span className="flex min-w-0 items-center gap-2 font-medium">
-                <i className="fa-solid fa-sparkles shrink-0 text-indigo-500" aria-hidden="true" />
+                <i
+                  className={`fa-solid fa-sparkles shrink-0 ${holidayBannerColors.icon}`}
+                  aria-hidden="true"
+                />
                 <span className="truncate">{record.holidayName}</span>
               </span>
-              <span className="shrink-0 rounded-md bg-white/80 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-indigo-700">
+              <span
+                className={`shrink-0 rounded-md bg-white/80 px-2 py-1 text-[9px] font-bold uppercase tracking-wide ${holidayBannerColors.rate}`}
+              >
                 {holidayRateLabel || "—"} Rate
               </span>
             </div>
@@ -346,18 +372,18 @@ export default function AttendanceDashboard({
               </button>
             </div>
 
-            <div className="mt-3 flex items-center justify-between gap-3 text-[10px] font-bold text-slate-800">
-              <span>{hasScheduledTime ? scheduledStartTime : "—"}</span>
-              <span className="text-right">
-                {formatCompactHours(workHours?.expectedPaidMinutes)} paid
-                <span className="ml-1 font-medium text-slate-500">
-                  · {breakSummary}
+            {hasScheduledTime && (
+              <div className="mt-3 flex items-center justify-between gap-3 text-[10px] font-bold text-slate-800">
+                <span>{scheduledStartTime}</span>
+                <span className="text-right">
+                  {formatCompactHours(workHours?.expectedPaidMinutes)} paid
+                  <span className="ml-1 font-medium text-slate-500">
+                    · {breakSummary}
+                  </span>
                 </span>
-              </span>
-              <span className="text-right">
-                {hasScheduledTime ? scheduledEndTime : "—"}
-              </span>
-            </div>
+                <span className="text-right">{scheduledEndTime}</span>
+              </div>
+            )}
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
               <div
                 className={`h-full rounded-full ${
@@ -378,9 +404,15 @@ export default function AttendanceDashboard({
                 <i className="fa-regular fa-clock mr-1 text-slate-400" aria-hidden="true" />
                 Actual DTR Log:
               </span>
-              <span className="font-bold tabular-nums text-slate-700">
+              <button
+                type="button"
+                data-action="openManualEntryModal()"
+                aria-label={`Edit attendance entry for ${selectedDate}`}
+                title="Open Direct Attendance Entry"
+                className="cursor-pointer rounded-sm font-bold tabular-nums text-slate-700 underline decoration-slate-400 underline-offset-2 transition hover:text-teal-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600"
+              >
                 {actualDtrSummary}
-              </span>
+              </button>
             </div>
           </section>
 
@@ -406,16 +438,13 @@ export default function AttendanceDashboard({
             )}
 
           <section aria-label="Attendance status" className="mb-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h3 className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                Attendance Status
-              </h3>
-              <span className="text-[9px] font-medium text-slate-500">
-                {selectedRange?.dayCount > 1
-                  ? `Apply status to ${selectedRange.dayCount} selected days`
-                  : `Span: ${formatCompactHours(workHours?.scheduledMinutes)} · Potential OT: ${formatCompactHours(workHours?.potentialOvertimeMinutes)}`}
-              </span>
-            </div>
+            {selectedRange?.dayCount > 1 && (
+              <div className="mb-2 flex justify-end">
+                <span className="text-[9px] font-medium text-slate-500">
+                  Apply status to {selectedRange.dayCount} selected days
+                </span>
+              </div>
+            )}
             <div
               role="group"
               aria-label="Set attendance status"

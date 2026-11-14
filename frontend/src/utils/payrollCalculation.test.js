@@ -21,6 +21,7 @@ import {
   summarizePayrollPeriod,
 } from "./payrollPeriods.js";
 import { calculateHolidayPay } from "./holidayPay.js";
+import { statutoryHolidays2026 } from "../data/holidayCalendar.js";
 
 const unconfiguredSettings = {
   dailyWage: "",
@@ -665,6 +666,76 @@ test("holiday and both cutoff earnings use the existing payroll rules", () => {
   );
   assert.equal(firstCutoff.recordedEarnings, 1000);
   assert.equal(secondCutoff.recordedEarnings, 3000);
+});
+
+test("unassigned regular holidays earn 100% without a shift and 200% when worked", () => {
+  const date = "2026-11-30";
+  const holiday = statutoryHolidays2026.find(
+    (item) => item.date === date,
+  );
+  const settings = {
+    dailyWage: "645",
+    dailyAllowance: "",
+    overtimeMultiplier: "1.25",
+    nightDifferential: "10",
+  };
+  const record = { type: "Unassigned" };
+  const unworked = calculateAttendancePayroll({
+    record,
+    date,
+    settings,
+    holiday,
+  });
+
+  assert.equal(holiday.name, "Bonifacio Day");
+  assert.equal(unworked.status, "ready");
+  assert.equal(unworked.earnings, 645);
+  assert.equal(unworked.breakdown.regularHoliday, 645);
+
+  const worked = calculateAttendancePayroll({
+    record: {
+      type: "Regular",
+      workStartTime: "08:00",
+      workEndTime: "16:00",
+      in: "08:00",
+      out: "16:00",
+    },
+    date,
+    settings: { ...settings, dailyAllowance: "0" },
+    holiday,
+  });
+  assert.equal(worked.status, "ready");
+  assert.equal(worked.earnings, 1290);
+  assert.equal(worked.breakdown.regularHoliday, 1290);
+
+  const period = getPayrollPeriodForDate(date);
+  const earnings = summarizePayrollPeriod(
+    { [date]: record },
+    period,
+    (entry, entryDate) =>
+      calculateAttendancePayroll({
+        record: entry,
+        date: entryDate,
+        settings,
+        holiday,
+      }).earnings,
+  );
+  assert.equal(earnings.recordedEarnings, 645);
+  const breakdown = summarizePayrollEarningsBreakdown(
+    { [date]: record },
+    period,
+    (entry, entryDate) =>
+      calculateAttendancePayroll({
+        record: entry,
+        date: entryDate,
+        settings,
+        holiday,
+      }).breakdown,
+  );
+  assert.equal(
+    breakdown.items.find((item) => item.id === "regularHoliday").total,
+    645,
+  );
 });
 
 test("holiday overtime excludes the scheduled one-hour break on a nine-hour shift", () => {

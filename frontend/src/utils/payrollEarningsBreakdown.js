@@ -153,6 +153,20 @@ export function summarizePayrollEarningsBreakdown(
       continue;
     }
 
+    if (["Rest Day", "Unassigned"].includes(record.type)) {
+      if (dateOrdinal < startOrdinal || dateOrdinal > endOrdinal) continue;
+      for (const { id, unit } of categoryDefinitions) {
+        const amount = Number(values[id]);
+        if (!Number.isFinite(amount) || amount <= 0) continue;
+        const aggregate = categories.get(id);
+        aggregate.total += amount;
+        aggregate.units += unit === "hours"
+          ? Number(values.overtimeHours) || 0
+          : 1;
+      }
+      continue;
+    }
+
     const interval = getAttendanceInterval(dateKey, record);
     if (
       !interval ||

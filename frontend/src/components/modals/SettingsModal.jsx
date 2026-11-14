@@ -1022,7 +1022,7 @@ export default function SettingsModal({
                 className="mt-0.5 h-4 w-4 shrink-0 accent-teal-600"
               />
               <span className="text-[11px] leading-relaxed text-amber-900">
-                Confirm employee eligibility for unworked regular-holiday pay
+                Confirm employee eligibility for worked non-regular-holiday pay
                 estimates
               </span>
             </label>

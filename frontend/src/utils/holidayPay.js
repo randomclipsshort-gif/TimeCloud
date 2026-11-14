@@ -50,7 +50,6 @@ export function calculateHolidayPay({
   isRestDay = false,
   eligibilityKnown = false,
   worked = false,
-  unworked = false,
   hasAttendanceTime = false,
   overtimeMultiplier = holidayPayRules.overtimeMultiplier,
 }) {
@@ -62,15 +61,16 @@ export function calculateHolidayPay({
     };
   }
 
-  if (unworked && !worked && holiday.classification === "Regular Holiday") {
-    if (!hasSchedule) {
-      return { amount: null, message: "A scheduled workday or rest-day assignment is required to assess this regular-holiday estimate." };
+  if (holiday.classification === "Regular Holiday" && !worked) {
+    if (hasAttendanceTime) {
+      return {
+        amount: null,
+        message:
+          "Complete clock-in and clock-out times are required to estimate regular-holiday pay.",
+      };
     }
     if (!Number.isFinite(dailyWage) || dailyWage <= 0) {
       return { amount: null, message: "A configured daily wage is required to estimate unworked regular-holiday pay." };
-    }
-    if (!eligibilityKnown) {
-      return { amount: null, message: "Eligibility for unworked regular-holiday pay must be confirmed before an estimate can be calculated." };
     }
     return {
       amount: dailyWage,
@@ -115,10 +115,11 @@ export function calculateHolidayPay({
   }
 
   const missing = [];
+  const isRegularHoliday = holiday.classification === "Regular Holiday";
   if (!Number.isFinite(dailyWage) || dailyWage <= 0) missing.push("daily wage");
-  if (!hasSchedule) missing.push("scheduled shift information");
+  if (!isRegularHoliday && !hasSchedule) missing.push("scheduled shift information");
   if (!Number.isFinite(hoursWorked) || hoursWorked <= 0) missing.push("valid clock-in and clock-out times");
-  if (!eligibilityKnown) missing.push("employee eligibility");
+  if (!isRegularHoliday && !eligibilityKnown) missing.push("employee eligibility");
   if (missing.length) {
     return { amount: null, message: `Cannot estimate holiday pay without ${missing.join(", ")}.` };
   }
