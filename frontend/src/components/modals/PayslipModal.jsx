@@ -2,12 +2,22 @@ import React from "react";
 import { formatPayrollPeriod } from "../../utils/payrollPeriods.js";
 import { groupIncentiveEarningsItems } from "../../utils/payrollEarningsBreakdown.js";
 
+function formatPayslipPeriodOption(period) {
+  const formatDate = (dateKey) =>
+    new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(`${dateKey}T00:00:00Z`));
+  return `${formatDate(period.startDate)} - ${formatDate(period.endDate)}`;
+}
+
 export default function PayslipModal({
   open,
   userName,
   historicalPayslip,
-  payrollPeriodMode,
-  onPayrollPeriodModeChange,
+  payslipPeriodOptions,
+  onPayslipPeriodChange,
   payrollPeriod,
   payrollPeriodSummary,
   monthlyPayslipRange,
@@ -180,28 +190,36 @@ export default function PayslipModal({
             </span>
             {!historicalPayslip && (
               <div
-                className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1"
+                className="flex max-w-full flex-wrap items-center gap-x-3 gap-y-2"
                 role="group"
-                aria-label="Payslip period"
+                aria-label="Active payslip period"
               >
-                {[
-                  { value: "first", label: "1st cutoff" },
-                  { value: "second", label: "2nd cutoff" },
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    aria-pressed={payrollPeriodMode === option.value}
-                    onClick={() => onPayrollPeriodModeChange(option.value)}
-                    className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
-                      payrollPeriodMode === option.value
-                        ? "bg-teal-600 text-white shadow-sm"
-                        : "text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+                <span className="shrink-0 text-[11px] font-medium text-slate-400">
+                  Active Period:
+                </span>
+                <div className="flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+                  {payslipPeriodOptions.map(({ period, isCurrent }) => {
+                    const isSelected =
+                      activePeriod.startDate === period.startDate &&
+                      activePeriod.endDate === period.endDate;
+                    return (
+                      <button
+                        key={period.endDate}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => onPayslipPeriodChange(period.endDate)}
+                        className={`whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition ${
+                          isSelected
+                            ? "bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-200"
+                            : "text-slate-600 hover:bg-white hover:text-slate-900"
+                        }`}
+                      >
+                        {isCurrent ? "Current: " : ""}
+                        {formatPayslipPeriodOption(period)}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -213,7 +231,7 @@ export default function PayslipModal({
                 className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900"
                 role="status"
               >
-                {`${pendingPayrollRecords} attendance record(s) in this cutoff are incomplete and excluded from the estimate. Configure the required payroll settings or complete attendance before relying on this total.`}
+                {`${pendingPayrollRecords} attendance record(s) in this pay period are incomplete and excluded from the estimate. Configure the required payroll settings or complete attendance before relying on this total.`}
               </p>
             )}
 

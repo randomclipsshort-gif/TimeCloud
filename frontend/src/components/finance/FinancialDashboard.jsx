@@ -817,7 +817,7 @@ export default function FinancialDashboard({
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      {activeTab !== "expenses" && (
+      {activeTab !== "expenses" && activeTab !== "payslips" && (
         <div className="relative flex min-h-[115px] flex-col items-start justify-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-950 via-slate-900 to-slate-900 px-5 py-4 text-white shadow-md sm:flex-row sm:items-center sm:justify-between sm:gap-5 sm:px-5">
           <div
             className="pointer-events-none absolute inset-y-0 right-[31%] w-[34%] -skew-x-12 bg-slate-950/55"

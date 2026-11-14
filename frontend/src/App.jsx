@@ -72,6 +72,7 @@ import {
   appendPayslipSnapshot,
   createPayslipSnapshot,
   findPayslipSnapshot,
+  getUpcomingPayslipPeriods,
   removePayslipSnapshot,
 } from "./utils/payrollHistory.js";
 import {
@@ -1020,12 +1021,8 @@ export default function App() {
   const [activeSettingsTab, setActiveSettingsTab] = useState("general");
   const [page, setPage] = useState(0);
   const [initialCalendarDate] = useState(() => getManilaDateTime().date);
-  const [payslipPeriodMode, setPayslipPeriodMode] = useState(() =>
-    Number(initialCalendarDate.slice(8, 10)) <= 10 ||
-    Number(initialCalendarDate.slice(8, 10)) >= 26
-      ? "first"
-      : "second",
-  );
+  const [selectedPayslipPeriodEndDate, setSelectedPayslipPeriodEndDate] =
+    useState(null);
   const [monthIndex, setMonthIndex] = useState(
     () => Number(initialCalendarDate.slice(5, 7)) - 1,
   );
@@ -1406,13 +1403,29 @@ export default function App() {
   );
   const payrollPeriodNetPay =
     payrollPeriodSummary.recordedEarnings - cutoffPayrollDeductions.total;
-  const payslipMonth = payrollPeriod.endDate.slice(0, 7);
+  const payslipPeriodOptions = useMemo(
+    () =>
+      getUpcomingPayslipPeriods(
+        currentPayrollPeriod,
+        historicalPayslips,
+        authSession?.user?.id,
+      ),
+    [authSession?.user?.id, currentPayrollPeriod, historicalPayslips],
+  );
   const selectedPayslipPeriod = useMemo(() => {
-    return getPayrollPeriodForMonth(
-      payslipMonth,
-      payslipPeriodMode === "first" ? 10 : 25,
+    return (
+      payslipPeriodOptions.find(
+        ({ period }) => period.endDate === selectedPayslipPeriodEndDate,
+      )?.period ||
+      payslipPeriodOptions[0]?.period ||
+      currentPayrollPeriod
     );
-  }, [payslipMonth, payslipPeriodMode]);
+  }, [
+    currentPayrollPeriod,
+    payslipPeriodOptions,
+    selectedPayslipPeriodEndDate,
+  ]);
+  const payslipMonth = selectedPayslipPeriod.endDate.slice(0, 7);
   const selectedPayslipSettings = getPayrollSettingsAtDate(
     selectedPayslipPeriod.endDate,
   );
@@ -3544,6 +3557,11 @@ export default function App() {
     setActiveModal("payslipModal");
   };
 
+  const viewCurrentPayslip = useCallback(() => {
+    setActiveHistoricalPayslip(null);
+    setActiveModal("payslipModal");
+  }, []);
+
   const deleteHistoricalPayslip = async (snapshot) => {
     if (payslipHistorySaving) return false;
     if (privateFinancialDataStatus !== "ready" || !user?.id) {
@@ -5149,6 +5167,7 @@ export default function App() {
               <Header
                 clock={clock}
                 user={user}
+                onViewPayslip={viewCurrentPayslip}
                 isSigningOut={Boolean(signOutStatus)}
                 onLogout={async () => {
                   if (signOutInProgressRef.current) return;
@@ -5382,10 +5401,7 @@ export default function App() {
               payslipHistorySaving={payslipHistorySaving}
               privateFinancialDataStatus={privateFinancialDataStatus}
               currentPayrollPeriod={payrollPeriod}
-              onViewCurrentPayslip={() => {
-                setActiveHistoricalPayslip(null);
-                setActiveModal("payslipModal");
-              }}
+              onViewCurrentPayslip={viewCurrentPayslip}
               onViewHistoricalPayslip={viewHistoricalPayslip}
               onDeleteHistoricalPayslip={deleteHistoricalPayslip}
               travelPlans={travelPlans}
@@ -5485,8 +5501,8 @@ export default function App() {
                   ? activeHistoricalPayslip
                   : null
               }
-              payrollPeriodMode={payslipPeriodMode}
-              onPayrollPeriodModeChange={setPayslipPeriodMode}
+              payslipPeriodOptions={payslipPeriodOptions}
+              onPayslipPeriodChange={setSelectedPayslipPeriodEndDate}
               payrollPeriod={selectedPayslipPeriod}
               payrollPeriodSummary={selectedPayslipSummary}
               monthlyPayslipRange={monthlyPayslipRange}

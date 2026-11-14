@@ -8,7 +8,13 @@ import {
   Settings,
 } from "lucide-react";
 
-export default function Header({ clock, user, onLogout, isSigningOut = false }) {
+export default function Header({
+  clock,
+  user,
+  onLogout,
+  onViewPayslip,
+  isSigningOut = false,
+}) {
   return (
   <header className="border-b border-slate-200 bg-white/95 backdrop-blur-md">
     <div className="mx-auto flex min-h-[60px] w-full max-w-[1600px] flex-wrap items-center justify-between gap-3 px-4 py-2 sm:px-[18px]">
@@ -35,7 +41,7 @@ export default function Header({ clock, user, onLogout, isSigningOut = false }) 
             </span>
           </span>
         </div>
-        <button data-action="openModal(&#x27;payslipModal&#x27;)" aria-label="View Payslip" title="View Payslip" className="flex h-8 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg bg-teal-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-700 sm:px-3">
+        <button type="button" onClick={onViewPayslip} aria-label="View Payslip" title="View Payslip" className="flex h-8 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg bg-teal-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-700 sm:px-3">
           <FileText size={14} aria-hidden="true" />
           <span className="hidden sm:inline">
             View Payslip

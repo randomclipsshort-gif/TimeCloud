@@ -1,7 +1,55 @@
 import {
   getCalendarPayrollPeriod,
+  getNextPayrollPeriod,
   getPayrollPeriodForEndDate,
 } from "./payrollPeriods.js";
+
+export function getUpcomingPayslipPeriods(
+  currentPeriod,
+  history,
+  employeeId,
+  count = 4,
+) {
+  if (
+    !currentPeriod ||
+    !Array.isArray(history) ||
+    !Number.isInteger(count) ||
+    count < 1
+  ) {
+    return [];
+  }
+
+  const savedPeriodKeys = new Set(
+    history
+      .filter(
+        (snapshot) =>
+          typeof employeeId === "string" &&
+          employeeId &&
+          snapshot?.employeeId === employeeId,
+      )
+      .map(
+        (snapshot) =>
+          `${snapshot?.period?.startDate}:${snapshot?.period?.endDate}`,
+      ),
+  );
+  const periods = [];
+  let period = currentPeriod;
+
+  while (period && periods.length < count) {
+    const periodKey = `${period.startDate}:${period.endDate}`;
+    if (!savedPeriodKeys.has(periodKey)) {
+      periods.push({
+        period,
+        isCurrent:
+          period.startDate === currentPeriod.startDate &&
+          period.endDate === currentPeriod.endDate,
+      });
+    }
+    period = getNextPayrollPeriod(period);
+  }
+
+  return periods;
+}
 
 export function isValidPayslipSnapshot(snapshot) {
   const expectedPeriod = getPayrollPeriodForEndDate(snapshot?.period?.endDate);

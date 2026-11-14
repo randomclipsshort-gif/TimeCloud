@@ -4,8 +4,10 @@ import {
   appendPayslipSnapshot,
   createPayslipSnapshot,
   findPayslipSnapshot,
+  getUpcomingPayslipPeriods,
   removePayslipSnapshot,
 } from "./payrollHistory.js";
+import { getPayrollPeriodForDate } from "./payrollPeriods.js";
 
 const period = { startDate: "2026-10-26", endDate: "2026-11-10" };
 const createSnapshot = (endDate = period.endDate) => createPayslipSnapshot({
@@ -54,6 +56,62 @@ test("payslip history keeps distinct payroll periods", () => {
     "2026-11-10",
     "2026-11-25",
   ]);
+});
+
+test("active payslip periods include the current period and three future periods", () => {
+  const currentPeriod = getPayrollPeriodForDate("2026-11-15");
+  const options = getUpcomingPayslipPeriods(
+    currentPeriod,
+    [],
+    "employee-1",
+  );
+
+  assert.deepEqual(
+    options.map(({ period, isCurrent }) => [
+      period.startDate,
+      period.endDate,
+      isCurrent,
+    ]),
+    [
+      ["2026-11-11", "2026-11-25", true],
+      ["2026-11-26", "2026-12-10", false],
+      ["2026-12-11", "2026-12-25", false],
+      ["2026-12-26", "2027-01-10", false],
+    ],
+  );
+});
+
+test("snapshotted periods disappear from active payslip periods", () => {
+  const currentPeriod = getPayrollPeriodForDate("2026-11-15");
+  const options = getUpcomingPayslipPeriods(
+    currentPeriod,
+    [
+      { employeeId: "employee-1", period: currentPeriod },
+      {
+        employeeId: "employee-1",
+        period: getPayrollPeriodForDate("2026-11-26"),
+      },
+      {
+        employeeId: "another-employee",
+        period: getPayrollPeriodForDate("2026-12-11"),
+      },
+    ],
+    "employee-1",
+  );
+
+  assert.deepEqual(
+    options.map(({ period, isCurrent }) => [
+      period.startDate,
+      period.endDate,
+      isCurrent,
+    ]),
+    [
+      ["2026-12-11", "2026-12-25", false],
+      ["2026-12-26", "2027-01-10", false],
+      ["2027-01-11", "2027-01-25", false],
+      ["2027-01-26", "2027-02-10", false],
+    ],
+  );
 });
 
 test("payslip snapshots require a valid semi-monthly period", () => {
