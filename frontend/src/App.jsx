@@ -1425,8 +1425,8 @@ export default function App() {
       (selectedPayslipPeriodEndDate
         ? getPayrollPeriodForDate(selectedPayslipPeriodEndDate)
         : null) ||
-      payslipPeriodOptions[0]?.period ||
-      currentPayrollPeriod
+      currentPayrollPeriod ||
+      payslipPeriodOptions[0]?.period
     );
   }, [
     currentPayrollPeriod,
@@ -2856,6 +2856,12 @@ export default function App() {
       document.body.style.overflow = "";
       window.removeEventListener("keydown", closeOnEscape);
     };
+  }, [activeModal]);
+
+  useEffect(() => {
+    if (activeModal !== "payslipModal") {
+      setSelectedPayslipPeriodEndDate(null);
+    }
   }, [activeModal]);
 
   const clearCalendarRange = () => {

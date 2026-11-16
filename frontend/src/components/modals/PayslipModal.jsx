@@ -308,7 +308,7 @@ function PayslipCutoffDirectory({
                 const status = entry.snapshot
                   ? "Saved payslip"
                   : entry.isFuture
-                    ? "Future cutoff"
+                    ? "Incoming"
                     : entry.pendingCount > 0
                       ? "Payroll pending"
                       : entry.isCurrent
