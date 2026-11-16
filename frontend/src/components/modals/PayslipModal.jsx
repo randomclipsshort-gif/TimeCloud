@@ -241,7 +241,7 @@ function PayslipCutoffDirectory({
             type="button"
             onClick={() => setIsOpen(false)}
             aria-label="Close payslip cutoff directory"
-            className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
+            className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
           >
             <X size={16} aria-hidden="true" />
           </button>
@@ -283,7 +283,7 @@ function PayslipCutoffDirectory({
                     setYearFilter(year);
                     setPage(1);
                   }}
-                  className={`shrink-0 rounded-lg px-3 py-1.5 text-[10px] font-semibold transition ${
+                  className={`shrink-0 cursor-pointer rounded-lg px-3 py-1.5 text-[10px] font-semibold transition ${
                     isSelected
                       ? "bg-teal-50 text-teal-700 ring-1 ring-teal-200"
                       : "text-slate-600 hover:bg-slate-50"
@@ -327,7 +327,7 @@ function PayslipCutoffDirectory({
                       }
                       setIsOpen(false);
                     }}
-                    className="cutoff-card w-full rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-sm hover:border-emerald-300 hover:bg-emerald-50/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
+                    className="cutoff-card w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-sm hover:border-emerald-300 hover:bg-emerald-50/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
                   >
                     <div className="flex min-h-9 items-start justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
@@ -406,7 +406,7 @@ function PayslipCutoffDirectory({
               type="button"
               disabled={visiblePage <= 1}
               onClick={() => setPage(visiblePage - 1)}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronLeft size={12} aria-hidden="true" />
               Previous
@@ -419,7 +419,7 @@ function PayslipCutoffDirectory({
                   aria-label={`Go to page ${item}`}
                   aria-current={item === visiblePage ? "page" : undefined}
                   onClick={() => setPage(item)}
-                  className={`size-8 rounded-lg border text-[10px] font-semibold transition ${
+                  className={`size-8 cursor-pointer rounded-lg border text-[10px] font-semibold transition ${
                     item === visiblePage
                       ? "border-teal-200 bg-teal-50 text-teal-700"
                       : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-white"
@@ -441,7 +441,7 @@ function PayslipCutoffDirectory({
               type="button"
               disabled={pageCount === 0 || visiblePage >= pageCount}
               onClick={() => setPage(visiblePage + 1)}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Next
               <ChevronRight size={12} aria-hidden="true" />
@@ -637,7 +637,7 @@ export default function PayslipModal({
             type="button"
             aria-label="Close payslip"
             data-action="closeModal(&#x27;payslipModal&#x27;)"
-            className="ml-3 shrink-0 rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            className="ml-3 shrink-0 cursor-pointer rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
           >
             <i className="fa-solid fa-xmark text-lg" aria-hidden="true"></i>
           </button>
@@ -669,7 +669,7 @@ export default function PayslipModal({
                         type="button"
                         aria-pressed={isSelected}
                         onClick={() => onPayslipPeriodChange(period.endDate)}
-                        className={`whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition ${
+                        className={`whitespace-nowrap cursor-pointer rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition ${
                           isSelected
                             ? "bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-200"
                             : "text-slate-600 hover:bg-white hover:text-slate-900"
@@ -685,7 +685,7 @@ export default function PayslipModal({
                   ref={directoryTriggerRef}
                   type="button"
                   onClick={() => setIsDirectoryOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-[10px] font-semibold text-teal-700 transition hover:border-teal-300 hover:bg-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-[10px] font-semibold text-teal-700 transition hover:border-teal-300 hover:bg-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
                 >
                   <Archive size={13} aria-hidden="true" />
                   Search &amp; Browse
@@ -1015,14 +1015,14 @@ export default function PayslipModal({
             <button
               type="button"
               data-action="closeModal(&#x27;payslipModal&#x27;)"
-              className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
+              className="cursor-pointer rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
             >
               Close
             </button>
             <button
               type="button"
               onClick={() => window.print()}
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-800"
+              className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-teal-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-800"
             >
               <i className="fa-solid fa-print" aria-hidden="true"></i>
               Print summary
@@ -1034,7 +1034,7 @@ export default function PayslipModal({
                   !canSavePayslip || payslipAlreadySaved || payslipHistorySaving
                 }
                 onClick={onSavePayslipToHistory}
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+                className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
                 title={
                   !canSavePayslip
                     ? "Private financial data is not available to save this payslip"
