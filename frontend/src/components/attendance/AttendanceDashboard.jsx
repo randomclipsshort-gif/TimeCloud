@@ -494,9 +494,7 @@ export default function AttendanceDashboard({
                   disabled={status.disabled}
                   onClick={() => {
                     if (status.label === "Leave") {
-                      if (record.type !== "Leave") {
-                        setIsLeaveTypeSelectorOpen(true);
-                      }
+                      setIsLeaveTypeSelectorOpen((isOpen) => !isOpen);
                     } else {
                       setIsLeaveTypeSelectorOpen(false);
                     }
@@ -511,10 +509,12 @@ export default function AttendanceDashboard({
                 </button>
               ))}
             </div>
-            {isLeaveTypeSelectorOpen && record.type !== "Leave" && (
+            {isLeaveTypeSelectorOpen && (
               <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50/40 p-2.5">
                 <p className="mb-2 text-[9px] font-bold uppercase tracking-wide text-amber-800">
-                  Select Leave Type (Paid 8h)
+                  {record.type === "Leave"
+                    ? "Selected Leave Type (click to cancel)"
+                    : "Select Leave Type (Paid 8h)"}
                 </p>
                 <div className="grid grid-cols-3 gap-1.5">
                   {[
@@ -529,18 +529,45 @@ export default function AttendanceDashboard({
                       Number.isFinite(remainingDays) && remainingDays >= 0
                         ? `${remainingDays} ${remainingDays === 1 ? "day" : "days"} left`
                         : "Balance unavailable";
+                    const isSelectedLeaveType =
+                      record.type === "Leave" &&
+                      record.leaveCode === leaveType.code;
+                    const hasExistingLeave = record.type === "Leave";
                     return (
                       <button
                         key={leaveType.code}
                         type="button"
-                        data-action={`grantSelectedDateLeave('${leaveType.code}')`}
-                        aria-label={`${leaveType.label}, ${balanceLabel}`}
+                        data-action={
+                          isSelectedLeaveType
+                            ? "clearSelectedShift()"
+                            : hasExistingLeave
+                              ? undefined
+                              : `grantSelectedDateLeave('${leaveType.code}')`
+                        }
+                        aria-label={
+                          isSelectedLeaveType
+                            ? `${leaveType.label} leave selected. Click to cancel this leave.`
+                            : `${leaveType.label}, ${balanceLabel}`
+                        }
+                        aria-pressed={isSelectedLeaveType}
+                        disabled={hasExistingLeave && !isSelectedLeaveType}
+                        title={
+                          isSelectedLeaveType
+                            ? "Click to cancel this leave"
+                            : undefined
+                        }
                         onClick={() => setIsLeaveTypeSelectorOpen(false)}
-                        className="flex cursor-pointer flex-col items-center rounded-lg border border-slate-200 bg-white px-2 py-2 text-[10px] font-semibold text-slate-700 transition hover:border-amber-300 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                        className={`flex cursor-pointer flex-col items-center rounded-lg border px-2 py-2 text-[10px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-50 ${
+                          isSelectedLeaveType
+                            ? "border-amber-400 bg-amber-100 text-amber-900"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-amber-300 hover:bg-amber-50"
+                        }`}
                       >
                         <span>{leaveType.label}</span>
                         <span className="mt-0.5 text-[9px] font-medium text-slate-500">
-                          {balanceLabel}
+                          {isSelectedLeaveType
+                            ? "Selected · click to cancel"
+                            : balanceLabel}
                         </span>
                       </button>
                     );
