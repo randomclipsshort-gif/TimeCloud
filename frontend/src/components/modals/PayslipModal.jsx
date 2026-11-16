@@ -1,14 +1,24 @@
-import React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Archive, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { formatPayrollPeriod } from "../../utils/payrollPeriods.js";
 import { groupIncentiveEarningsItems } from "../../utils/payrollEarningsBreakdown.js";
 
+const PAYSLIP_DIRECTORY_PAGE_SIZE = 12;
+const PAYSLIP_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+const PAYSLIP_MONTH_YEAR_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
 function formatPayslipPeriodOption(period) {
   const formatDate = (dateKey) =>
-    new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      timeZone: "UTC",
-    }).format(new Date(`${dateKey}T00:00:00Z`));
+    PAYSLIP_DATE_FORMATTER.format(new Date(`${dateKey}T00:00:00Z`));
   return `${formatDate(period.startDate)} - ${formatDate(period.endDate)}`;
 }
 
@@ -20,12 +30,440 @@ function formatRateTierDate(dateKey) {
   }).format(new Date(`${dateKey}T00:00:00Z`));
 }
 
+function getPayslipDirectorySearchText(period) {
+  const start = new Date(`${period.startDate}T00:00:00Z`);
+  const end = new Date(`${period.endDate}T00:00:00Z`);
+
+  return [
+    formatPayslipPeriodOption(period),
+    period.startDate,
+    period.endDate,
+    PAYSLIP_MONTH_YEAR_FORMATTER.format(start),
+    PAYSLIP_MONTH_YEAR_FORMATTER.format(end),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function getDirectoryPaginationItems(currentPage, pageCount) {
+  if (pageCount <= 7) {
+    return Array.from({ length: pageCount }, (_, index) => index + 1);
+  }
+
+  const pages = [1];
+  const middleStart = Math.max(2, currentPage - 1);
+  const middleEnd = Math.min(pageCount - 1, currentPage + 1);
+  if (middleStart > 2) pages.push("start-ellipsis");
+  for (let page = middleStart; page <= middleEnd; page += 1) {
+    pages.push(page);
+  }
+  if (middleEnd < pageCount - 1) pages.push("end-ellipsis");
+  pages.push(pageCount);
+  return pages;
+}
+
+function PayslipCutoffDirectory({
+  periods,
+  historicalPayslips,
+  formatCurrency,
+  onHistoricalPayslipSelect,
+  onArchivedPeriodSelect,
+  setIsOpen,
+  triggerRef,
+}) {
+  const [query, setQuery] = useState("");
+  const [yearFilter, setYearFilter] = useState(() =>
+    String(new Date().getFullYear()),
+  );
+  const [page, setPage] = useState(1);
+  const searchRef = useRef(null);
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusableElements = dialogRef.current?.querySelectorAll(
+        'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusableElements?.length) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    searchRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+      triggerRef.current?.focus();
+    };
+  }, [setIsOpen, triggerRef]);
+
+  const directoryEntries = useMemo(() => {
+    const snapshotsByPeriod = new Map(
+      historicalPayslips
+        .filter(
+          (snapshot) =>
+            snapshot?.period?.startDate && snapshot?.period?.endDate,
+        )
+        .map((snapshot) => [
+          `${snapshot.period.startDate}:${snapshot.period.endDate}`,
+          snapshot,
+        ]),
+    );
+
+    return periods
+      .filter(
+        (item) =>
+          item?.period?.startDate && item?.period?.endDate,
+      )
+      .map((item) => {
+        const periodKey = `${item.period.startDate}:${item.period.endDate}`;
+        return {
+          ...item,
+          snapshot: snapshotsByPeriod.get(periodKey) || null,
+          searchText: getPayslipDirectorySearchText(item.period),
+        };
+      })
+      .sort((left, right) =>
+        right.period.endDate.localeCompare(left.period.endDate),
+      );
+  }, [historicalPayslips, periods]);
+  const years = useMemo(
+    () =>
+      [
+        ...new Set(
+          [
+            "2025",
+            ...directoryEntries.map((entry) =>
+              entry.period.endDate.slice(0, 4),
+            ),
+          ],
+        ),
+      ].sort((left, right) => right.localeCompare(left)),
+    [directoryEntries],
+  );
+  const searchTokens = useMemo(
+    () =>
+      query
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim()
+        .split(/\s+/)
+        .filter((token) => !["to", "through", "until"].includes(token)),
+    [query],
+  );
+  const filteredEntries = useMemo(
+    () =>
+      directoryEntries.filter((entry) => {
+        const matchesYear =
+          yearFilter === "all" ||
+          entry.period.endDate.startsWith(yearFilter);
+        return (
+          matchesYear &&
+          searchTokens.every((token) => entry.searchText.includes(token))
+        );
+      }),
+    [directoryEntries, searchTokens, yearFilter],
+  );
+  const pageCount = Math.ceil(
+    filteredEntries.length / PAYSLIP_DIRECTORY_PAGE_SIZE,
+  );
+  const visiblePage = Math.min(page, Math.max(pageCount, 1));
+  const visibleEntries = filteredEntries.slice(
+    (visiblePage - 1) * PAYSLIP_DIRECTORY_PAGE_SIZE,
+    visiblePage * PAYSLIP_DIRECTORY_PAGE_SIZE,
+  );
+  const paginationItems = getDirectoryPaginationItems(visiblePage, pageCount);
+  const rangeStart =
+    filteredEntries.length > 0
+      ? (visiblePage - 1) * PAYSLIP_DIRECTORY_PAGE_SIZE + 1
+      : 0;
+  const rangeEnd = Math.min(
+    visiblePage * PAYSLIP_DIRECTORY_PAGE_SIZE,
+    filteredEntries.length,
+  );
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-sm sm:p-5"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) setIsOpen(false);
+      }}
+    >
+      <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payslipDirectoryTitle"
+        aria-describedby="payslipDirectoryDescription"
+        tabIndex={-1}
+        className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+      >
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3.5 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-teal-100 bg-teal-50 text-teal-700">
+              <Archive size={16} aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2
+                id="payslipDirectoryTitle"
+                className="truncate text-sm font-bold text-slate-800"
+              >
+                {`Payslip Cutoff Directory (${directoryEntries.length} ${
+                  directoryEntries.length === 1 ? "Record" : "Records"
+                })`}
+              </h2>
+              <p
+                id="payslipDirectoryDescription"
+                className="mt-0.5 text-[10px] text-slate-500"
+              >
+                Search current and future cutoffs, or browse saved payslips.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            aria-label="Close payslip cutoff directory"
+            className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className="flex shrink-0 flex-col gap-2 border-b border-slate-200 bg-slate-50/70 px-4 py-3 sm:px-6 md:flex-row">
+          <label className="relative min-w-0 flex-1">
+            <Search
+              size={14}
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              ref={searchRef}
+              type="search"
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(1);
+              }}
+              aria-label="Search payslip cutoffs by date or month"
+              placeholder="Search cutoff by date or month (e.g., Nov, Oct 26, 2026-11-10)…"
+              className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/15"
+            />
+          </label>
+          <div
+            className="flex max-w-full shrink-0 items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1"
+            role="group"
+            aria-label="Filter payslip cutoffs by year"
+          >
+            {years.map((year) => {
+              const isSelected = yearFilter === year;
+              return (
+                <button
+                  key={year}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => {
+                    setYearFilter(year);
+                    setPage(1);
+                  }}
+                  className={`shrink-0 rounded-lg px-3 py-1.5 text-[10px] font-semibold transition ${
+                    isSelected
+                      ? "bg-teal-50 text-teal-700 ring-1 ring-teal-200"
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {year}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          {visibleEntries.length > 0 ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleEntries.map((entry) => {
+                const grossPay =
+                  entry.snapshot?.summary?.recordedEarnings ?? entry.grossPay;
+                const netPay = entry.snapshot?.netPay ?? entry.netPay;
+                const hasPayrollTotals =
+                  Number.isFinite(grossPay) && Number.isFinite(netPay);
+                const status = entry.snapshot
+                  ? "Saved payslip"
+                  : entry.isFuture
+                    ? "Future cutoff"
+                    : entry.pendingCount > 0
+                      ? "Payroll pending"
+                      : entry.isCurrent
+                        ? "Current Estimate"
+                        : "Estimate";
+
+                return (
+                  <button
+                    key={entry.period.endDate}
+                    type="button"
+                    onClick={() => {
+                      if (entry.snapshot) {
+                        onHistoricalPayslipSelect(entry.snapshot);
+                      } else {
+                        onArchivedPeriodSelect(entry.period.endDate);
+                      }
+                      setIsOpen(false);
+                    }}
+                    className="cutoff-card w-full rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-sm hover:border-emerald-300 hover:bg-emerald-50/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
+                  >
+                    <div className="flex min-h-9 items-start justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                        <span className="font-bold text-slate-800">
+                          {formatPayslipPeriodOption(entry.period)}
+                        </span>
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
+                          {entry.period.startDate.slice(0, 4) ===
+                          entry.period.endDate.slice(0, 4)
+                            ? entry.period.endDate.slice(0, 4)
+                            : `${entry.period.startDate.slice(0, 4)}–${entry.period.endDate.slice(0, 4)}`}
+                        </span>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-md px-2 py-1 text-[9px] font-bold ${
+                          status === "Current Estimate"
+                            ? "bg-teal-50 text-teal-700"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {status}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5 text-[10px]">
+                      {hasPayrollTotals ? (
+                        <>
+                          <span className="text-slate-500">
+                            Net pay:{" "}
+                            <strong className="font-bold tabular-nums text-slate-800">
+                              {formatCurrency(netPay)}
+                            </strong>
+                          </span>
+                          <span className="text-slate-500">
+                            Gross:{" "}
+                            <strong className="font-bold tabular-nums text-slate-800">
+                              {formatCurrency(grossPay)}
+                            </strong>
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-slate-500">
+                          Select to view this cutoff&apos;s estimate
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex min-h-48 flex-col items-center justify-center text-center">
+              <Search
+                size={20}
+                aria-hidden="true"
+                className="text-slate-300"
+              />
+              <p className="mt-2 text-xs font-semibold text-slate-700">
+                No cutoffs match your search.
+              </p>
+              <p className="mt-1 text-[10px] text-slate-400">
+                Try another date, month, or year.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 text-[10px] text-slate-500 sm:px-6">
+          <span>
+            {`Showing ${rangeStart}–${rangeEnd} of ${filteredEntries.length} cutoffs`}
+          </span>
+          <nav
+            aria-label="Payslip cutoff directory pagination"
+            className="flex items-center gap-1"
+          >
+            <button
+              type="button"
+              disabled={visiblePage <= 1}
+              onClick={() => setPage(visiblePage - 1)}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronLeft size={12} aria-hidden="true" />
+              Previous
+            </button>
+            {paginationItems.map((item) =>
+              typeof item === "number" ? (
+                <button
+                  key={item}
+                  type="button"
+                  aria-label={`Go to page ${item}`}
+                  aria-current={item === visiblePage ? "page" : undefined}
+                  onClick={() => setPage(item)}
+                  className={`size-8 rounded-lg border text-[10px] font-semibold transition ${
+                    item === visiblePage
+                      ? "border-teal-200 bg-teal-50 text-teal-700"
+                      : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-white"
+                  }`}
+                >
+                  {item}
+                </button>
+              ) : (
+                <span
+                  key={item}
+                  aria-hidden="true"
+                  className="px-1 text-slate-400"
+                >
+                  …
+                </span>
+              ),
+            )}
+            <button
+              type="button"
+              disabled={pageCount === 0 || visiblePage >= pageCount}
+              onClick={() => setPage(visiblePage + 1)}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+              <ChevronRight size={12} aria-hidden="true" />
+            </button>
+          </nav>
+        </footer>
+      </section>
+    </div>,
+    document.body,
+  );
+}
+
 export default function PayslipModal({
   open,
   userName,
   historicalPayslip,
+  historicalPayslips = [],
+  payslipArchivePeriods = [],
   payslipPeriodOptions,
   onPayslipPeriodChange,
+  onArchivedPeriodSelect,
+  onHistoricalPayslipSelect,
   payrollPeriod,
   payrollPeriodSummary,
   monthlyPayslipRange,
@@ -43,6 +481,8 @@ export default function PayslipModal({
   payslipHistorySaving,
   onSavePayslipToHistory,
 }) {
+  const [isDirectoryOpen, setIsDirectoryOpen] = useState(false);
+  const directoryTriggerRef = useRef(null);
   const activePeriod = historicalPayslip?.period || payrollPeriod;
   const activeSummary = historicalPayslip?.summary || payrollPeriodSummary;
   const activeBreakdown =
@@ -126,6 +566,9 @@ export default function PayslipModal({
   const netPayLabel = earningsAvailable
     ? formatCurrency(activeNetPay)
     : "Private data unavailable";
+  useEffect(() => {
+    if (!open) setIsDirectoryOpen(false);
+  }, [open]);
   const recordedHours = Number.isFinite(activeSummary.actualPaidHours)
     ? activeSummary.actualPaidHours
     : activeSummary.regularHours + activeSummary.overtimeHours;
@@ -167,7 +610,8 @@ export default function PayslipModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"
       role="dialog"
       aria-modal="true"
-      aria-hidden={!open}
+      aria-hidden={!open || isDirectoryOpen}
+      inert={isDirectoryOpen}
       style={{ display: open ? "flex" : "none" }}
     >
       <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 shadow-2xl">
@@ -210,13 +654,10 @@ export default function PayslipModal({
             </span>
             {!historicalPayslip && (
               <div
-                className="flex max-w-full flex-wrap items-center gap-x-3 gap-y-2"
+                className="flex max-w-full flex-wrap items-center gap-2"
                 role="group"
                 aria-label="Active payslip period"
               >
-                <span className="shrink-0 text-[11px] font-medium text-slate-400">
-                  Active Period:
-                </span>
                 <div className="flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
                   {payslipPeriodOptions.map(({ period, isCurrent }) => {
                     const isSelected =
@@ -240,6 +681,15 @@ export default function PayslipModal({
                     );
                   })}
                 </div>
+                <button
+                  ref={directoryTriggerRef}
+                  type="button"
+                  onClick={() => setIsDirectoryOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-[10px] font-semibold text-teal-700 transition hover:border-teal-300 hover:bg-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
+                >
+                  <Archive size={13} aria-hidden="true" />
+                  Search &amp; Browse
+                </button>
               </div>
             )}
           </div>
@@ -605,6 +1055,17 @@ export default function PayslipModal({
           </div>
         </div>
       </div>
+      {open && isDirectoryOpen && (
+        <PayslipCutoffDirectory
+          periods={payslipArchivePeriods}
+          historicalPayslips={historicalPayslips}
+          formatCurrency={formatCurrency}
+          onHistoricalPayslipSelect={onHistoricalPayslipSelect}
+          onArchivedPeriodSelect={onArchivedPeriodSelect}
+          setIsOpen={setIsDirectoryOpen}
+          triggerRef={directoryTriggerRef}
+        />
+      )}
     </div>
   );
 }

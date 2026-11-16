@@ -72,6 +72,8 @@ import {
   appendPayslipSnapshot,
   createPayslipSnapshot,
   findPayslipSnapshot,
+  getPayslipDirectoryPeriods,
+  getPayslipPeriodsThroughYearEnd,
   getUpcomingPayslipPeriods,
   removePayslipSnapshot,
 } from "./utils/payrollHistory.js";
@@ -1420,6 +1422,9 @@ export default function App() {
       payslipPeriodOptions.find(
         ({ period }) => period.endDate === selectedPayslipPeriodEndDate,
       )?.period ||
+      (selectedPayslipPeriodEndDate
+        ? getPayrollPeriodForDate(selectedPayslipPeriodEndDate)
+        : null) ||
       payslipPeriodOptions[0]?.period ||
       currentPayrollPeriod
     );
@@ -1860,6 +1865,27 @@ export default function App() {
     getPayrollSettingsAtDate,
     historicalPayslips,
     payrollAttendance,
+  ]);
+  const payslipDirectoryActivePeriods = useMemo(
+    () =>
+      getPayslipPeriodsThroughYearEnd(
+        currentPayrollPeriod,
+        new Date().getFullYear(),
+      ),
+    [currentPayrollPeriod],
+  );
+  const payslipArchivePeriods = useMemo(() => {
+    return getPayslipDirectoryPeriods({
+      currentPeriod: currentPayrollPeriod,
+      activePeriods: payslipDirectoryActivePeriods,
+      payrollPeriods: financePayrollHistory,
+      payslipHistory: historicalPayslips,
+    });
+  }, [
+    currentPayrollPeriod,
+    financePayrollHistory,
+    historicalPayslips,
+    payslipDirectoryActivePeriods,
   ]);
   const financePeriodSelection =
     financeTrackingScope === "current"
@@ -5580,8 +5606,19 @@ export default function App() {
                   ? activeHistoricalPayslip
                   : null
               }
+              historicalPayslips={
+                privateFinancialDataStatus === "ready" ? historicalPayslips : []
+              }
+              payslipArchivePeriods={
+                privateFinancialDataStatus === "ready" ? payslipArchivePeriods : []
+              }
               payslipPeriodOptions={payslipPeriodOptions}
               onPayslipPeriodChange={setSelectedPayslipPeriodEndDate}
+              onArchivedPeriodSelect={(endDate) => {
+                setActiveHistoricalPayslip(null);
+                setSelectedPayslipPeriodEndDate(endDate);
+              }}
+              onHistoricalPayslipSelect={viewHistoricalPayslip}
               payrollPeriod={selectedPayslipPeriod}
               payrollPeriodSummary={selectedPayslipSummary}
               monthlyPayslipRange={monthlyPayslipRange}

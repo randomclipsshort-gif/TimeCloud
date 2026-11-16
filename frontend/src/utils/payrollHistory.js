@@ -8,7 +8,7 @@ export function getUpcomingPayslipPeriods(
   currentPeriod,
   history,
   employeeId,
-  count = 4,
+  count = 2,
 ) {
   if (
     !currentPeriod ||
@@ -49,6 +49,79 @@ export function getUpcomingPayslipPeriods(
   }
 
   return periods;
+}
+
+export function getPayslipPeriodsThroughYearEnd(currentPeriod, year) {
+  if (!currentPeriod || !Number.isInteger(year)) return [];
+
+  const yearKey = String(year);
+  const periods = [];
+  let period = currentPeriod;
+  while (period?.endDate?.startsWith(yearKey)) {
+    periods.push({
+      period,
+      isCurrent:
+        period.startDate === currentPeriod.startDate &&
+        period.endDate === currentPeriod.endDate,
+    });
+    period = getNextPayrollPeriod(period);
+  }
+
+  return periods;
+}
+
+export function getPayslipDirectoryPeriods({
+  currentPeriod,
+  activePeriods,
+  payrollPeriods,
+  payslipHistory,
+}) {
+  const getPeriodKey = (period) => `${period.startDate}:${period.endDate}`;
+  const currentPeriodKey = getPeriodKey(currentPeriod);
+  const payrollPeriodsByKey = new Map(
+    payrollPeriods
+      .filter((item) => item?.period?.startDate && item?.period?.endDate)
+      .map((item) => [getPeriodKey(item.period), item]),
+  );
+  const directoryPeriods = activePeriods
+    .filter((item) => item?.period?.startDate && item?.period?.endDate)
+    .map((item) => ({
+      ...(payrollPeriodsByKey.get(getPeriodKey(item.period)) || {}),
+      ...item,
+      isCurrent: getPeriodKey(item.period) === currentPeriodKey,
+      isFuture: item.period.endDate > currentPeriod.endDate,
+    }));
+
+  if (
+    !directoryPeriods.some(
+      (item) => getPeriodKey(item.period) === currentPeriodKey,
+    )
+  ) {
+    directoryPeriods.unshift({
+      ...(payrollPeriodsByKey.get(currentPeriodKey) || {}),
+      period: currentPeriod,
+      isCurrent: true,
+      isFuture: false,
+    });
+  }
+
+  const includedPeriods = new Set(
+    directoryPeriods.map((item) => getPeriodKey(item.period)),
+  );
+  for (const snapshot of payslipHistory) {
+    if (!snapshot?.period?.startDate || !snapshot?.period?.endDate) continue;
+    const periodKey = getPeriodKey(snapshot.period);
+    if (includedPeriods.has(periodKey)) continue;
+
+    directoryPeriods.push({
+      period: snapshot.period,
+      isCurrent: periodKey === currentPeriodKey,
+      isFuture: snapshot.period.endDate > currentPeriod.endDate,
+    });
+    includedPeriods.add(periodKey);
+  }
+
+  return directoryPeriods;
 }
 
 export function isValidPayslipSnapshot(snapshot) {

@@ -4,6 +4,8 @@ import {
   appendPayslipSnapshot,
   createPayslipSnapshot,
   findPayslipSnapshot,
+  getPayslipDirectoryPeriods,
+  getPayslipPeriodsThroughYearEnd,
   getUpcomingPayslipPeriods,
   removePayslipSnapshot,
 } from "./payrollHistory.js";
@@ -58,7 +60,7 @@ test("payslip history keeps distinct payroll periods", () => {
   ]);
 });
 
-test("active payslip periods include the current period and three future periods", () => {
+test("active payslip periods include the current period and one future period", () => {
   const currentPeriod = getPayrollPeriodForDate("2026-11-15");
   const options = getUpcomingPayslipPeriods(
     currentPeriod,
@@ -75,8 +77,20 @@ test("active payslip periods include the current period and three future periods
     [
       ["2026-11-11", "2026-11-25", true],
       ["2026-11-26", "2026-12-10", false],
-      ["2026-12-11", "2026-12-25", false],
-      ["2026-12-26", "2027-01-10", false],
+    ],
+  );
+});
+
+test("payslip cutoff directory includes future periods through year end", () => {
+  const currentPeriod = getPayrollPeriodForDate("2026-11-15");
+  const periods = getPayslipPeriodsThroughYearEnd(currentPeriod, 2026);
+
+  assert.deepEqual(
+    periods.map(({ period, isCurrent }) => [period.endDate, isCurrent]),
+    [
+      ["2026-11-25", true],
+      ["2026-12-10", false],
+      ["2026-12-25", false],
     ],
   );
 });
@@ -108,9 +122,44 @@ test("snapshotted periods disappear from active payslip periods", () => {
     [
       ["2026-12-11", "2026-12-25", false],
       ["2026-12-26", "2027-01-10", false],
-      ["2027-01-11", "2027-01-25", false],
-      ["2027-01-26", "2027-02-10", false],
     ],
+  );
+});
+
+test("payslip cutoff directory uses saved history for previous periods", () => {
+  const currentPeriod = getPayrollPeriodForDate("2026-11-15");
+  const firstFuturePeriod = getPayrollPeriodForDate("2026-11-26");
+  const secondFuturePeriod = getPayrollPeriodForDate("2026-12-11");
+  const unsavedPreviousPeriod = getPayrollPeriodForDate("2026-10-25");
+  const savedPreviousPayslip = createSnapshot();
+  const directoryPeriods = getPayslipDirectoryPeriods({
+    currentPeriod,
+    activePeriods: [
+      { period: currentPeriod, isCurrent: true },
+      { period: firstFuturePeriod, isCurrent: false },
+      { period: secondFuturePeriod, isCurrent: false },
+    ],
+    payrollPeriods: [
+      { period: currentPeriod, isCurrent: true, netPay: 900 },
+      { period: unsavedPreviousPeriod, isCurrent: false, netPay: 800 },
+    ],
+    payslipHistory: [savedPreviousPayslip],
+  });
+
+  assert.deepEqual(
+    directoryPeriods.map(({ period }) => period.endDate),
+    [
+      currentPeriod.endDate,
+      firstFuturePeriod.endDate,
+      secondFuturePeriod.endDate,
+      savedPreviousPayslip.period.endDate,
+    ],
+  );
+  assert.equal(
+    directoryPeriods.some(
+      ({ period }) => period.endDate === unsavedPreviousPeriod.endDate,
+    ),
+    false,
   );
 });
 
