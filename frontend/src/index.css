@@ -116,22 +116,6 @@ body {
   animation: budget-category-fade 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-@keyframes budget-period-date-slide {
-  from {
-    opacity: 0;
-    transform: translateX(var(--period-slide-offset, 0));
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.budget-period-date-slide {
-  animation: budget-period-date-slide 280ms ease-out both;
-}
-
 .accordion-wrapper {
   display: grid;
   grid-template-rows: 1fr;
@@ -172,9 +156,7 @@ body {
 
 .cutoff-card.is-selected {
   border-color: #00b86b;
-  box-shadow:
-    0 0 0 1px #00b86b,
-    0 4px 14px -2px rgb(0 184 107 / 0.12);
+  box-shadow: 0 4px 14px -2px rgb(0 184 107 / 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -183,7 +165,6 @@ body {
   .cat-segment,
   .budget-utilization-ghost,
   .budget-category-fade,
-  .budget-period-date-slide,
   .accordion-wrapper,
   .cutoff-card {
     transition: none !important;

@@ -5,12 +5,16 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import {
+  Archive,
   ArrowDownRight,
   CarFront,
   CalendarDays,
   ChartPie,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Filter,
   FileText,
@@ -25,6 +29,7 @@ import {
   Trash2,
   TrendingUp,
   Wallet,
+  X,
   Zap,
 } from "lucide-react";
 import {
@@ -56,6 +61,22 @@ const FINANCE_TRANSITION_DURATION_MS = 520;
 const GHOST_TRAIL_DURATION_MS = 650;
 const CATEGORY_SHARE_TRANSITION_DURATION_MS = 650;
 const CATEGORY_SHARE_STAGGER_MS = 90;
+const CUTOFF_DIRECTORY_PAGE_SIZE = 12;
+const CUTOFF_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+const CUTOFF_MONTH_YEAR_SHORT_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+const CUTOFF_MONTH_YEAR_LONG_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
 
 const EXPENSE_LEDGER_CATEGORIES = [
   {
@@ -211,17 +232,31 @@ function StableAnimatedCurrency({
   duration,
   delay,
 }) {
-  const previousValueRef = useRef(value);
-  const previousValue = previousValueRef.current;
   const startingValue = initialValue ?? value;
+  const [reservedValues, setReservedValues] = useState(() => [
+    value,
+    startingValue,
+  ]);
+  const currentValueRef = useRef(value);
 
   useEffect(() => {
-    previousValueRef.current = value;
-  }, [value]);
+    const previousValue = currentValueRef.current;
+    currentValueRef.current = value;
+    if (previousValue === value) return undefined;
+
+    setReservedValues((currentValues) =>
+      [...new Set([...currentValues, previousValue, value])],
+    );
+    const timeoutId = window.setTimeout(
+      () => setReservedValues([value]),
+      duration + delay,
+    );
+    return () => window.clearTimeout(timeoutId);
+  }, [delay, duration, value]);
 
   return (
     <span className="inline-grid align-baseline whitespace-nowrap tabular-nums">
-      {[previousValue, startingValue, value].map((reservedValue, index) => (
+      {[...reservedValues, startingValue, value].map((reservedValue, index) => (
         <span
           key={index}
           aria-hidden="true"
@@ -243,24 +278,11 @@ function StableAnimatedCurrency({
   );
 }
 
-function AnimatedCategoryShare({
-  category,
-  index,
-  total,
-  activeSelection,
-  formatCurrency,
-}) {
+function useCategoryShareTransition(activeSelection, index) {
   const rowRef = useRef(null);
   const previousRectRef = useRef(null);
   const previousSelectionRef = useRef(activeSelection);
-  const share = total > 0 ? (category.amount / total) * 100 : 0;
   const staggerDelay = index * CATEGORY_SHARE_STAGGER_MS;
-  const animatedShare = useAnimatedNumber(
-    share,
-    CATEGORY_SHARE_TRANSITION_DURATION_MS,
-    0,
-    staggerDelay,
-  );
 
   useLayoutEffect(() => {
     const row = rowRef.current;
@@ -303,6 +325,28 @@ function AnimatedCategoryShare({
     return () => animation.cancel();
   }, [activeSelection, staggerDelay]);
 
+  return { rowRef, staggerDelay };
+}
+
+function AnimatedCategoryShare({
+  category,
+  index,
+  total,
+  activeSelection,
+  formatCurrency,
+}) {
+  const { rowRef, staggerDelay } = useCategoryShareTransition(
+    activeSelection,
+    index,
+  );
+  const share = total > 0 ? (category.amount / total) * 100 : 0;
+  const animatedShare = useAnimatedNumber(
+    share,
+    CATEGORY_SHARE_TRANSITION_DURATION_MS,
+    0,
+    staggerDelay,
+  );
+
   return (
     <span
       ref={rowRef}
@@ -335,11 +379,7 @@ function AnimatedCategoryShare({
 
 function formatCutoffHistoryPeriod(period) {
   const formatDate = (dateKey) =>
-    new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      timeZone: "UTC",
-    }).format(new Date(`${dateKey}T00:00:00Z`));
+    CUTOFF_DATE_FORMATTER.format(new Date(`${dateKey}T00:00:00Z`));
   const start = formatDate(period.startDate);
   const end = formatDate(period.endDate);
   const startYear = period.startDate.slice(0, 4);
@@ -347,6 +387,114 @@ function formatCutoffHistoryPeriod(period) {
   return startYear === endYear
     ? `${start}–${end}`
     : `${start}, ${startYear}–${end}, ${endYear}`;
+}
+
+function getCutoffHistoryYearLabel(period) {
+  const startYear = period.startDate.slice(0, 4);
+  const endYear = period.endDate.slice(0, 4);
+  return startYear === endYear ? endYear : `${startYear}–${endYear}`;
+}
+
+function getCutoffSearchText(period) {
+  const startDate = new Date(`${period.startDate}T00:00:00Z`);
+  const endDate = new Date(`${period.endDate}T00:00:00Z`);
+
+  return [
+    formatCutoffHistoryPeriod(period),
+    period.startDate,
+    period.endDate,
+    CUTOFF_MONTH_YEAR_SHORT_FORMATTER.format(startDate),
+    CUTOFF_MONTH_YEAR_SHORT_FORMATTER.format(endDate),
+    CUTOFF_MONTH_YEAR_LONG_FORMATTER.format(startDate),
+    CUTOFF_MONTH_YEAR_LONG_FORMATTER.format(endDate),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function getCutoffPaginationItems(currentPage, pageCount) {
+  if (pageCount <= 7) {
+    return Array.from({ length: pageCount }, (_, index) => index + 1);
+  }
+
+  const pages = [1];
+  const middleStart = Math.max(2, currentPage - 1);
+  const middleEnd = Math.min(pageCount - 1, currentPage + 1);
+
+  if (middleStart > 2) pages.push("start-ellipsis");
+  for (let page = middleStart; page <= middleEnd; page += 1) {
+    pages.push(page);
+  }
+  if (middleEnd < pageCount - 1) pages.push("end-ellipsis");
+  pages.push(pageCount);
+  return pages;
+}
+
+function AnimatedBudgetMetric({
+  metric,
+  index,
+  activeSelection,
+  formatCurrency,
+  privateDataHidden,
+}) {
+  const { rowRef, staggerDelay } = useCategoryShareTransition(
+    activeSelection,
+    index,
+  );
+  const animatedPercentage = useAnimatedNumber(
+    metric.percentage,
+    CATEGORY_SHARE_TRANSITION_DURATION_MS,
+    0,
+    staggerDelay,
+  );
+  const previousPercentageRef = useRef(metric.percentage);
+  const percentageWidth = Math.max(
+    getPercentageWidth(previousPercentageRef.current),
+    getPercentageWidth(metric.percentage),
+  );
+
+  useEffect(() => {
+    previousPercentageRef.current = metric.percentage;
+  }, [metric.percentage]);
+
+  return (
+    <span
+      ref={rowRef}
+      className="inline-flex items-center gap-1.5 whitespace-nowrap text-[10px] text-slate-600"
+    >
+      <span>{metric.label}:</span>
+      <strong
+        className={`font-bold tabular-nums ${
+          metric.valueColor || "text-slate-800"
+        }`}
+      >
+        {privateDataHidden ? (
+          "Private"
+        ) : (
+          <StableAnimatedCurrency
+            value={metric.value}
+            formatCurrency={formatCurrency}
+            initialValue={0}
+            duration={CATEGORY_SHARE_TRANSITION_DURATION_MS}
+            delay={staggerDelay}
+          />
+        )}
+      </strong>
+      {!privateDataHidden && (
+        <span
+          className="inline-block shrink-0 text-right tabular-nums text-slate-400"
+          style={{ width: `${percentageWidth}ch` }}
+        >
+          {`${Math.round(animatedPercentage)}%`}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function getPercentageWidth(value) {
+  const percentage = Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0;
+  return String(Math.abs(percentage)).length + 1 + (percentage < 0 ? 1 : 0);
 }
 
 export default function FinancialDashboard({
@@ -412,7 +560,14 @@ export default function FinancialDashboard({
   onDeleteTravelExpense,
 }) {
   const [activeTab, setActiveTab] = useState("expenses");
-  const [isCutoffHistoryVisible, setIsCutoffHistoryVisible] = useState(true);
+  const [isCutoffHistoryVisible, setIsCutoffHistoryVisible] = useState(false);
+  const [isCutoffDirectoryOpen, setIsCutoffDirectoryOpen] = useState(false);
+  const [cutoffDirectoryQuery, setCutoffDirectoryQuery] = useState("");
+  const [cutoffDirectoryYear, setCutoffDirectoryYear] = useState("all");
+  const [cutoffDirectoryPage, setCutoffDirectoryPage] = useState(1);
+  const cutoffDirectoryTriggerRef = useRef(null);
+  const cutoffDirectorySearchRef = useRef(null);
+  const cutoffDirectoryDialogRef = useRef(null);
   const [expenseSearch, setExpenseSearch] = useState("");
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState("all");
   const [expenseSort, setExpenseSort] = useState("newest");
@@ -423,34 +578,14 @@ export default function FinancialDashboard({
   const [payslipMonth, setPayslipMonth] = useState(monthValue);
   const [payslipYear, setPayslipYear] = useState(monthValue.slice(0, 4));
   const [payslipCutoff, setPayslipCutoff] = useState("all");
-  const [cutoffDirection, setCutoffDirection] = useState(0);
   const activeFinancePeriodSelection =
     financeTrackingScope === "current"
       ? `period:${financeCutoffHistory[0]?.period.endDate || ""}`
       : financeTrackingScope;
-  const selectFinanceTrackingScope = (nextScope) => {
-    const nextSelection =
-      nextScope === "current"
-        ? `period:${financeCutoffHistory[0]?.period.endDate || ""}`
-        : nextScope;
-    const previousEndDate = activeFinancePeriodSelection.startsWith("period:")
-      ? activeFinancePeriodSelection.slice("period:".length)
-      : "";
-    const nextEndDate = nextSelection.startsWith("period:")
-      ? nextSelection.slice("period:".length)
-      : "";
-    setCutoffDirection(
-      previousEndDate && nextEndDate
-        ? nextEndDate < previousEndDate
-          ? 1
-          : nextEndDate > previousEndDate
-            ? -1
-            : 0
-        : 0,
-    );
+  const selectFinanceTrackingScope = (nextScope) =>
     setFinanceTrackingScope(nextScope);
-  };
   const animatedPercentage = useAnimatedNumber(percentage);
+  const remainingPercentage = netPay > 0 ? (remaining / netPay) * 100 : 0;
   const financeTabs = [
     {
       id: "incentives",
@@ -482,6 +617,44 @@ export default function FinancialDashboard({
     if (payslipFilterMode === "month") setPayslipMonth(monthValue);
     if (payslipFilterMode === "year") setPayslipYear(monthValue.slice(0, 4));
   }, [monthValue, payslipFilterMode]);
+
+  useEffect(() => {
+    if (!isCutoffDirectoryOpen) return undefined;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setIsCutoffDirectoryOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusableElements =
+        cutoffDirectoryDialogRef.current?.querySelectorAll(
+          'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+      if (!focusableElements?.length) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    cutoffDirectorySearchRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+      cutoffDirectoryTriggerRef.current?.focus();
+    };
+  }, [isCutoffDirectoryOpen]);
 
   const validExpenses = useMemo(
     () => expenses.filter((expense) => getExpenseDate(expense)),
@@ -804,6 +977,240 @@ export default function FinancialDashboard({
       }),
     [financeCutoffHistory, validExpenses],
   );
+  const currentCutoffCard = useMemo(
+    () =>
+      cutoffHistoryCards.find((card) => card.isCurrent) ??
+      cutoffHistoryCards[0],
+    [cutoffHistoryCards],
+  );
+  const previousCutoffCards = useMemo(
+    () =>
+      currentCutoffCard
+        ? cutoffHistoryCards.filter(
+            (card) => card.period.endDate < currentCutoffCard.period.endDate,
+          )
+        : [],
+    [currentCutoffCard, cutoffHistoryCards],
+  );
+  const selectedPreviousCutoffIndex = previousCutoffCards.findIndex(
+    (card) => card.isSelected,
+  );
+  const visibleCutoffHistoryCards = useMemo(
+    () =>
+      selectedPreviousCutoffIndex >= 0
+        ? [
+            ...(currentCutoffCard ? [currentCutoffCard] : []),
+            ...previousCutoffCards.slice(
+              selectedPreviousCutoffIndex,
+              selectedPreviousCutoffIndex + 3,
+            ),
+          ]
+        : [
+            ...(currentCutoffCard ? [currentCutoffCard] : []),
+            ...previousCutoffCards.slice(0, 3),
+          ],
+    [currentCutoffCard, previousCutoffCards, selectedPreviousCutoffIndex],
+  );
+  const cutoffDirectoryCards = useMemo(
+    () => [
+      ...(currentCutoffCard ? [currentCutoffCard] : []),
+      ...previousCutoffCards,
+    ],
+    [currentCutoffCard, previousCutoffCards],
+  );
+  const cutoffDirectoryYears = useMemo(
+    () =>
+      [
+        ...new Set(
+          cutoffDirectoryCards.map((card) => card.period.endDate.slice(0, 4)),
+        ),
+      ].sort((left, right) => right.localeCompare(left)),
+    [cutoffDirectoryCards],
+  );
+  const cutoffSearchTokens = useMemo(
+    () =>
+      cutoffDirectoryQuery
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim()
+        .split(/\s+/)
+        .filter((token) => !["to", "through", "until"].includes(token)),
+    [cutoffDirectoryQuery],
+  );
+  const cutoffDirectorySearchEntries = useMemo(
+    () =>
+      cutoffDirectoryCards.map((card) => ({
+        card,
+        searchText: getCutoffSearchText(card.period),
+      })),
+    [cutoffDirectoryCards],
+  );
+  const filteredCutoffDirectoryCards = useMemo(
+    () =>
+      cutoffDirectorySearchEntries
+        .filter(({ card, searchText }) => {
+          const matchesYear =
+            cutoffDirectoryYear === "all" ||
+            card.period.endDate.startsWith(cutoffDirectoryYear);
+          if (!matchesYear) return false;
+          return cutoffSearchTokens.every((token) =>
+            searchText.includes(token),
+          );
+        })
+        .map(({ card }) => card),
+    [cutoffDirectorySearchEntries, cutoffDirectoryYear, cutoffSearchTokens],
+  );
+  const cutoffDirectoryPageCount = Math.ceil(
+    filteredCutoffDirectoryCards.length / CUTOFF_DIRECTORY_PAGE_SIZE,
+  );
+  const visibleCutoffDirectoryPage = Math.min(
+    cutoffDirectoryPage,
+    Math.max(cutoffDirectoryPageCount, 1),
+  );
+  const visibleCutoffDirectoryCards = filteredCutoffDirectoryCards.slice(
+    (visibleCutoffDirectoryPage - 1) * CUTOFF_DIRECTORY_PAGE_SIZE,
+    visibleCutoffDirectoryPage * CUTOFF_DIRECTORY_PAGE_SIZE,
+  );
+  const cutoffDirectoryPaginationItems = getCutoffPaginationItems(
+    visibleCutoffDirectoryPage,
+    cutoffDirectoryPageCount,
+  );
+  const cutoffDirectoryRangeStart =
+    filteredCutoffDirectoryCards.length > 0
+      ? (visibleCutoffDirectoryPage - 1) * CUTOFF_DIRECTORY_PAGE_SIZE + 1
+      : 0;
+  const cutoffDirectoryRangeEnd = Math.min(
+    visibleCutoffDirectoryPage * CUTOFF_DIRECTORY_PAGE_SIZE,
+    filteredCutoffDirectoryCards.length,
+  );
+  const openCutoffDirectory = () => {
+    setCutoffDirectoryQuery("");
+    setCutoffDirectoryYear("all");
+    setCutoffDirectoryPage(1);
+    setIsCutoffDirectoryOpen(true);
+  };
+  const renderCutoffHistoryCard = (card) => {
+    const budgetAvailable = card.pendingCount === 0 && card.netPay > 0;
+    const budgetStatus =
+      card.pendingCount > 0 ? "Payroll pending" : "Budget unavailable";
+
+    return (
+      <button
+        type="button"
+        onClick={() =>
+          selectFinanceTrackingScope(`period:${card.period.endDate}`)
+        }
+        aria-pressed={card.isSelected}
+        key={card.period.startDate}
+        className={`cutoff-card w-full rounded-xl border px-3 py-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 ${
+          card.isSelected
+            ? "is-selected border-emerald-400 bg-emerald-50/40"
+            : "border-slate-200 bg-slate-50/40"
+        }`}
+      >
+        <div className="flex items-center justify-between gap-2 text-[10px]">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <span className="font-semibold text-slate-700">
+              {card.isCurrent ? "Current: " : ""}
+              {formatCutoffHistoryPeriod(card.period)}
+            </span>
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
+              {getCutoffHistoryYearLabel(card.period)}
+            </span>
+          </div>
+          <span className="shrink-0 text-slate-400">
+            {budgetAvailable
+              ? `${Math.round(card.percentage)}% used`
+              : budgetStatus}
+          </span>
+        </div>
+        <p className="mt-1 text-sm font-extrabold tabular-nums text-slate-900">
+          <AnimatedCurrency value={card.spent} formatCurrency={formatCurrency} />
+        </p>
+        <p className="mt-0.5 text-[9px] text-slate-500">
+          {budgetAvailable ? (
+            <>
+              Left:{" "}
+              <AnimatedCurrency
+                value={card.remaining}
+                formatCurrency={formatCurrency}
+              />
+            </>
+          ) : (
+            budgetStatus
+          )}
+        </p>
+      </button>
+    );
+  };
+  const renderCutoffDirectoryCard = (card) => {
+    const budgetAvailable = card.pendingCount === 0 && card.netPay > 0;
+    const budgetStatus =
+      card.pendingCount > 0 ? "Payroll pending" : "Budget unavailable";
+    const spentBadgeClass =
+      card.percentage >= 95
+        ? "bg-rose-50 text-rose-600"
+        : "bg-slate-100 text-slate-600";
+
+    return (
+      <button
+        key={card.period.startDate}
+        type="button"
+        aria-pressed={card.isSelected}
+        onClick={() => {
+          selectFinanceTrackingScope(`period:${card.period.endDate}`);
+          setIsCutoffDirectoryOpen(false);
+        }}
+        className={`cutoff-card w-full rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 ${
+          card.isSelected ? "is-selected" : ""
+        }`}
+      >
+        <div className="flex min-h-9 items-start justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+            <span className="font-bold text-slate-800">
+              {card.isCurrent ? "Current: " : ""}
+              {formatCutoffHistoryPeriod(card.period)}
+            </span>
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
+              {getCutoffHistoryYearLabel(card.period)}
+            </span>
+          </div>
+          <span
+            className={`shrink-0 rounded-md px-2 py-1 text-[9px] font-bold ${
+              budgetAvailable
+                ? spentBadgeClass
+                : "bg-slate-50 text-slate-400"
+            }`}
+          >
+            {budgetAvailable
+              ? `${Math.round(card.percentage)}% spent`
+              : budgetStatus}
+          </span>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
+          <strong className="text-sm font-extrabold tabular-nums text-slate-900">
+            <AnimatedCurrency
+              value={card.spent}
+              formatCurrency={formatCurrency}
+            />
+          </strong>
+          <span className="text-[10px] text-slate-500">
+            {budgetAvailable ? (
+              <>
+                Left:{" "}
+                <AnimatedCurrency
+                  value={card.remaining}
+                  formatCurrency={formatCurrency}
+                />
+              </>
+            ) : (
+              budgetStatus
+            )}
+          </span>
+        </div>
+      </button>
+    );
+  };
   const filteredPayslips = historicalPayslips
     .filter((snapshot) => {
       const endDate = snapshot.period.endDate;
@@ -1175,15 +1582,6 @@ export default function FinancialDashboard({
                       <h3 className="text-[11px] font-bold text-slate-800">
                         Budget utilization &amp; category share
                       </h3>
-                      <span
-                        key={activeFinancePeriodSelection}
-                        className="budget-period-date-slide text-[10px] text-slate-400"
-                        style={{
-                          "--period-slide-offset": `${cutoffDirection * 10}px`,
-                        }}
-                      >
-                        ({financePeriodLabel})
-                      </span>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       {!privateFinancialDataHidden && (
@@ -1197,8 +1595,8 @@ export default function FinancialDashboard({
                         >
                           <History size={12} aria-hidden="true" />
                           {isCutoffHistoryVisible
-                            ? "Hide Cutoff History"
-                            : "Show Cutoff History"}
+                            ? "Hide Spending History"
+                            : "Show Spending History"}
                         </button>
                       )}
                       <span
@@ -1210,17 +1608,7 @@ export default function FinancialDashboard({
                       >
                         {privateFinancialDataHidden
                           ? "Private"
-                          : (
-                            <>
-                              <span className="text-slate-700">
-                                <AnimatedCurrency
-                                  value={categorySpendingTotal}
-                                  formatCurrency={formatCurrency}
-                                />
-                              </span>
-                              <span>{`${animatedPercentage.toFixed(1)}% spent`}</span>
-                            </>
-                          )}
+                          : `${animatedPercentage.toFixed(1)}%`}
                       </span>
                     </div>
                   </div>
@@ -1287,14 +1675,38 @@ export default function FinancialDashboard({
                         </span>
                       )}
                     </div>
-                    <span className="shrink-0 text-[9px] text-slate-400">
-                      Cap:{" "}
-                      <strong className="font-medium text-slate-500">
-                        {privateFinancialDataHidden
-                          ? "Private"
-                          : <AnimatedCurrency value={netPay} formatCurrency={formatCurrency} />}
-                      </strong>
-                    </span>
+                    {(privateFinancialDataHidden || categorySpendingTotal > 0) && (
+                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-4 gap-y-1">
+                        {[
+                          {
+                            label: "Cap",
+                            value: netPay,
+                            percentage: netPay > 0 ? 100 : 0,
+                          },
+                          {
+                            label: "Spent",
+                            value: categorySpendingTotal,
+                            percentage: animatedPercentage,
+                          },
+                          {
+                            label: "Left",
+                            value: remaining,
+                            percentage: remainingPercentage,
+                            valueColor:
+                              remaining < 0 ? "text-rose-600" : "text-slate-800",
+                          },
+                        ].map((metric, index) => (
+                          <AnimatedBudgetMetric
+                            key={metric.label}
+                            metric={metric}
+                            index={index}
+                            activeSelection={activeFinancePeriodSelection}
+                            formatCurrency={formatCurrency}
+                            privateDataHidden={privateFinancialDataHidden}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {!privateFinancialDataHidden && (
                     <div
@@ -1305,63 +1717,21 @@ export default function FinancialDashboard({
                       }`}
                     >
                       <div className="accordion-inner">
+                        {cutoffDirectoryCards.length > 0 && (
+                          <div className="mb-2 flex justify-end">
+                            <button
+                              ref={cutoffDirectoryTriggerRef}
+                              type="button"
+                              onClick={openCutoffDirectory}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-[10px] font-semibold text-teal-700 transition hover:border-teal-300 hover:bg-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
+                            >
+                              <Archive size={13} aria-hidden="true" />
+                              Search &amp; Browse
+                            </button>
+                          </div>
+                        )}
                         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                          {cutoffHistoryCards.map((card) => {
-                            const budgetAvailable =
-                              card.pendingCount === 0 && card.netPay > 0;
-                            const budgetStatus =
-                              card.pendingCount > 0
-                                ? "Payroll pending"
-                                : "Budget unavailable";
-                            return (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  selectFinanceTrackingScope(
-                                    `period:${card.period.endDate}`,
-                                  )
-                                }
-                                aria-pressed={card.isSelected}
-                                key={card.period.startDate}
-                                className={`cutoff-card w-full rounded-xl border px-3 py-2.5 text-left focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${
-                                  card.isSelected
-                                    ? "is-selected border-emerald-400 bg-emerald-50/40"
-                                    : "border-slate-200 bg-slate-50/40"
-                                }`}
-                              >
-                                <div className="flex items-center justify-between gap-2 text-[10px]">
-                                  <span className="font-semibold text-slate-700">
-                                    {card.isCurrent ? "Current: " : ""}
-                                    {formatCutoffHistoryPeriod(card.period)}
-                                  </span>
-                                  <span className="shrink-0 text-slate-400">
-                                    {budgetAvailable
-                                      ? `${Math.round(card.percentage)}% used`
-                                      : budgetStatus}
-                                  </span>
-                                </div>
-                                <p className="mt-1 text-sm font-extrabold tabular-nums text-slate-900">
-                                  <AnimatedCurrency
-                                    value={card.spent}
-                                    formatCurrency={formatCurrency}
-                                  />
-                                </p>
-                                <p className="mt-0.5 text-[9px] text-slate-500">
-                                  {budgetAvailable
-                                    ? (
-                                      <>
-                                        Left:{" "}
-                                        <AnimatedCurrency
-                                          value={card.remaining}
-                                          formatCurrency={formatCurrency}
-                                        />
-                                      </>
-                                    )
-                                    : budgetStatus}
-                                </p>
-                              </button>
-                            );
-                          })}
+                          {visibleCutoffHistoryCards.map(renderCutoffHistoryCard)}
                         </div>
                       </div>
                     </div>
@@ -2052,6 +2422,201 @@ export default function FinancialDashboard({
           </div>
         )}
       </div>
+      {isCutoffDirectoryOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-sm sm:p-5"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                setIsCutoffDirectoryOpen(false);
+              }
+            }}
+          >
+          <section
+            ref={cutoffDirectoryDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cutoffDirectoryTitle"
+            aria-describedby="cutoffDirectoryDescription"
+            tabIndex={-1}
+            className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          >
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3.5 sm:px-6">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-teal-100 bg-teal-50 text-teal-700">
+                  <Archive size={16} aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <h2
+                    id="cutoffDirectoryTitle"
+                    className="truncate text-sm font-bold text-slate-800"
+                  >
+                    {`Archived Cutoff Directory (${cutoffDirectoryCards.length} ${
+                      cutoffDirectoryCards.length === 1 ? "Record" : "Records"
+                    })`}
+                  </h2>
+                  <p
+                    id="cutoffDirectoryDescription"
+                    className="mt-0.5 text-[10px] text-slate-500"
+                  >
+                    {cutoffDirectoryCards.length > 0
+                      ? `Search and jump to a semi-monthly cutoff dating back to ${
+                          cutoffDirectoryCards[
+                            cutoffDirectoryCards.length - 1
+                          ].period.startDate.slice(0, 4)
+                        }.`
+                      : "Search and jump to a historical semi-monthly cutoff."}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCutoffDirectoryOpen(false)}
+                aria-label="Close cutoff directory"
+                className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </header>
+
+            <div className="flex shrink-0 flex-col gap-2 border-b border-slate-200 bg-slate-50/70 px-4 py-3 sm:px-6 md:flex-row">
+              <label className="relative min-w-0 flex-1">
+                <Search
+                  size={14}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <input
+                  ref={cutoffDirectorySearchRef}
+                  type="search"
+                  value={cutoffDirectoryQuery}
+                  onChange={(event) => {
+                    setCutoffDirectoryQuery(event.target.value);
+                    setCutoffDirectoryPage(1);
+                  }}
+                  aria-label="Search cutoffs by date or month"
+                  placeholder="Search cutoff by date or month (e.g., Nov, Oct 26, 2026-11-10)…"
+                  className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/15"
+                />
+              </label>
+              <div
+                className="flex max-w-full shrink-0 items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1"
+                role="group"
+                aria-label="Filter cutoffs by year"
+              >
+                {["all", ...cutoffDirectoryYears].map((year) => {
+                  const isSelected = cutoffDirectoryYear === year;
+                  return (
+                    <button
+                      key={year}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => {
+                        setCutoffDirectoryYear(year);
+                        setCutoffDirectoryPage(1);
+                      }}
+                      className={`shrink-0 rounded-lg px-3 py-1.5 text-[10px] font-semibold transition ${
+                        isSelected
+                          ? "bg-teal-50 text-teal-700 ring-1 ring-teal-200"
+                          : "text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {year === "all" ? "All" : year}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+              {visibleCutoffDirectoryCards.length > 0 ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {visibleCutoffDirectoryCards.map(renderCutoffDirectoryCard)}
+                </div>
+              ) : (
+                <div className="flex min-h-48 flex-col items-center justify-center text-center">
+                  <Search
+                    size={20}
+                    aria-hidden="true"
+                    className="text-slate-300"
+                  />
+                  <p className="mt-2 text-xs font-semibold text-slate-700">
+                    No cutoffs match your search.
+                  </p>
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    Try another date, month, or year.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 text-[10px] text-slate-500 sm:px-6">
+              <span>
+                {`Showing ${cutoffDirectoryRangeStart}–${cutoffDirectoryRangeEnd} of ${filteredCutoffDirectoryCards.length} cutoffs`}
+              </span>
+              <nav
+                aria-label="Cutoff directory pagination"
+                className="flex items-center gap-1"
+              >
+                <button
+                  type="button"
+                  disabled={visibleCutoffDirectoryPage <= 1}
+                  onClick={() =>
+                    setCutoffDirectoryPage(visibleCutoffDirectoryPage - 1)
+                  }
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ChevronLeft size={12} aria-hidden="true" />
+                  Previous
+                </button>
+                {cutoffDirectoryPaginationItems.map((item) =>
+                  typeof item === "number" ? (
+                    <button
+                      key={item}
+                      type="button"
+                      aria-label={`Go to page ${item}`}
+                      aria-current={
+                        item === visibleCutoffDirectoryPage ? "page" : undefined
+                      }
+                      onClick={() => setCutoffDirectoryPage(item)}
+                      className={`size-8 rounded-lg border text-[10px] font-semibold transition ${
+                        item === visibleCutoffDirectoryPage
+                          ? "border-teal-200 bg-teal-50 text-teal-700"
+                          : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-white"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ) : (
+                    <span
+                      key={item}
+                      aria-hidden="true"
+                      className="px-1 text-slate-400"
+                    >
+                      …
+                    </span>
+                  ),
+                )}
+                <button
+                  type="button"
+                  disabled={
+                    cutoffDirectoryPageCount === 0 ||
+                    visibleCutoffDirectoryPage >= cutoffDirectoryPageCount
+                  }
+                  onClick={() =>
+                    setCutoffDirectoryPage(visibleCutoffDirectoryPage + 1)
+                  }
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Next
+                  <ChevronRight size={12} aria-hidden="true" />
+                </button>
+              </nav>
+            </footer>
+          </section>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

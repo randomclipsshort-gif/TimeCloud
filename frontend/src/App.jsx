@@ -2068,7 +2068,7 @@ export default function App() {
   const financeCutoffHistory = [
     ...financePayrollHistory.slice(0, 1),
     ...(financeNextPeriodData ? [financeNextPeriodData] : []),
-    ...financePayrollHistory.slice(1, 4),
+    ...financePayrollHistory.slice(1),
   ].map((item) => ({
     ...item,
     isSelected: financePeriodSelection === `period:${item.period.endDate}`,
