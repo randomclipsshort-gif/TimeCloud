@@ -68,6 +68,92 @@ function formatRate(total, units) {
   return units > 0 ? total / units : 0;
 }
 
+function dateKeyFromOrdinal(ordinal) {
+  const date = new Date(ordinal * DAY_MILLISECONDS);
+  return `${String(date.getUTCFullYear()).padStart(4, "0")}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function getDailyWage(settingsVersion) {
+  const rate = Number(settingsVersion?.settings?.dailyWage);
+  return Number.isFinite(rate) && rate > 0 ? rate : null;
+}
+
+function getBasicPayRateTiers(history, startOrdinal, endOrdinal) {
+  if (!Array.isArray(history)) return [];
+
+  const versionsByDate = new Map();
+  for (const version of history) {
+    if (
+      parseDateKey(version?.effectiveDate) !== null &&
+      version.settings &&
+      typeof version.settings === "object" &&
+      !Array.isArray(version.settings)
+    ) {
+      versionsByDate.set(version.effectiveDate, version);
+    }
+  }
+  const versions = [...versionsByDate.values()].sort((left, right) =>
+    left.effectiveDate.localeCompare(right.effectiveDate),
+  );
+  if (versions.length === 0) return [];
+
+  let activeIndex = 0;
+  for (let index = 0; index < versions.length; index += 1) {
+    if (parseDateKey(versions[index].effectiveDate) > startOrdinal) break;
+    activeIndex = index;
+  }
+
+  const tiers = [];
+  let activeRate = getDailyWage(versions[activeIndex]);
+  let tierStart = startOrdinal;
+  for (const version of versions.slice(activeIndex + 1)) {
+    const effectiveOrdinal = parseDateKey(version.effectiveDate);
+    if (effectiveOrdinal > endOrdinal) break;
+    const nextRate = getDailyWage(version);
+    if (nextRate === activeRate) continue;
+
+    if (activeRate !== null && effectiveOrdinal > tierStart) {
+      tiers.push({
+        startDate: dateKeyFromOrdinal(tierStart),
+        endDate: dateKeyFromOrdinal(effectiveOrdinal - 1),
+        effectiveDate: dateKeyFromOrdinal(tierStart),
+        rate: activeRate,
+        units: 0,
+        total: 0,
+      });
+    }
+    tierStart = effectiveOrdinal;
+    activeRate = nextRate;
+  }
+
+  if (activeRate !== null && tierStart <= endOrdinal) {
+    tiers.push({
+      startDate: dateKeyFromOrdinal(tierStart),
+      endDate: dateKeyFromOrdinal(endOrdinal),
+      effectiveDate: dateKeyFromOrdinal(tierStart),
+      rate: activeRate,
+      units: 0,
+      total: 0,
+    });
+  }
+
+  return tiers;
+}
+
+function isHalfDay(record) {
+  return record?.isHalfDay === true || record?.shift === "Half-day";
+}
+
+function addBasicPayToRateTier(tiers, date, record, amount) {
+  const tier = tiers.find(
+    (candidate) =>
+      date >= candidate.startDate && date <= candidate.endDate,
+  );
+  if (!tier) return;
+  tier.total += amount;
+  tier.units += isHalfDay(record) ? 0.5 : 1;
+}
+
 export function groupIncentiveEarningsItems(items) {
   const groups = new Map();
   for (const item of items) {
@@ -95,6 +181,7 @@ export function summarizePayrollEarningsBreakdown(
   period,
   getRecordBreakdown,
   incentives = [],
+  payrollSettingsHistory = [],
 ) {
   const startOrdinal = period && parseDateKey(period.startDate);
   const endOrdinal = period && parseDateKey(period.endDate);
@@ -110,6 +197,11 @@ export function summarizePayrollEarningsBreakdown(
     total: 0,
     units: 0,
   }]));
+  const basicPayRateTiers = getBasicPayRateTiers(
+    payrollSettingsHistory,
+    startOrdinal,
+    endOrdinal,
+  );
   let lateMinutes = 0;
   let undertimeMinutes = 0;
 
@@ -140,6 +232,11 @@ export function summarizePayrollEarningsBreakdown(
         if (!Number.isFinite(amount) || amount <= 0) continue;
         const aggregate = categories.get(id);
         aggregate.total += amount;
+        if (id === "basicPay") {
+          aggregate.units += isHalfDay(record) ? 0.5 : 1;
+          addBasicPayToRateTier(basicPayRateTiers, dateKey, record, amount);
+          continue;
+        }
         if (unit === "hours") {
           const minutes = Number(values.overtimeMinutes);
           const hours = Number.isFinite(minutes) && minutes > 0
@@ -160,6 +257,11 @@ export function summarizePayrollEarningsBreakdown(
         if (!Number.isFinite(amount) || amount <= 0) continue;
         const aggregate = categories.get(id);
         aggregate.total += amount;
+        if (id === "basicPay") {
+          aggregate.units += isHalfDay(record) ? 0.5 : 1;
+          addBasicPayToRateTier(basicPayRateTiers, dateKey, record, amount);
+          continue;
+        }
         aggregate.units += unit === "hours"
           ? Number(values.overtimeHours) || 0
           : 1;
@@ -184,6 +286,11 @@ export function summarizePayrollEarningsBreakdown(
       if (!Number.isFinite(amount) || amount <= 0) continue;
       const aggregate = categories.get(id);
       aggregate.total += amount;
+      if (id === "basicPay") {
+        aggregate.units += isHalfDay(record) ? 0.5 : 1;
+        addBasicPayToRateTier(basicPayRateTiers, dateKey, record, amount);
+        continue;
+      }
       if (unit === "hours") {
         const minutes = Number(values.overtimeMinutes);
         const hours = Number.isFinite(minutes) && minutes > 0
@@ -207,6 +314,17 @@ export function summarizePayrollEarningsBreakdown(
         units,
         rate: formatRate(roundedTotal, units),
         total: roundedTotal,
+        ...(id === "basicPay" && basicPayRateTiers.length > 0
+          ? {
+              rateTiers: basicPayRateTiers
+                .filter((tier) => tier.units > 0)
+                .map((tier) => ({
+                  ...tier,
+                  rate: Math.round((tier.rate + Number.EPSILON) * 100) / 100,
+                  total: Math.round((tier.total + Number.EPSILON) * 100) / 100,
+                })),
+            }
+          : {}),
       };
     })
     .filter((item) => item.total > 0);

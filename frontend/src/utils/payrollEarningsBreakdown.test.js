@@ -107,6 +107,62 @@ test("separates regular and non-special holiday pay", () => {
   assert.equal(items.specialHoliday.total, 780);
 });
 
+test("splits basic pay by effective daily-wage periods", () => {
+  const attendance = {};
+  const period = { startDate: "2026-11-11", endDate: "2026-11-25" };
+  for (let day = 11; day <= 25; day += 1) {
+    const date = `2026-11-${String(day).padStart(2, "0")}`;
+    attendance[date] = {
+      type: "Regular",
+      workStartTime: "08:00",
+      workEndTime: "16:00",
+    };
+  }
+
+  const breakdown = summarizePayrollEarningsBreakdown(
+    attendance,
+    period,
+    (_record, date) => ({
+      basicPay: date < "2026-11-13" ? 645 : 700,
+    }),
+    [],
+    [
+      { effectiveDate: "2026-11-01", settings: { dailyWage: "645" } },
+      { effectiveDate: "2026-11-13", settings: { dailyWage: "700" } },
+    ],
+  );
+  const basicPay = breakdown.items.find((item) => item.id === "basicPay");
+
+  assert.equal(basicPay.total, 10390);
+  assert.deepEqual(
+    basicPay.rateTiers.map(
+      ({ startDate, endDate, rate, units, total }) => ({
+        startDate,
+        endDate,
+        rate,
+        units,
+        total,
+      }),
+    ),
+    [
+      {
+        startDate: "2026-11-11",
+        endDate: "2026-11-12",
+        rate: 645,
+        units: 2,
+        total: 1290,
+      },
+      {
+        startDate: "2026-11-13",
+        endDate: "2026-11-25",
+        rate: 700,
+        units: 13,
+        total: 9100,
+      },
+    ],
+  );
+});
+
 test("assigns overnight earnings to the cutoff containing the shift start date", () => {
   const attendance = {
     "2026-10-10": {

@@ -12,6 +12,14 @@ function formatPayslipPeriodOption(period) {
   return `${formatDate(period.startDate)} - ${formatDate(period.endDate)}`;
 }
 
+function formatRateTierDate(dateKey) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${dateKey}T00:00:00Z`));
+}
+
 export default function PayslipModal({
   open,
   userName,
@@ -52,6 +60,18 @@ export default function PayslipModal({
   const groupedBreakdownItems = activeBreakdown.items.filter(
     (item) => !item.id.startsWith("incentive-"),
   );
+  const basicPayRateTiers =
+    groupedBreakdownItems.find((item) => item.id === "basicPay")?.rateTiers || [];
+  const basicPayRateTierCount = basicPayRateTiers.length;
+  const rateRevisionLabel =
+    basicPayRateTierCount > 2
+      ? `Rates revised ${basicPayRateTiers
+          .slice(1)
+          .map((tier) => formatRateTierDate(tier.effectiveDate))
+          .join(", ")}`
+      : basicPayRateTierCount > 1
+        ? `Rate revised ${formatRateTierDate(basicPayRateTiers[1].effectiveDate)}`
+        : "";
   if (incentiveItems.length > 0) {
     const incentiveGroup = {
       id: "incentives",
@@ -270,12 +290,34 @@ export default function PayslipModal({
                   ></i>
                   {label}
                 </span>
-                <span
-                  className={`mt-1.5 block truncate text-xs font-semibold text-slate-800 ${label === "Employee" ? "uppercase" : ""}`}
-                  title={value}
-                >
-                  {value}
-                </span>
+                {label === "Daily wage" && basicPayRateTierCount > 1 ? (
+                  <div className="mt-1.5 min-w-0">
+                    <span
+                      className="block truncate text-xs font-bold text-slate-800"
+                      title={
+                        earningsAvailable
+                          ? `${formatCurrency(basicPayRateTiers[0].rate)} → ${formatCurrency(basicPayRateTiers[basicPayRateTierCount - 1].rate)}`
+                          : value
+                      }
+                    >
+                      {earningsAvailable
+                        ? `${formatCurrency(basicPayRateTiers[0].rate)} → ${formatCurrency(basicPayRateTiers[basicPayRateTierCount - 1].rate)}`
+                        : value}
+                    </span>
+                    {earningsAvailable && (
+                      <span className="mt-1 inline-flex max-w-full rounded-md border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[9px] font-semibold text-teal-700">
+                        {rateRevisionLabel}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span
+                    className={`mt-1.5 block truncate text-xs font-semibold text-slate-800 ${label === "Employee" ? "uppercase" : ""}`}
+                    title={value}
+                  >
+                    {value}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -327,7 +369,7 @@ export default function PayslipModal({
           <div className="mb-6 flex flex-col gap-6">
             {/* Gross Earnings Breakdown */}
             <section className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
-              <div className="flex items-center gap-3 border-b border-teal-100 bg-teal-50/70 px-4 py-3">
+              <div className="flex items-center justify-between gap-3 border-b border-teal-100 bg-teal-50/70 px-4 py-3">
                 <h4 className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wider text-teal-900">
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-teal-700 shadow-2xs">
                     <i
@@ -337,56 +379,126 @@ export default function PayslipModal({
                   </span>
                   Gross Earnings Breakdown
                 </h4>
+                {basicPayRateTierCount > 1 && (
+                  <span className="shrink-0 rounded-full border border-teal-200 bg-white px-2.5 py-1 text-[9px] font-semibold text-teal-700">
+                    Split-Rate Period ({basicPayRateTierCount} Tiers)
+                  </span>
+                )}
               </div>
               <div className="divide-y divide-slate-100 px-4">
-                {groupedBreakdownItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`flex justify-between gap-4 py-3 text-xs ${
-                      item.id === "incentives" ? "items-start" : "items-center"
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <span className="block font-medium text-slate-700">
-                        {item.label}
-                      </span>
-                      {item.id === "incentives" && (
-                        <div className="mt-0.5 space-y-0.5 pl-3 text-[10px] text-slate-400">
-                          {item.incentiveItems.map((incentive) => (
-                            <div key={incentive.id}>
-                              {`${incentive.label} — ${incentive.count} @ ${formatCurrency(incentive.total / incentive.count)} ea (${formatCurrency(incentive.total)})`}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {earningsAvailable &&
-                        item.id !== "incentives" &&
-                        formatEarningsItemCalculation(item) && (
-                          <span className="mt-0.5 block text-[10px] text-slate-400">
-                            {formatEarningsItemCalculation(item)}
+                {groupedBreakdownItems.map((item) => {
+                  const rateTiers = item.rateTiers || [];
+                  if (item.id === "basicPay" && rateTiers.length > 1) {
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-start justify-between gap-4 py-3 text-xs"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <span className="block font-medium text-slate-700">
+                            Basic Pay{" "}
+                            <span className="text-[10px] font-normal text-slate-500">
+                              ({formatUnits(item.units)} days total)
+                            </span>
                           </span>
-                        )}
-                      {item.id === "lateUndertime" && (
-                        <span className="text-[10px] text-slate-400">
-                          (no deduction configured)
+                          <div className="mt-3 space-y-2 border-l-2 border-teal-200 pl-3">
+                            {rateTiers.map((tier, index) => {
+                              const dayLabel = tier.units === 1 ? "day" : "days";
+                              const tierRange =
+                                tier.startDate === tier.endDate
+                                  ? formatRateTierDate(tier.startDate)
+                                  : `${formatRateTierDate(tier.startDate)} – ${formatRateTierDate(tier.endDate)}`;
+                              return (
+                                <div
+                                  key={`${tier.effectiveDate}:${tier.rate}`}
+                                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"
+                                >
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2 font-semibold text-slate-800">
+                                      <span>
+                                        {tierRange} ·{" "}
+                                        {index === 0 ? "Previous Rate" : "Revised Rate"}
+                                      </span>
+                                      {index > 0 && (
+                                        <span className="rounded-md border border-teal-200 bg-white px-2 py-0.5 text-[9px] font-semibold text-teal-700">
+                                          Effective {formatRateTierDate(tier.effectiveDate)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="mt-0.5 block text-[10px] text-slate-500">
+                                      {earningsAvailable
+                                        ? `${formatUnits(tier.units)} ${dayLabel} × ${formatCurrency(tier.rate)}/day`
+                                        : "Private"}
+                                    </span>
+                                  </div>
+                                  <span className="shrink-0 font-semibold tabular-nums text-slate-900">
+                                    {earningsAvailable
+                                      ? formatCurrency(tier.total)
+                                      : "Private"}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <span className="shrink-0 font-semibold tabular-nums text-slate-900">
+                          {earningsAvailable
+                            ? formatCurrency(item.total)
+                            : "Private"}
                         </span>
-                      )}
-                    </div>
-                    <span
-                      className={`shrink-0 font-semibold tabular-nums ${
-                        item.informational
-                          ? "text-slate-400"
-                          : "text-slate-900"
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex justify-between gap-4 py-3 text-xs ${
+                        item.id === "incentives" ? "items-start" : "items-center"
                       }`}
                     >
-                      {item.informational
-                        ? "Not deducted"
-                        : earningsAvailable
-                          ? formatCurrency(item.total)
-                          : "Private"}
-                    </span>
-                  </div>
-                ))}
+                      <div className="min-w-0 flex-1">
+                        <span className="block font-medium text-slate-700">
+                          {item.label}
+                        </span>
+                        {item.id === "incentives" && (
+                          <div className="mt-0.5 space-y-0.5 pl-3 text-[10px] text-slate-400">
+                            {item.incentiveItems.map((incentive) => (
+                              <div key={incentive.id}>
+                                {`${incentive.label} — ${incentive.count} @ ${formatCurrency(incentive.total / incentive.count)} ea (${formatCurrency(incentive.total)})`}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {earningsAvailable &&
+                          item.id !== "incentives" &&
+                          formatEarningsItemCalculation(item) && (
+                            <span className="mt-0.5 block text-[10px] text-slate-400">
+                              {formatEarningsItemCalculation(item)}
+                            </span>
+                          )}
+                        {item.id === "lateUndertime" && (
+                          <span className="text-[10px] text-slate-400">
+                            (no deduction configured)
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={`shrink-0 font-semibold tabular-nums ${
+                          item.informational
+                            ? "text-slate-400"
+                            : "text-slate-900"
+                        }`}
+                      >
+                        {item.informational
+                          ? "Not deducted"
+                          : earningsAvailable
+                            ? formatCurrency(item.total)
+                            : "Private"}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </section>
 

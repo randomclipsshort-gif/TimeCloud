@@ -45,6 +45,7 @@ export default function DashboardContent(props) {
     setFinanceCustomRange,
     financePeriodLabel,
     financeCutoffHistory,
+    financeActivePeriodOptions,
     totalExpenses,
     remaining,
     percentage,
@@ -184,6 +185,7 @@ export default function DashboardContent(props) {
               setFinanceCustomRange={setFinanceCustomRange}
               financePeriodLabel={financePeriodLabel}
               financeCutoffHistory={financeCutoffHistory}
+              financeActivePeriodOptions={financeActivePeriodOptions}
               totalExpenses={totalExpenses}
               remaining={remaining}
               percentage={percentage}

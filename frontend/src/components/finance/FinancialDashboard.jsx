@@ -359,6 +359,7 @@ export default function FinancialDashboard({
   setFinanceCustomRange,
   financePeriodLabel,
   financeCutoffHistory = [],
+  financeActivePeriodOptions = [],
   totalExpenses,
   remaining,
   percentage,
@@ -504,12 +505,21 @@ export default function FinancialDashboard({
             })
           : [];
       } else if (financeTrackingScope !== "all-history") {
-        const periodExpenseIds = new Set(
-          monthExpenses.map((expense) => String(expense.id)),
-        );
-        scopedExpenses = validExpenses.filter((expense) =>
-          periodExpenseIds.has(String(expense.id)),
-        );
+        const selectedEndDate = activeFinancePeriodSelection.startsWith("period:")
+          ? activeFinancePeriodSelection.slice("period:".length)
+          : "";
+        const selectedPeriod = financeCutoffHistory.find(
+          ({ period }) => period.endDate === selectedEndDate,
+        )?.period;
+        scopedExpenses = selectedPeriod
+          ? validExpenses.filter((expense) => {
+              const date = getExpenseDate(expense);
+              return (
+                date >= selectedPeriod.startDate &&
+                date <= selectedPeriod.endDate
+              );
+            })
+          : [];
       }
 
       return scopedExpenses.sort((left, right) =>
@@ -520,8 +530,9 @@ export default function FinancialDashboard({
     },
     [
       financeCustomRange,
+      activeFinancePeriodSelection,
       financeTrackingScope,
-      monthExpenses,
+      financeCutoffHistory,
       validExpenses,
     ],
   );
@@ -889,14 +900,11 @@ export default function FinancialDashboard({
             </div>
             {activeTab === "expenses" && (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:justify-end">
-                <span className="shrink-0 text-[11px] font-medium text-slate-400">
-                  Active Period:
-                </span>
                 <div
                   className="flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1"
                   aria-label="Active finance period"
                 >
-                  {financeCutoffHistory.map((item) => {
+                  {financeActivePeriodOptions.map((item) => {
                     const value = `period:${item.period.endDate}`;
                     const isSelected = activeFinancePeriodSelection === value;
                     return (
@@ -917,7 +925,6 @@ export default function FinancialDashboard({
                     );
                   })}
                   {[
-                    { value: "all-history", label: "All History" },
                     { value: "custom-range", label: "Custom Range" },
                   ].map((option) => {
                     const isSelected =
@@ -932,12 +939,12 @@ export default function FinancialDashboard({
                             option.value === "custom-range" &&
                             !financeCustomRange.startDate &&
                             !financeCustomRange.endDate &&
-                            financeCutoffHistory[0]
+                            financeActivePeriodOptions[0]
                           ) {
                             setFinanceCustomRange({
                               startDate:
-                                financeCutoffHistory[0].period.startDate <= today
-                                  ? financeCutoffHistory[0].period.startDate
+                                financeActivePeriodOptions[0].period.startDate <= today
+                                  ? financeActivePeriodOptions[0].period.startDate
                                   : today,
                               endDate: today,
                             });

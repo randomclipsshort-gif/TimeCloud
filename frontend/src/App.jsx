@@ -93,6 +93,7 @@ import {
 import {
   getCalendarPayrollPeriod,
   formatPayrollPeriod,
+  getNextPayrollPeriod,
   getPreviousPayrollPeriod,
   getPayrollPeriodForDate,
   getPayrollPeriodForMonth,
@@ -1349,11 +1350,13 @@ export default function App() {
         payrollPeriod,
         getPayrollRecordBreakdown,
         availableEmployeeIncentives,
+        payrollSettingsHistory,
       ),
     [
       availableEmployeeIncentives,
       getPayrollRecordBreakdown,
       payrollAttendance,
+      payrollSettingsHistory,
       payrollPeriod,
     ],
   );
@@ -1523,11 +1526,13 @@ export default function App() {
         selectedPayslipPeriod,
         getPayrollRecordBreakdown,
         availableEmployeeIncentives,
+        payrollSettingsHistory,
       ),
     [
       availableEmployeeIncentives,
       getPayrollRecordBreakdown,
       payrollAttendance,
+      payrollSettingsHistory,
       selectedPayslipPeriod,
     ],
   );
@@ -1860,8 +1865,72 @@ export default function App() {
     financeTrackingScope === "current"
       ? `period:${getPayrollPeriodForDate(financeAnchorDate)?.endDate}`
       : financeTrackingScope;
+  const financeNextPeriodData = useMemo(() => {
+    const currentPeriod = getPayrollPeriodForDate(financeAnchorDate);
+    const period = getNextPayrollPeriod(currentPeriod);
+    if (!period) return null;
+
+    const summary = summarizePayrollPeriod(
+      payrollAttendance,
+      period,
+      getPayrollRecordEarnings,
+      availableEmployeeIncentives,
+      getPayrollRecordHours,
+    );
+    const payrollMonth = period.endDate.slice(0, 7);
+    const monthlyGrossPay = [10, 25].reduce((total, cutoffDay) => {
+      const monthPeriod = getPayrollPeriodForMonth(payrollMonth, cutoffDay);
+      return (
+        total +
+        summarizePayrollPeriod(
+          payrollAttendance,
+          monthPeriod,
+          getPayrollRecordEarnings,
+          availableEmployeeIncentives,
+          getPayrollRecordHours,
+        ).recordedEarnings
+      );
+    }, 0);
+    const settings = getPayrollDeductionSettingsDefaults(
+      getPayrollSettingsAtDate(period.endDate),
+    );
+    const deductions = calculateCutoffPayrollDeductions({
+      period,
+      mode: settings.payrollDeductionMode,
+      monthlyGrossPay,
+      manualPerPaycheck: {
+        sss: settings.manualSssPerPaycheck,
+        philHealth: settings.manualPhilHealthPerPaycheck,
+        pagIbig: settings.manualPagIbigPerPaycheck,
+      },
+      settings,
+    });
+
+    return {
+      period,
+      summary,
+      grossPay: summary.recordedEarnings,
+      deductions,
+      netPay: Math.max(0, summary.recordedEarnings - deductions.total),
+      pendingCount: countPendingPayrollRecords(period),
+      isCurrent: false,
+    };
+  }, [
+    availableEmployeeIncentives,
+    countPendingPayrollRecords,
+    financeAnchorDate,
+    getPayrollRecordEarnings,
+    getPayrollRecordHours,
+    getPayrollSettingsAtDate,
+    payrollAttendance,
+  ]);
   const selectedFinanceData = financePayrollHistory.find(
     (item) => financePeriodSelection === `period:${item.period.endDate}`,
+  ) || (
+    financeNextPeriodData &&
+    financePeriodSelection === `period:${financeNextPeriodData.period.endDate}`
+      ? financeNextPeriodData
+      : null
   );
   const isAllHistorySelected = financePeriodSelection === "all-history";
   const isCustomRangeSelected = financePeriodSelection === "custom-range";
@@ -1996,12 +2065,21 @@ export default function App() {
         );
   const { remaining: financeRemaining, percentage: financePercentage } =
     getBudgetUtilization(financeNetPay, financeTotalExpenses);
-  const financeCutoffHistory = financePayrollHistory
-    .slice(0, 4)
-    .map((item) => ({
-      ...item,
-      isSelected: financePeriodSelection === `period:${item.period.endDate}`,
-    }));
+  const financeCutoffHistory = [
+    ...financePayrollHistory.slice(0, 1),
+    ...(financeNextPeriodData ? [financeNextPeriodData] : []),
+    ...financePayrollHistory.slice(1, 4),
+  ].map((item) => ({
+    ...item,
+    isSelected: financePeriodSelection === `period:${item.period.endDate}`,
+  }));
+  const financeActivePeriodOptions = [
+    ...financePayrollHistory.slice(0, 1),
+    ...(financeNextPeriodData ? [financeNextPeriodData] : []),
+  ].map((item) => ({
+    ...item,
+    isSelected: financePeriodSelection === `period:${item.period.endDate}`,
+  }));
   const workspaceData = useMemo(
     () => ({
       attendance: serializeWorkspaceForCloud({ attendance }).attendance,
@@ -5371,6 +5449,7 @@ export default function App() {
               setFinanceCustomRange={setFinanceCustomRange}
               financePeriodLabel={financePeriodLabel}
               financeCutoffHistory={financeCutoffHistory}
+              financeActivePeriodOptions={financeActivePeriodOptions}
               formatCurrency={formatCurrency}
               expenseName={expenseName}
               setExpenseName={setExpenseName}
