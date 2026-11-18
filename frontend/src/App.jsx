@@ -5809,7 +5809,6 @@ export default function App() {
                 dailyAllowance={dailyAllowance}
                 overtimeMultiplier={overtimeMultiplier}
                 payrollSettings={privateFinancialSettings}
-                payrollDeductions={payrollDeductions}
                 nightDifferential={nightDifferential}
                 payrollEffectiveDate={manilaNow.date}
                 shiftTemplates={shiftTemplates}

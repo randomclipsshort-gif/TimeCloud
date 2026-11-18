@@ -15,11 +15,13 @@ import {
   X,
 } from "lucide-react";
 import {
+  calculateCutoffPayrollDeductions,
   calculateMonthlyPayrollDeductions,
   getPayrollDeductionSettingsDefaults,
   payrollContributions,
   payrollFrequencyLabels,
 } from "../../utils/payrollDeductions.js";
+import { getPayrollPeriodForMonth } from "../../utils/payrollPeriods.js";
 import { switchPayrollBasis } from "../../utils/payrollSettingsBasis.js";
 import { getExpectedPaidMinutes } from "../../utils/shiftAssignment.js";
 
@@ -85,7 +87,6 @@ export default function SettingsModal({
   dailyAllowance,
   overtimeMultiplier,
   payrollSettings,
-  payrollDeductions,
   nightDifferential,
   payrollEffectiveDate,
   onDeleteAccount,
@@ -294,6 +295,27 @@ export default function SettingsModal({
     },
     settings: settingsDraft,
   });
+  const deductionCutoffs = [10, 25].map((cutoffDay) =>
+    calculateCutoffPayrollDeductions({
+      period: getPayrollPeriodForMonth(
+        payrollEffectiveDate.slice(0, 7),
+        cutoffDay,
+      ),
+      mode: settingsDraft.payrollDeductionMode,
+      monthlyGrossPay: basisMonthlyRate,
+      manualPerPaycheck: {
+        sss: settingsDraft.manualSssPerPaycheck,
+        philHealth: settingsDraft.manualPhilHealthPerPaycheck,
+        pagIbig: settingsDraft.manualPagIbigPerPaycheck,
+      },
+      settings: settingsDraft,
+    }),
+  );
+  const getDeductionAtCutoff = (id, index) =>
+    Number(
+      deductionCutoffs[index]?.items?.find((item) => item.id === id)?.amount ||
+        0,
+    );
   const payrollHistory = Array.isArray(payrollSettings?.payrollSettingsHistory)
     ? payrollSettings.payrollSettingsHistory
     : [];
@@ -583,8 +605,7 @@ export default function SettingsModal({
   };
 
   const isCustomHoliday = (holiday) =>
-    holiday.custom === true ||
-    String(holiday.id || "").startsWith("holiday-");
+    holiday.custom === true || String(holiday.id || "").startsWith("holiday-");
 
   const deleteCustomHoliday = (holidayId) => {
     updateDraft(
@@ -602,7 +623,13 @@ export default function SettingsModal({
       aria-hidden={!open}
       style={{ display: open ? "flex" : "none" }}
     >
-      <div className="flex h-[90vh] max-h-[calc(100vh-12px)] w-full max-w-[1128px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-cardBg shadow-2xl">
+      <div
+        className="flex h-[90vh] max-h-[calc(100vh-12px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xl"
+        style={{
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        }}
+      >
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700">
@@ -753,42 +780,86 @@ export default function SettingsModal({
               </dl>
             </section>
           </aside>
-          <main className="flex min-h-0 min-w-0 flex-col">
+          <main className="flex-1 min-h-0 min-w-0 flex-col">
             {activeSettingsTab !== "shiftTemplates" && (
               <div
-                className={`shrink-0 border-b border-slate-100 px-5 pt-5 sm:px-7 ${
-                  activeSettingsTab === "earnings" ? "pb-4" : "pb-3"
-                }`}
+                className="shrink-0 pt-5"
               >
-                <div className="flex items-center justify-between gap-3">
-                  <h4
-                    className={`font-bold text-slate-900 ${
-                      activeSettingsTab === "earnings" ? "text-base" : "text-lg"
-                    }`}
-                  >
-                    {activeSettingsTab === "earnings"
-                      ? "Compensation & Overtime Multipliers"
-                      : activeDomain?.label || "Settings"}
-                  </h4>
+                <div
+                  className={
+                    activeSettingsTab === "deductions"
+                      ? "mx-5 flex flex-col justify-between gap-3 border-b border-slate-100 pb-3 sm:mx-7 sm:flex-row sm:items-center"
+                      : `mx-5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 ${
+                          activeSettingsTab === "earnings" ? "pb-4" : "pb-3"
+                        } sm:mx-7`
+                  }
+                >
+                  <div>
+                    <h4
+                      className={`font-bold text-slate-900 ${
+                        activeSettingsTab === "earnings"
+                          ? "text-base"
+                          : "text-lg"
+                      }`}
+                    >
+                      {activeSettingsTab === "earnings"
+                        ? "Compensation & Overtime Multipliers"
+                        : activeDomain?.label || "Settings"}
+                    </h4>
+                    <p
+                      className={`text-xs text-slate-500 ${
+                        activeSettingsTab === "earnings" ? "mt-0.5" : "mt-1"
+                      }`}
+                    >
+                      {activeSettingsTab === "earnings"
+                        ? "Define base salary computation and premium rates for overtime and holidays."
+                        : activeSettingsTab === "holidays"
+                          ? "Toggle, update, and add holidays used in attendance and payroll calculations."
+                          : activeSettingsTab === "deductions"
+                            ? "Configure semi-monthly deduction schedules, amounts, and leave credits."
+                            : "Manage account privacy, employee preferences, and your workspace settings."}
+                    </p>
+                  </div>
                   {activeSettingsTab === "holidays" && (
                     <span className="shrink-0 rounded-full border border-teal-100 bg-teal-50 px-3 py-1 text-[10px] font-semibold text-teal-700">
                       {`${settingsDraft.holidays.filter((holiday) => holiday.enabled).length} of ${settingsDraft.holidays.length} active`}
                     </span>
                   )}
+                  {activeSettingsTab === "deductions" && (
+                    <div
+                      role="group"
+                      aria-label="Contribution amount mode"
+                      className="inline-flex min-h-10 min-w-[15.25rem] shrink-0 justify-between rounded-xl border border-slate-200 bg-slate-100 p-1"
+                    >
+                      {[
+                        {
+                          value: "manual",
+                          label: "Configured Amounts",
+                        },
+                        { value: "automatic", label: "Auto-Estimate" },
+                      ].map((mode) => (
+                        <button
+                          key={mode.value}
+                          type="button"
+                          aria-pressed={
+                            settingsDraft.payrollDeductionMode === mode.value
+                          }
+                          disabled={privateFinancialDataStatus !== "ready"}
+                          onClick={() =>
+                            updateDraft("payrollDeductionMode", mode.value)
+                          }
+                          className={`rounded-lg px-3 py-1.5 text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                            settingsDraft.payrollDeductionMode === mode.value
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-500 hover:text-slate-800"
+                          }`}
+                        >
+                          {mode.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <p
-                  className={`text-xs text-slate-500 ${
-                    activeSettingsTab === "earnings" ? "mt-0.5" : "mt-1"
-                  }`}
-                >
-                  {activeSettingsTab === "earnings"
-                    ? "Define base salary computation and premium rates for overtime and holidays."
-                    : activeSettingsTab === "holidays"
-                      ? "Toggle, update, and add holidays used in attendance and payroll calculations."
-                      : activeSettingsTab === "deductions"
-                        ? "Configure statutory contribution schedules, allowances, and leave balances."
-                        : "Manage account privacy, employee preferences, and your workspace settings."}
-                </p>
               </div>
             )}
             <div
@@ -800,8 +871,8 @@ export default function SettingsModal({
                 id="settingsTabEarnings"
                 className={
                   activeSettingsTab === "earnings"
-                    ? "space-y-6 text-xs"
-                    : "space-y-6 text-xs hidden"
+                    ? "flex min-h-full flex-col text-xs"
+                    : "hidden"
                 }
               >
                 {activeSettingsTab === "earnings" && (
@@ -822,7 +893,7 @@ export default function SettingsModal({
                       </div>
                     )}
                     <section
-                      className="space-y-4"
+                      className="flex flex-1 flex-col gap-4"
                       aria-labelledby="earningsRatesHeading"
                     >
                       <h5
@@ -838,7 +909,7 @@ export default function SettingsModal({
                             settingsDraft.payrollBasis === "monthly"
                           }
                           disabled
-                          className="cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-medium text-slate-500 opacity-60"
+                          className="cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-medium text-slate-500 opacity-60"
                         >
                           <span className="flex items-center justify-between gap-2">
                             <span>Fixed Monthly Salary</span>
@@ -852,7 +923,7 @@ export default function SettingsModal({
                           aria-pressed={settingsDraft.payrollBasis === "daily"}
                           onClick={() => setPayrollBasis("daily")}
                           disabled={privateFinancialDataStatus !== "ready"}
-                          className={`rounded-xl border px-4 py-3 text-xs transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+                          className={`rounded-xl border px-4 py-2.5 text-xs transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                             settingsDraft.payrollBasis === "daily"
                               ? "border-emerald-400 bg-emerald-50 font-semibold text-emerald-800"
                               : "border-slate-200 bg-white font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900"
@@ -881,7 +952,7 @@ export default function SettingsModal({
                               type="number"
                               disabled
                               value={previousBasisRate ?? ""}
-                              className="settings-number-input w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-7 pr-3 text-xs font-normal text-slate-700"
+                              className="settings-number-input w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-7 pr-3 text-xs font-normal text-slate-700"
                             />
                           </div>
                         </label>
@@ -922,7 +993,7 @@ export default function SettingsModal({
                                   ? updateMonthlySalary(event.target.value)
                                   : updateDraft("dailyWage", event.target.value)
                               }
-                              className="settings-number-input w-full rounded-xl border border-emerald-400 bg-white py-3 pl-7 pr-3 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-300"
+                              className="settings-number-input w-full rounded-xl border border-emerald-400 bg-white py-2.5 pl-7 pr-3 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-300"
                             />
                           </div>
                         </label>
@@ -942,7 +1013,7 @@ export default function SettingsModal({
                                 event.target.value,
                               )
                             }
-                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-normal text-slate-800 outline-none focus:ring-2 focus:ring-teal-400"
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-normal text-slate-800 outline-none focus:ring-2 focus:ring-teal-400"
                           />
                         </label>
                       </div>
@@ -972,7 +1043,7 @@ export default function SettingsModal({
                                   event.target.value,
                                 )
                               }
-                              className="settings-number-input w-full rounded-xl border border-slate-200 bg-white py-3 pl-7 pr-3 text-xs font-normal text-slate-800 outline-none focus:ring-2 focus:ring-teal-400"
+                              className="settings-number-input w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-7 pr-3 text-xs font-normal text-slate-800 outline-none focus:ring-2 focus:ring-teal-400"
                             />
                           </div>
                         </label>
@@ -997,7 +1068,7 @@ export default function SettingsModal({
                               onChange={(event) =>
                                 updateWorkingDaysFactor(event.target.value)
                               }
-                              className="settings-number-input w-full rounded-xl border border-emerald-400 bg-white px-3 py-3 pr-12 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-300"
+                              className="settings-number-input w-full rounded-xl border border-emerald-400 bg-white px-3 py-2.5 pr-12 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-300"
                             />
                             <span
                               className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-400"
@@ -1009,7 +1080,7 @@ export default function SettingsModal({
                         </div>
                       </div>
 
-                      <div className="min-h-[78px] rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-4">
+                      <div className="min-h-[72px] rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
                         <div className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3">
                           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
                             <Calculator size={14} aria-hidden="true" />
@@ -1046,11 +1117,11 @@ export default function SettingsModal({
                         </div>
                       </div>
 
-                      <section className="space-y-4 border-t border-slate-100 pt-4">
+                      <section className="space-y-3 border-t border-slate-100 pt-3">
                         <h5 className="text-xs font-medium uppercase tracking-wide text-slate-600">
                           Overtime &amp; Holiday Multipliers
                         </h5>
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-4">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                           <label className="block min-w-0">
                             <span className="mb-2 flex h-6 items-center text-xs font-medium text-slate-700">
                               Regular Holiday Rate
@@ -1071,7 +1142,7 @@ export default function SettingsModal({
                                     event.target.value,
                                   )
                                 }
-                                className="settings-number-input w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-8 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                                className="settings-number-input w-full rounded-xl border border-slate-200 bg-white px-3 py-2 pr-8 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                               />
                               <span
                                 className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-400"
@@ -1101,7 +1172,7 @@ export default function SettingsModal({
                                     event.target.value,
                                   )
                                 }
-                                className="settings-number-input w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-8 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                                className="settings-number-input w-full rounded-xl border border-slate-200 bg-white px-3 py-2 pr-8 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                               />
                               <span
                                 className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-400"
@@ -1131,7 +1202,7 @@ export default function SettingsModal({
                                     event.target.value,
                                   )
                                 }
-                                className="settings-number-input w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-8 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                                className="settings-number-input w-full rounded-xl border border-slate-200 bg-white px-3 py-2 pr-8 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                               />
                               <span
                                 className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-400"
@@ -1161,7 +1232,7 @@ export default function SettingsModal({
                                     event.target.value,
                                   )
                                 }
-                                className="settings-number-input w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-8 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                                className="settings-number-input w-full rounded-xl border border-slate-200 bg-white px-3 py-2 pr-8 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                               />
                               <span
                                 className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-400"
@@ -1196,13 +1267,13 @@ export default function SettingsModal({
                     </p>
                   </div>
                   <div
-                    className="inline-flex self-start rounded-lg border border-slate-200 bg-slate-100 p-0.5 sm:self-center"
+                    className="inline-flex min-h-10 min-w-[15.25rem] self-start justify-between rounded-xl border border-slate-200 bg-slate-100 p-1 sm:self-center"
                     role="group"
                     aria-label="Shift time display format"
                   >
                     {[
-                      ["24h", "24-Hour (22:00)"],
-                      ["12h", "12-Hour (10:00 PM)"],
+                      ["24h", "24-Hour"],
+                      ["12h", "12-Hour"],
                     ].map(([format, label]) => (
                       <button
                         key={format}
@@ -1210,7 +1281,7 @@ export default function SettingsModal({
                         aria-pressed={settingsDraft.shiftTimeFormat === format}
                         disabled={privateFinancialDataStatus !== "ready"}
                         onClick={() => updateDraft("shiftTimeFormat", format)}
-                        className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                        className={`flex-1 rounded-lg px-3 py-1.5 text-center text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
                           settingsDraft.shiftTimeFormat === format
                             ? "bg-white text-emerald-800 shadow-sm"
                             : "text-slate-600 hover:text-slate-900"
@@ -1377,11 +1448,11 @@ export default function SettingsModal({
                 id="settingsTabDeductions"
                 className={
                   activeSettingsTab === "deductions"
-                    ? "space-y-6 text-xs"
-                    : "space-y-6 text-xs hidden"
+                    ? "space-y-4 text-xs"
+                    : "space-y-4 text-xs hidden"
                 }
               >
-                <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="space-y-3">
                   {privateFinancialDataStatus !== "ready" && (
                     <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-900">
                       <i
@@ -1393,326 +1464,424 @@ export default function SettingsModal({
                         : "Private financial data is not available; retry cloud loading before editing contribution settings."}
                     </p>
                   )}
-                  <div className="grid gap-4 rounded-xl border border-slate-100 bg-slate-50/80 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(15rem,0.8fr)] sm:items-center">
-                    <div>
-                      <label
-                        className="block font-bold text-slate-800"
-                        htmlFor="payrollDeductionMode"
-                      >
-                        Contribution amount source
-                      </label>
-                      <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                        Choose estimates or enter amounts configured by your
-                        payroll administrator.
-                      </p>
-                    </div>
-                    <select
-                      id="payrollDeductionMode"
-                      value={settingsDraft.payrollDeductionMode}
-                      onChange={(event) =>
-                        updateDraft("payrollDeductionMode", event.target.value)
-                      }
-                      disabled={privateFinancialDataStatus !== "ready"}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <option value="automatic">
-                        Automatic planning estimates
-                      </option>
-                      <option value="manual">Enter configured amounts</option>
-                    </select>
-                  </div>
-                  <div>
-                    <div className="mb-3 flex items-center gap-2">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
-                        <i className="fa-solid fa-receipt" aria-hidden="true" />
-                      </span>
-                      <div>
-                        <h5 className="font-bold text-slate-800">
-                          Employee contributions
-                        </h5>
-                        <p className="mt-0.5 text-[10px] text-slate-500">
-                          Set a schedule and amount for each contribution.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      {payrollContributions.map(
-                        ({ id, label, manualAmountKey }) => {
-                          const frequency = settingsDraft[`${id}Frequency`];
-                          const isCustom = frequency === "custom";
-                          const usesMonthlyAmount =
-                            frequency === "monthly" ||
-                            frequency === "split_monthly";
-                          const amountLabel = usesMonthlyAmount
-                            ? "Monthly amount"
-                            : "Amount each cutoff";
-                          const monthlyAmount = payrollDeductions?.items?.find(
-                            (item) => item.id === id,
-                          )?.amount;
-                          const automaticAmountLabel =
-                            frequency === "custom"
-                              ? "Configured total across cutoffs"
-                              : "Estimated total across cutoffs";
-                          return (
-                            <div
-                              key={id}
-                              className="rounded-xl border border-slate-200 bg-white p-4 transition hover:border-teal-200 hover:shadow-sm"
-                            >
-                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                <label className="block">
-                                  <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                                    {label} schedule
-                                  </span>
-                                  <select
-                                    id={`${id}Frequency`}
-                                    value={frequency}
-                                    onChange={(event) =>
-                                      updateDraft(
-                                        `${id}Frequency`,
-                                        event.target.value,
-                                      )
-                                    }
-                                    disabled={
-                                      privateFinancialDataStatus !== "ready"
-                                    }
-                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    {Object.entries(payrollFrequencyLabels).map(
-                                      ([value, optionLabel]) => (
-                                        <option key={value} value={value}>
-                                          {optionLabel}
-                                        </option>
-                                      ),
-                                    )}
-                                  </select>
-                                </label>
-                                {settingsDraft.payrollDeductionMode ===
-                                  "manual" && !isCustom ? (
-                                  <label className="block">
-                                    <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                                      {label} {amountLabel} (₱)
-                                    </span>
-                                    <input
-                                      type="number"
-                                      id={manualAmountKey}
-                                      min="0"
-                                      step="0.01"
-                                      value={settingsDraft[manualAmountKey]}
+                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <div className="w-full">
+                      <table className="w-full table-fixed border-collapse text-left">
+                        <colgroup>
+                          <col className="w-[20%]" />
+                          <col className="w-[20%]" />
+                          <col className="w-[15%]" />
+                          <col className="w-[14%]" />
+                          <col className="w-[14%]" />
+                          <col className="w-[17%]" />
+                        </colgroup>
+                        <thead className="border-b border-slate-200 bg-slate-50">
+                          <tr className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                            <th className="break-words py-2.5 pl-4 pr-3">
+                              Deduction
+                            </th>
+                            <th className="break-words px-3 py-2.5">
+                              Cutoff Schedule
+                            </th>
+                            <th className="break-words px-3 py-2.5">
+                              Per Cutoff (₱)
+                            </th>
+                            <th className="break-words px-3 py-2.5 text-right">
+                              10th Cutoff
+                            </th>
+                            <th className="break-words px-3 py-2.5 text-right">
+                              25th Cutoff
+                            </th>
+                            <th className="whitespace-nowrap py-2.5 pl-3 pr-4 text-right">
+                              Monthly Total
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-xs">
+                          {payrollContributions.map(
+                            ({ id, label, manualAmountKey }) => {
+                              const frequency = settingsDraft[`${id}Frequency`];
+                              const isCustom = frequency === "custom";
+                              const firstCutoffAmount = getDeductionAtCutoff(
+                                id,
+                                0,
+                              );
+                              const secondCutoffAmount = getDeductionAtCutoff(
+                                id,
+                                1,
+                              );
+                              const amountItem =
+                                summaryMonthlyDeductions.items.find(
+                                  (item) => item.id === id,
+                                );
+                              const perCutoffAmount =
+                                settingsDraft.payrollDeductionMode === "manual"
+                                  ? Number(settingsDraft[manualAmountKey]) || 0
+                                  : (firstCutoffAmount + secondCutoffAmount) /
+                                    2;
+                              const contributionDetails = {
+                                sss: {
+                                  name: "SSS Contribution",
+                                  description: "Social Security System",
+                                },
+                                philHealth: {
+                                  name: "PhilHealth",
+                                  description: "National Health Insurance",
+                                },
+                                pagIbig: {
+                                  name: "Pag-IBIG",
+                                  description: "Home Development Mutual Fund",
+                                },
+                              }[id];
+                              return (
+                                <tr
+                                  key={id}
+                                  className="transition-colors hover:bg-slate-50/70"
+                                >
+                                  <td className="break-words py-2.5 pl-4 pr-3">
+                                    <div className="flex items-center">
+                                      <div>
+                                        <span className="block whitespace-nowrap font-semibold leading-tight text-slate-900">
+                                          {contributionDetails.name || label}
+                                        </span>
+                                        <span className="mt-0.5 block text-[11px] leading-tight text-slate-400">
+                                          {contributionDetails.description}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    <select
+                                      id={`${id}Frequency`}
+                                      value={frequency}
                                       onChange={(event) =>
                                         updateDraft(
-                                          manualAmountKey,
+                                          `${id}Frequency`,
                                           event.target.value,
                                         )
                                       }
                                       disabled={
                                         privateFinancialDataStatus !== "ready"
                                       }
-                                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
-                                    />
-                                  </label>
-                                ) : settingsDraft.payrollDeductionMode ===
-                                  "automatic" ? (
-                                  <div>
-                                    <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                                      {automaticAmountLabel}
-                                    </span>
-                                    <output className="block rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-semibold text-slate-800">
-                                      ₱{Number(monthlyAmount || 0).toFixed(2)}
-                                    </output>
-                                  </div>
-                                ) : null}
-                              </div>
-                              {frequency === "monthly" && (
-                                <label className="mt-3 block sm:max-w-xs">
-                                  <span className="mb-1 block font-semibold text-slate-700">
-                                    Apply monthly amount on cutoff
-                                  </span>
-                                  <select
-                                    id={`${id}MonthlyCutoff`}
-                                    value={settingsDraft[`${id}MonthlyCutoff`]}
-                                    onChange={(event) =>
-                                      updateDraft(
-                                        `${id}MonthlyCutoff`,
-                                        event.target.value,
-                                      )
-                                    }
-                                    disabled={
-                                      privateFinancialDataStatus !== "ready"
-                                    }
-                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    <option value="10">10th cutoff</option>
-                                    <option value="25">25th cutoff</option>
-                                  </select>
-                                </label>
-                              )}
-                              {isCustom && (
-                                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                  {[
-                                    [
-                                      `${id}FirstCutoffAmount`,
-                                      "First cutoff (10th)",
-                                    ],
-                                    [
-                                      `${id}SecondCutoffAmount`,
-                                      "Second cutoff (25th)",
-                                    ],
-                                  ].map(([key, cutoffLabel]) => (
-                                    <label key={key} className="block">
-                                      <span className="mb-1 block font-semibold text-slate-700">
-                                        {label} · {cutoffLabel} (₱)
-                                      </span>
-                                      <input
-                                        type="number"
-                                        id={key}
-                                        min="0"
-                                        step="0.01"
-                                        value={settingsDraft[key]}
+                                      className="h-8 w-full max-w-36 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs text-slate-800 outline-none focus:border-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      {Object.entries(
+                                        payrollFrequencyLabels,
+                                      ).map(([value, optionLabel]) => (
+                                        <option key={value} value={value}>
+                                          {optionLabel}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {frequency === "monthly" && (
+                                      <select
+                                        aria-label={`Apply ${label} monthly amount on cutoff`}
+                                        value={
+                                          settingsDraft[`${id}MonthlyCutoff`]
+                                        }
                                         onChange={(event) =>
-                                          updateDraft(key, event.target.value)
+                                          updateDraft(
+                                            `${id}MonthlyCutoff`,
+                                            event.target.value,
+                                          )
                                         }
                                         disabled={
                                           privateFinancialDataStatus !== "ready"
                                         }
-                                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium text-slate-800 focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
-                                      />
-                                    </label>
-                                  ))}
-                                </div>
+                                        className="mt-1 h-7 w-full max-w-36 rounded-lg border border-slate-200 bg-white px-2 text-[11px] text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                      >
+                                        <option value="10">10th cutoff</option>
+                                        <option value="25">25th cutoff</option>
+                                      </select>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {isCustom ? (
+                                      <span className="text-[11px] text-slate-400">
+                                        Set per cutoff
+                                      </span>
+                                    ) : settingsDraft.payrollDeductionMode ===
+                                      "manual" ? (
+                                      <label className="relative block w-full max-w-28">
+                                        <span
+                                          className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-[10px] text-slate-400"
+                                          aria-hidden="true"
+                                        >
+                                          ₱
+                                        </span>
+                                        <input
+                                          type="number"
+                                          id={manualAmountKey}
+                                          min="0"
+                                          step="0.01"
+                                          value={settingsDraft[manualAmountKey]}
+                                          onChange={(event) =>
+                                            updateDraft(
+                                              manualAmountKey,
+                                              event.target.value,
+                                            )
+                                          }
+                                          disabled={
+                                            privateFinancialDataStatus !==
+                                            "ready"
+                                          }
+                                          aria-label={`${label} amount per cutoff`}
+                                          className="h-8 w-full rounded-lg border border-slate-200 bg-white pl-6 pr-2 font-mono text-xs font-semibold text-slate-800 outline-none focus:border-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                        />
+                                      </label>
+                                    ) : (
+                                      <output className="break-all font-mono text-xs font-semibold text-slate-700">
+                                        {formatSummaryAmount(perCutoffAmount)}
+                                      </output>
+                                    )}
+                                  </td>
+                                  {[firstCutoffAmount, secondCutoffAmount].map(
+                                    (amount, index) => {
+                                      const cutoffKey =
+                                        index === 0
+                                          ? `${id}FirstCutoffAmount`
+                                          : `${id}SecondCutoffAmount`;
+                                      const cutoffLabel =
+                                        index === 0 ? "10th" : "25th";
+                                      return (
+                                        <td
+                                          key={cutoffKey}
+                                          className="px-3 py-2.5 text-right"
+                                        >
+                                          {isCustom ? (
+                                            <input
+                                              type="number"
+                                              id={cutoffKey}
+                                              min="0"
+                                              step="0.01"
+                                              value={settingsDraft[cutoffKey]}
+                                              onChange={(event) =>
+                                                updateDraft(
+                                                  cutoffKey,
+                                                  event.target.value,
+                                                )
+                                              }
+                                              disabled={
+                                                privateFinancialDataStatus !==
+                                                "ready"
+                                              }
+                                              aria-label={`${label} ${cutoffLabel} cutoff amount`}
+                                              className="h-8 w-full max-w-24 rounded-lg border border-slate-200 bg-white px-1 text-right font-mono text-xs text-slate-800 outline-none focus:border-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                            />
+                                          ) : (
+                                            <output className="break-all font-mono text-xs text-slate-700">
+                                              {formatSummaryAmount(amount)}
+                                            </output>
+                                          )}
+                                        </td>
+                                      );
+                                    },
+                                  )}
+                                  <td className="break-all py-2.5 pl-3 pr-4 text-right font-mono text-xs font-bold text-slate-900">
+                                    {formatSummaryAmount(
+                                      amountItem?.amount ||
+                                        firstCutoffAmount + secondCutoffAmount,
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            },
+                          )}
+                        </tbody>
+                        <tfoot className="border-t border-slate-200 bg-slate-50/95 text-xs">
+                          <tr className="font-semibold text-slate-800">
+                            <td colSpan={3} className="py-2.5 pl-4 pr-3">
+                              Combined Statutory Deductions
+                            </td>
+                            <td className="break-all px-3 py-2.5 text-right font-mono">
+                              {formatSummaryAmount(deductionCutoffs[0].total)}
+                            </td>
+                            <td className="break-all px-3 py-2.5 text-right font-mono">
+                              {formatSummaryAmount(deductionCutoffs[1].total)}
+                            </td>
+                            <td className="break-all py-2.5 pl-3 pr-4 text-right font-mono text-emerald-700">
+                              {formatSummaryAmount(
+                                summaryMonthlyDeductions.total,
                               )}
-                            </div>
-                          );
-                        },
-                      )}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
                     </div>
                   </div>
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-relaxed text-amber-900">
-                    <p className="flex items-center gap-2 font-semibold">
-                      <i
-                        className="fa-solid fa-circle-info"
-                        aria-hidden="true"
-                      />
-                      Planning estimates only; verify actual deductions with
-                      payroll or HR.
-                    </p>
-                    <p className="mt-2">
-                      Automatic mode uses simplified assumptions: SSS employee
-                      share at 5% of a ₱5,000–₱35,000 salary-credit step;
-                      PhilHealth at 2.5% of a ₱10,000–₱100,000 base; Pag-IBIG at
-                      1% up to ₱1,500 and 2% above that, capped at ₱10,000.
-                      These built-in estimates may not match current official
-                      tables or your payroll basis. Verify actual deductions
-                      with payroll or HR. These estimates include employee
-                      shares only; employer contributions and income tax are not
-                      included or deducted from net pay.
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl bg-slate-800 px-4 py-3 text-xs font-semibold text-white">
-                    <span>Estimated employee contributions · both cutoffs</span>
-                    <span>₱{payrollDeductions.total.toFixed(2)}</span>
-                  </div>
-                </div>
-                <section className="space-y-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                      <i
-                        className="fa-solid fa-umbrella-beach"
-                        aria-hidden="true"
-                      />
-                    </span>
-                    <div>
-                      <h5 className="font-bold text-slate-800">
-                        Personal Leave Credits
-                      </h5>
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        Set available balances in days. Changes update leave
-                        requests.
+                  {settingsDraft.payrollDeductionMode === "automatic" && (
+                    <details className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900">
+                      <summary className="cursor-pointer font-semibold">
+                        Planning estimates only · verify with payroll or HR
+                      </summary>
+                      <p className="mt-2">
+                        Automatic mode uses simplified assumptions: SSS employee
+                        share at 5% of a ₱5,000–₱35,000 salary-credit step;
+                        PhilHealth at 2.5% of a ₱10,000–₱100,000 base; Pag-IBIG
+                        at 1% up to ₱1,500 and 2% above that, capped at ₱10,000.
+                        These estimates include employee shares only; employer
+                        contributions and income tax are not included.
                       </p>
+                    </details>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  <section className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-3.5">
+                    <div className="flex items-start gap-2.5">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-white text-emerald-600">
+                        <i
+                          className="fa-solid fa-circle-info"
+                          aria-hidden="true"
+                        />
+                      </span>
+                      <div>
+                        <h5 className="text-xs font-bold text-slate-900">
+                          {settingsDraft.payrollDeductionMode === "manual"
+                            ? "Configured Payroll Basis Active"
+                            : "Estimated Payroll Basis Active"}
+                        </h5>
+                        <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                          {settingsDraft.payrollDeductionMode === "manual"
+                            ? "Exact peso figures entered above are deducted per scheduled cutoff and reflected immediately in semi-monthly net pay projections."
+                            : "Estimated employee contributions are applied per scheduled cutoff and reflected immediately in semi-monthly net pay projections."}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <label
-                        className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-                        htmlFor="settingLeaveVL"
-                      >
-                        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
-                          VL
+                    <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-[11px]">
+                      <span className="text-slate-500">
+                        Employee share only · Tax excluded
+                      </span>
+                      <span className="shrink-0 font-semibold text-emerald-700">
+                        {settingsDraft.payrollDeductionMode === "manual"
+                          ? "Manual Override"
+                          : "Auto-Estimate"}
+                      </span>
+                    </div>
+                  </section>
+                  <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-3.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700">
+                          <i
+                            className="fa-solid fa-umbrella-beach"
+                            aria-hidden="true"
+                          />
                         </span>
-                        Vacation Leave
-                      </label>
-                      <input
-                        type="number"
-                        id="settingLeaveVL"
-                        value={settingsDraft.settingsBalances.VL}
-                        onChange={(event) =>
-                          updateDraft("settingsBalances", {
-                            ...settingsDraft.settingsBalances,
-                            VL: event.target.value,
-                          })
-                        }
-                        min="0"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
-                      />
+                        <div>
+                          <h5 className="font-bold text-slate-900">
+                            Personal Leave Credits
+                          </h5>
+                          <p className="text-[11px] text-slate-500">
+                            Available leave balances synced with leave filing.
+                          </p>
+                        </div>
+                      </div>
+                      <span className="shrink-0 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
+                        Total:{" "}
+                        {["VL", "SL", "EL"].reduce(
+                          (total, code) =>
+                            total +
+                            (Number(settingsDraft.settingsBalances[code]) || 0),
+                          0,
+                        )}{" "}
+                        days
+                      </span>
                     </div>
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <label
-                        className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-                        htmlFor="settingLeaveSL"
-                      >
-                        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 text-rose-700">
-                          SL
-                        </span>
-                        Sick Leave
-                      </label>
-                      <input
-                        type="number"
-                        id="settingLeaveSL"
-                        value={settingsDraft.settingsBalances.SL}
-                        onChange={(event) =>
-                          updateDraft("settingsBalances", {
-                            ...settingsDraft.settingsBalances,
-                            SL: event.target.value,
-                          })
-                        }
-                        min="0"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
-                      />
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      {[
+                        {
+                          code: "VL",
+                          label: "Vacation Leave",
+                          color: "emerald",
+                        },
+                        { code: "SL", label: "Sick Leave", color: "rose" },
+                        {
+                          code: "EL",
+                          label: "Emergency Leave",
+                          color: "amber",
+                        },
+                      ].map((leave) => {
+                        const balance =
+                          Number(settingsDraft.settingsBalances[leave.code]) ||
+                          0;
+                        const colorClasses = {
+                          emerald:
+                            "border-emerald-200 bg-emerald-50 text-emerald-700",
+                          rose: "border-rose-200 bg-rose-50 text-rose-700",
+                          amber: "border-amber-200 bg-amber-50 text-amber-700",
+                        }[leave.color];
+                        return (
+                          <div
+                            key={leave.code}
+                            className="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5"
+                          >
+                            <label
+                              className="mb-1.5 flex items-center gap-2 text-[11px] font-medium text-slate-600"
+                              htmlFor={`settingLeave${leave.code}`}
+                            >
+                              <span
+                                className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${colorClasses}`}
+                              >
+                                {leave.code}
+                              </span>
+                              {leave.label}
+                            </label>
+                            <div className="flex h-7 items-center justify-between rounded-lg border border-slate-200 bg-white">
+                              <button
+                                type="button"
+                                aria-label={`Remove one ${leave.label} day`}
+                                disabled={balance <= 0}
+                                onClick={() =>
+                                  updateDraft("settingsBalances", {
+                                    ...settingsDraft.settingsBalances,
+                                    [leave.code]: String(
+                                      Math.max(0, balance - 1),
+                                    ),
+                                  })
+                                }
+                                className="h-full w-7 text-slate-500 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                −
+                              </button>
+                              <input
+                                type="number"
+                                id={`settingLeave${leave.code}`}
+                                value={
+                                  settingsDraft.settingsBalances[leave.code]
+                                }
+                                onChange={(event) =>
+                                  updateDraft("settingsBalances", {
+                                    ...settingsDraft.settingsBalances,
+                                    [leave.code]: event.target.value,
+                                  })
+                                }
+                                min="0"
+                                step="1"
+                                className="h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-center text-xs font-semibold text-slate-800 outline-none"
+                              />
+                              <button
+                                type="button"
+                                aria-label={`Add one ${leave.label} day`}
+                                onClick={() =>
+                                  updateDraft("settingsBalances", {
+                                    ...settingsDraft.settingsBalances,
+                                    [leave.code]: String(balance + 1),
+                                  })
+                                }
+                                className="h-full w-7 text-slate-500 hover:text-slate-800"
+                              >
+                                +
+                              </button>
+                            </div>
+                            <p className="mt-0.5 text-center text-[10px] text-slate-400">
+                              days
+                            </p>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <label
-                        className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-                        htmlFor="settingLeaveEL"
-                      >
-                        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-700">
-                          EL
-                        </span>
-                        Emergency Leave
-                      </label>
-                      <input
-                        type="number"
-                        id="settingLeaveEL"
-                        value={settingsDraft.settingsBalances.EL}
-                        onChange={(event) =>
-                          updateDraft("settingsBalances", {
-                            ...settingsDraft.settingsBalances,
-                            EL: event.target.value,
-                          })
-                        }
-                        min="0"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-medium text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
-                      />
-                    </div>
-                  </div>
-                  <p className="flex items-start gap-2 rounded-xl border border-teal-100 bg-teal-50/70 p-3 text-[11px] leading-relaxed text-teal-800">
-                    <i
-                      className="fa-solid fa-circle-info mt-0.5 shrink-0"
-                      aria-hidden="true"
-                    />
-                    These balances update available credits when filing leave
-                    requests.
-                  </p>
-                </section>
+                  </section>
+                </div>
               </div>
               <div
                 id="settingsTabGeneral"
@@ -1864,9 +2033,18 @@ export default function SettingsModal({
                         className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1"
                       >
                         {[
-                          { id: "ALL", label: `All (${settingsDraft.holidays.length})` },
-                          { id: "REGULAR", label: `Regular (${regularHolidayCount})` },
-                          { id: "SPECIAL", label: `Special (${specialHolidayCount})` },
+                          {
+                            id: "ALL",
+                            label: `All (${settingsDraft.holidays.length})`,
+                          },
+                          {
+                            id: "REGULAR",
+                            label: `Regular (${regularHolidayCount})`,
+                          },
+                          {
+                            id: "SPECIAL",
+                            label: `Special (${specialHolidayCount})`,
+                          },
                         ].map((filter) => (
                           <button
                             key={filter.id}
@@ -1936,66 +2114,78 @@ export default function SettingsModal({
                         onSubmit={handleAddHoliday}
                         className="grid grid-cols-1 gap-2.5 rounded-2xl border border-emerald-200 bg-emerald-50/20 p-3 sm:grid-cols-[minmax(160px,1fr)_128px_minmax(250px,1.35fr)_auto] sm:items-center"
                       >
-                      <input
-                        id="customHolidayName"
-                        type="text"
-                        value={holidayName}
-                        onChange={(event) => setHolidayName(event.target.value)}
-                        placeholder="Holiday name (e.g. Company Foundation Day)"
-                        aria-label="Holiday name"
-                        maxLength={80}
-                        required
-                        className="h-9 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                      />
-                      <input
-                        id="customHolidayDate"
-                        type="date"
-                        value={holidayDate}
-                        onChange={(event) => setHolidayDate(event.target.value)}
-                        aria-label="Holiday date"
-                        required
-                        className="h-9 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-800 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                      />
-                      <select
-                        id="customHolidayType"
-                        value={holidayType}
-                        onChange={(event) => setHolidayType(event.target.value)}
-                        aria-label="New holiday classification"
-                        className="h-9 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                      >
-                        <option value="regular-holiday">
-                          Regular (
-                          {(Number(settingsDraft.regularHolidayMultiplier) || 2).toFixed(2)}
-                          x)
-                        </option>
-                        <option value="special-non-working">
-                          Special (
-                          {(Number(settingsDraft.specialHolidayMultiplier) || 1.3).toFixed(2)}
-                          x)
-                        </option>
-                        <option value="special-working">
-                          Special Working (1.00x)
-                        </option>
-                      </select>
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="submit"
-                          className="h-9 rounded-xl bg-emerald-800 px-4 text-xs font-semibold text-white transition hover:bg-emerald-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+                        <input
+                          id="customHolidayName"
+                          type="text"
+                          value={holidayName}
+                          onChange={(event) =>
+                            setHolidayName(event.target.value)
+                          }
+                          placeholder="Holiday name (e.g. Company Foundation Day)"
+                          aria-label="Holiday name"
+                          maxLength={80}
+                          required
+                          className="h-9 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                        />
+                        <input
+                          id="customHolidayDate"
+                          type="date"
+                          value={holidayDate}
+                          onChange={(event) =>
+                            setHolidayDate(event.target.value)
+                          }
+                          aria-label="Holiday date"
+                          required
+                          className="h-9 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-800 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                        />
+                        <select
+                          id="customHolidayType"
+                          value={holidayType}
+                          onChange={(event) =>
+                            setHolidayType(event.target.value)
+                          }
+                          aria-label="New holiday classification"
+                          className="h-9 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                         >
-                          Save
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setHolidayName("");
-                            setHolidayDate("");
-                            setHolidayFormOpen(false);
-                          }}
-                          className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                          <option value="regular-holiday">
+                            Regular (
+                            {(
+                              Number(settingsDraft.regularHolidayMultiplier) ||
+                              2
+                            ).toFixed(2)}
+                            x)
+                          </option>
+                          <option value="special-non-working">
+                            Special (
+                            {(
+                              Number(settingsDraft.specialHolidayMultiplier) ||
+                              1.3
+                            ).toFixed(2)}
+                            x)
+                          </option>
+                          <option value="special-working">
+                            Special Working (1.00x)
+                          </option>
+                        </select>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="submit"
+                            className="h-9 rounded-xl bg-emerald-800 px-4 text-xs font-semibold text-white transition hover:bg-emerald-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHolidayName("");
+                              setHolidayDate("");
+                              setHolidayFormOpen(false);
+                            }}
+                            className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </form>
                     </div>
                   </div>
@@ -2044,7 +2234,9 @@ export default function SettingsModal({
                               <tr
                                 key={holiday.id}
                                 className={`border-b border-slate-100 last:border-b-0 ${
-                                  holiday.enabled ? "bg-white" : "bg-slate-50/70"
+                                  holiday.enabled
+                                    ? "bg-white"
+                                    : "bg-slate-50/70"
                                 }`}
                               >
                                 <td className="whitespace-nowrap px-4 py-2.5">
@@ -2125,11 +2317,16 @@ export default function SettingsModal({
                                           title={`Delete ${holiday.name}`}
                                           className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-rose-500 transition hover:bg-rose-50 hover:text-rose-700"
                                         >
-                                          <Trash2 size={12} aria-hidden="true" />
+                                          <Trash2
+                                            size={12}
+                                            aria-hidden="true"
+                                          />
                                         </button>
                                       </>
                                     )}
-                                    {!isSupportedHolidayClassification(holiday) && (
+                                    {!isSupportedHolidayClassification(
+                                      holiday,
+                                    ) && (
                                       <span className="rounded-md border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
                                         Unavailable
                                       </span>
@@ -2141,7 +2338,8 @@ export default function SettingsModal({
                                     className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-medium ${classificationStyle}`}
                                   >
                                     <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                                    {classification === "Special Non-Working Day"
+                                    {classification ===
+                                    "Special Non-Working Day"
                                       ? "Special Non-Working"
                                       : classification}
                                   </span>
@@ -2155,13 +2353,16 @@ export default function SettingsModal({
                                   <div className="flex items-center justify-end gap-2">
                                     <span
                                       className={`text-[10px] font-medium ${
-                                        isSupportedHolidayClassification(holiday) &&
-                                        holiday.enabled
+                                        isSupportedHolidayClassification(
+                                          holiday,
+                                        ) && holiday.enabled
                                           ? "text-emerald-700"
                                           : "text-slate-400"
                                       }`}
                                     >
-                                      {!isSupportedHolidayClassification(holiday)
+                                      {!isSupportedHolidayClassification(
+                                        holiday,
+                                      )
                                         ? "Unavailable"
                                         : holiday.enabled
                                           ? "Active"
@@ -2171,12 +2372,15 @@ export default function SettingsModal({
                                       type="button"
                                       role="switch"
                                       aria-checked={
-                                        isSupportedHolidayClassification(holiday) &&
-                                        holiday.enabled
+                                        isSupportedHolidayClassification(
+                                          holiday,
+                                        ) && holiday.enabled
                                       }
                                       aria-label={`${holiday.enabled ? "Disable" : "Enable"} ${holiday.name}`}
                                       disabled={
-                                        !isSupportedHolidayClassification(holiday)
+                                        !isSupportedHolidayClassification(
+                                          holiday,
+                                        )
                                       }
                                       onClick={() =>
                                         updateDraft(
@@ -2238,7 +2442,8 @@ export default function SettingsModal({
                         }
                         className="h-4 w-4 shrink-0 accent-blue-600"
                       />
-                      Confirm eligibility for worked special/non-regular holiday pay
+                      Confirm eligibility for worked special/non-regular holiday
+                      pay
                     </label>
                     <p className="whitespace-nowrap text-[10px] font-medium">
                       <span className="text-emerald-700">
