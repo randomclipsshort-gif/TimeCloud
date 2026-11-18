@@ -16,7 +16,12 @@ const DAY_MINUTES = 24 * 60;
 const payrollRateSettingKeys = [
   "dailyWage",
   "dailyAllowance",
+  "workingDaysFactor",
+  "payrollBasis",
+  "monthlySalary",
   "overtimeMultiplier",
+  "regularHolidayMultiplier",
+  "specialHolidayMultiplier",
   "nightDifferential",
   ...payrollDeductionSettingKeys,
 ];
@@ -180,8 +185,11 @@ export function getAttendanceHoursBreakdown(record) {
   };
 }
 
-function getDailyWage(settings) {
-  const amount = Number(settings?.dailyWage);
+export function getPayrollDailyWage(settings = {}) {
+  const amount =
+    settings.payrollBasis === "monthly"
+      ? Number(settings.monthlySalary) / Number(settings.workingDaysFactor)
+      : Number(settings.dailyWage);
   return Number.isFinite(amount) && amount > 0 ? amount : null;
 }
 
@@ -241,10 +249,10 @@ export function buildPayrollSettingsHistory({
   const sourceDates = Object.keys(attendance)
     .filter(isValidDateKey)
     .sort();
-  const currentHasWage = getDailyWage(currentSettings) !== null;
-  const nextHasWage = getDailyWage(nextSettings) !== null;
+  const currentHasWage = getPayrollDailyWage(currentSettings) !== null;
+  const nextHasWage = getPayrollDailyWage(nextSettings) !== null;
   const historyHasWage = versions.some(
-    (version) => getDailyWage(version.settings) !== null,
+    (version) => getPayrollDailyWage(version.settings) !== null,
   );
 
   if (versions.length === 0 && currentHasWage) {
@@ -340,7 +348,7 @@ export function calculateAttendancePayroll({
     return getIncompleteResult(["Clock out before calculating payroll."], hours);
   }
 
-  const dailyWage = getDailyWage(settings);
+  const dailyWage = getPayrollDailyWage(settings);
   if (
     isRegularHoliday &&
     (type === "Absent" || !hasAttendanceTimeData(record))
@@ -530,6 +538,8 @@ export function calculateAttendancePayroll({
       hasAttendanceTime:
         record.type !== "Absent" && hasAttendanceTimeData(record),
       overtimeMultiplier,
+      regularHolidayMultiplier: Number(settings?.regularHolidayMultiplier),
+      specialHolidayMultiplier: Number(settings?.specialHolidayMultiplier),
     });
     if (holidayPay.amount == null) {
       return getIncompleteResult([holidayPay.message], hours);

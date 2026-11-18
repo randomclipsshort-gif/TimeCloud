@@ -611,7 +611,7 @@ export default function PayslipModal({
       role="dialog"
       aria-modal="true"
       aria-hidden={!open || isDirectoryOpen}
-      inert={isDirectoryOpen}
+      inert={isDirectoryOpen ? "" : undefined}
       style={{ display: open ? "flex" : "none" }}
     >
       <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 shadow-2xl">

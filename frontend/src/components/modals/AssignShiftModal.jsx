@@ -50,6 +50,7 @@ export default function AssignShiftModal({
   selectedShiftTemplateName,
   selectedShiftTemplateExpectedHours,
   selectedShiftTemplateIsRestDay,
+  shiftTimeFormat,
   dailyWage,
 }) {
   const initialStartDate = selectedRange?.startDate || selectedDate;
@@ -129,7 +130,10 @@ export default function AssignShiftModal({
                   : "Assign Shift"}
               </h3>
               <p className="mt-0.5 text-[10px] font-medium text-slate-500 sm:text-xs">
-                12-Hour Schedule Format <span className="px-1">•</span>{" "}
+                {shiftTimeFormat === "24h"
+                  ? "24-Hour Schedule Format"
+                  : "12-Hour Schedule Format"}{" "}
+                <span className="px-1">•</span>{" "}
                 Instant payroll sync
               </p>
             </div>
@@ -341,9 +345,11 @@ export default function AssignShiftModal({
                       onChange={(event) =>
                         setCustomShiftStart(event.target.value)
                       }
-                      placeholder="10:00 PM"
-                      aria-label="Custom shift start time in 12-hour format"
-                      className={`${fieldClass} font-mono`}
+                      placeholder={
+                        shiftTimeFormat === "24h" ? "22:00" : "10:00 PM"
+                      }
+                      aria-label={`Custom shift start time in ${shiftTimeFormat === "24h" ? "24" : "12"}-hour format`}
+                      className={`${fieldClass} tabular-nums`}
                     />
                   </div>
                   <div>
@@ -360,9 +366,11 @@ export default function AssignShiftModal({
                       onChange={(event) =>
                         setCustomShiftEnd(event.target.value)
                       }
-                      placeholder="06:00 AM"
-                      aria-label="Custom shift end time in 12-hour format"
-                      className={`${fieldClass} font-mono`}
+                      placeholder={
+                        shiftTimeFormat === "24h" ? "06:00" : "06:00 AM"
+                      }
+                      aria-label={`Custom shift end time in ${shiftTimeFormat === "24h" ? "24" : "12"}-hour format`}
+                      className={`${fieldClass} tabular-nums`}
                     />
                   </div>
                   <div>

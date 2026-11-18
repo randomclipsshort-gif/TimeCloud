@@ -4,6 +4,7 @@ import {
   buildPayrollSettingsHistory,
   calculateAttendancePayroll,
   getEstimatedAttendanceEarnings,
+  getPayrollDailyWage,
   getPayrollSettingsForDate,
 } from "./payrollCalculation.js";
 import {
@@ -48,6 +49,82 @@ const nightShift = {
   overtimeAmount: 0,
   overtimeMinutes: 0,
 };
+
+test("monthly salary converts to a daily payroll rate using the configured divisor", () => {
+  const settings = {
+    payrollBasis: "monthly",
+    monthlySalary: "26000",
+    workingDaysFactor: "26",
+    dailyWage: "0",
+    dailyAllowance: "0",
+    overtimeMultiplier: "1.25",
+    nightDifferential: "10",
+  };
+  assert.equal(getPayrollDailyWage(settings), 1000);
+
+  const calculation = calculateAttendancePayroll({
+    record: {
+      ...nightShift,
+      shift: "Day",
+      shiftStartTime: "08:00",
+      shiftEndTime: "16:00",
+      workStartTime: "08:00",
+      workEndTime: "16:00",
+    },
+    date: "2026-10-05",
+    settings,
+  });
+  assert.equal(calculation.status, "ready");
+  assert.equal(calculation.dailyWage, 1000);
+  assert.equal(calculation.earnings, 1000);
+});
+
+test("configurable holiday multipliers affect workdays but preserve rest-day rates", () => {
+  const settings = {
+    dailyWage: "1000",
+    dailyAllowance: "0",
+    overtimeMultiplier: "1.25",
+    regularHolidayMultiplier: "2.4",
+    specialHolidayMultiplier: "1.7",
+    nightDifferential: "10",
+  };
+  const calculatePayroll = (classification, isRestDay = false) => {
+    const type = isRestDay ? "Rest Day" : "Regular";
+    return calculateAttendancePayroll({
+      record: {
+        type,
+        hasAssignedShift: true,
+        shiftStartTime: "08:00",
+        shiftEndTime: "16:00",
+        workStartTime: "08:00",
+        workEndTime: "16:00",
+      },
+      date: "2026-10-12",
+      settings,
+      holiday: { date: "2026-10-12", classification },
+      holidayEligibilityConfirmed: true,
+    }).earnings;
+  };
+  const calculateFallback = (overrides = {}) =>
+    calculateHolidayPay({
+      holiday: { classification: "Regular Holiday" },
+      dailyWage: 1000,
+      hoursWorked: 8,
+      hasSchedule: true,
+      eligibilityKnown: true,
+      worked: true,
+      ...overrides,
+    }).amount;
+
+  assert.equal(calculatePayroll("Regular Holiday"), 2400);
+  assert.equal(calculatePayroll("Regular Holiday", true), 2600);
+  assert.equal(calculatePayroll("Special Non-Working Day"), 1700);
+  assert.equal(calculatePayroll("Special Non-Working Day", true), 1500);
+  assert.equal(
+    calculateFallback({ regularHolidayMultiplier: Number.NaN }),
+    2000,
+  );
+});
 
 test("first payroll setup backfills pending shifts without changing source attendance", () => {
   const attendance = {

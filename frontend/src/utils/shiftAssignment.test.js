@@ -8,6 +8,7 @@ import {
   getShiftDurationMinutes,
   getManualEntryRangeConflicts,
   hasRecordedAttendance,
+  normalizeShiftTime,
   normalizeTwelveHourShiftTime,
   requiresQuickShiftForManualEntry,
 } from "./shiftAssignment.js";
@@ -40,6 +41,10 @@ test("normalizes custom 12-hour shift times and rejects incomplete values", () =
   assert.equal(normalizeTwelveHourShiftTime("12:15 PM"), "12:15");
   assert.equal(normalizeTwelveHourShiftTime("22:00"), null);
   assert.equal(normalizeTwelveHourShiftTime("13:00 PM"), null);
+  assert.equal(normalizeShiftTime("22:00", "24h"), "22:00");
+  assert.equal(normalizeShiftTime("8:05", "24h"), "08:05");
+  assert.equal(normalizeShiftTime("24:00", "24h"), null);
+  assert.equal(normalizeShiftTime("10:00 PM", "12h"), "22:00");
 });
 
 test("manual present entries require a quick shift only when the date has no assigned shift", () => {

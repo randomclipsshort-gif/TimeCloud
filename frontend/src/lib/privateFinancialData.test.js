@@ -125,6 +125,7 @@ test("travel plans and their separate expense history remain in cloud workspace 
 
 test("payroll deduction settings stay private in server-managed financial data", () => {
   const payrollSettings = {
+    workingDaysFactor: "26",
     payrollSettingsHistory: [{
       effectiveDate: "2026-10-01",
       settings: { dailyWage: "1200", nightDifferential: "10" },
@@ -147,8 +148,14 @@ test("payroll deduction settings stay private in server-managed financial data",
   assert.deepEqual(extractPrivateFinancialSettings(payrollSettings), {
     dailyWage: "",
     dailyAllowance: "0",
+    workingDaysFactor: "26",
+    payrollBasis: "daily",
+    monthlySalary: "0",
     overtimeMultiplier: "1.25",
+    regularHolidayMultiplier: "2",
+    specialHolidayMultiplier: "1.3",
     nightDifferential: "10",
+    shiftTimeFormat: "24h",
     payrollSettingsHistory: [],
     ...payrollSettings,
   });
@@ -173,8 +180,14 @@ test("private settings provide defaults for older financial records", () => {
   assert.deepEqual(extractPrivateFinancialSettings({}), {
     dailyWage: "",
     dailyAllowance: "0",
+    workingDaysFactor: "26",
+    payrollBasis: "daily",
+    monthlySalary: "0",
     overtimeMultiplier: "1.25",
+    regularHolidayMultiplier: "2",
+    specialHolidayMultiplier: "1.3",
     nightDifferential: "10",
+    shiftTimeFormat: "24h",
     payrollSettingsHistory: [],
     payrollDeductionMode: "automatic",
     manualSssPerPaycheck: "0",

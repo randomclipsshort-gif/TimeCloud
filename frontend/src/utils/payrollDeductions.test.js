@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  calculateMonthlyPayrollDeductions,
   calculateCutoffPayrollDeductions,
   calculatePayrollDeductions,
   estimateEmployeeContributions,
@@ -222,4 +223,16 @@ test("automatic estimates use per-contribution frequencies without adding employ
   assert.equal(first.total + second.total, monthlyEstimate.total);
   assert.equal(first.employeeContributionTotal, first.total);
   assert.equal(sumCutoffPayrollDeductions(first, second).total, monthlyEstimate.total);
+});
+
+test("monthly deduction estimates use the supplied monthly gross pay", () => {
+  const settings = getPayrollDeductionSettingsDefaults({});
+  const result = calculateMonthlyPayrollDeductions({
+    month: "2026-11",
+    mode: "automatic",
+    monthlyGrossPay: (645 + 18) * 26,
+    settings,
+  });
+
+  assert.equal(result.total, 1480.95);
 });

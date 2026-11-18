@@ -40,6 +40,7 @@ import {
 import {
   calculateAttendancePayroll,
   getEstimatedAttendanceEarnings,
+  getPayrollDailyWage,
   getPayrollSettingsForDate,
 } from "./utils/payrollCalculation.js";
 import {
@@ -59,7 +60,7 @@ import {
   getExpectedPaidMinutes,
   getShiftDurationMinutes,
   getManualEntryRangeConflicts,
-  normalizeTwelveHourShiftTime,
+  normalizeShiftTime,
   requiresQuickShiftForManualEntry,
 } from "./utils/shiftAssignment.js";
 import { summarizePayrollEarningsBreakdown } from "./utils/payrollEarningsBreakdown.js";
@@ -177,8 +178,38 @@ const defaultShiftTemplates = [
     icon: "fa-calendar-xmark",
     iconColor: "text-slate-600",
     protected: true,
+    isDefault: true,
   },
 ];
+
+function normalizeShiftTemplateDefaults(templates) {
+  if (!Array.isArray(templates) || templates.length === 0) {
+    return defaultShiftTemplates;
+  }
+  const defaultTemplate =
+    templates.find((template) => template.isDefault) ||
+    templates.find(
+      (template) =>
+        template.id !== "rest-day" &&
+        template.startTime &&
+        template.endTime,
+    ) ||
+    templates.find((template) => template.id === "rest-day") ||
+    templates[0];
+  return templates.map((template) => ({
+    ...template,
+    isDefault: template.id === defaultTemplate.id,
+  }));
+}
+
+function getDefaultShiftTemplateId(templates) {
+  return (
+    templates.find((template) => template.isDefault)?.id ||
+    templates.find((template) => template.id === "rest-day")?.id ||
+    templates[0]?.id ||
+    "rest-day"
+  );
+}
 const leaveTypes = {
   VL: {
     name: "Vacation Leave",
@@ -348,11 +379,14 @@ function formatCurrency(amount) {
   })}`;
 }
 
-function formatTime(time) {
+function formatTime(time, format = "12h") {
   if (!time) return "";
   const minutes = parseTimeMinutes(time);
   if (minutes === null) return "";
   const hour = Math.floor(minutes / 60) % 24;
+  if (format === "24h") {
+    return `${String(hour).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+  }
   return `${String(hour % 12 || 12).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")} ${hour >= 12 ? "PM" : "AM"}`;
 }
 
@@ -633,6 +667,7 @@ function CalendarDay({
   dateKey,
   record,
   shiftTemplates,
+  shiftTimeFormat,
   selected,
   hasIncentive,
   rangePosition,
@@ -787,8 +822,8 @@ function CalendarDay({
             ? "Paid · 100%"
             : calendarHasShift
               ? [
-                  formatTime(record.shiftStartTime),
-                  formatTime(record.shiftEndTime),
+                  formatTime(record.shiftStartTime, shiftTimeFormat),
+                  formatTime(record.shiftEndTime, shiftTimeFormat),
                 ]
                   .filter(Boolean)
                   .join(" - ") || record.assigned
@@ -1021,7 +1056,7 @@ export default function App() {
   const [activeModal, setActiveModal] = useState(null);
   const [manualEntryInitialType, setManualEntryInitialType] =
     useState("Present");
-  const [activeSettingsTab, setActiveSettingsTab] = useState("general");
+  const [activeSettingsTab, setActiveSettingsTab] = useState("earnings");
   const [page, setPage] = useState(0);
   const [initialCalendarDate] = useState(() => getManilaDateTime().date);
   const [selectedPayslipPeriodEndDate, setSelectedPayslipPeriodEndDate] =
@@ -1070,6 +1105,8 @@ export default function App() {
     localPrivateFinancialDefaults.overtimeMultiplier,
   );
   const [privateFinancialSettings, setPrivateFinancialSettings] = useState({});
+  const shiftTimeFormat =
+    privateFinancialSettings.shiftTimeFormat === "12h" ? "12h" : "24h";
   const [expenses, setExpenses] = useState([]);
   const [travelPlans, setTravelPlans] = useState([]);
   const [expenseName, setExpenseName] = useState("");
@@ -1605,6 +1642,12 @@ export default function App() {
             hasAttendanceTimeData(selectedRecord),
           overtimeMultiplier: Number(
             selectedPayrollSettings.overtimeMultiplier,
+          ),
+          regularHolidayMultiplier: Number(
+            selectedPayrollSettings.regularHolidayMultiplier,
+          ),
+          specialHolidayMultiplier: Number(
+            selectedPayrollSettings.specialHolidayMultiplier,
           ),
         })
     : null;
@@ -2188,7 +2231,10 @@ export default function App() {
     historicalPayslipsRef.current = payslips;
     setHistoricalPayslips(payslips);
     setActiveHistoricalPayslip(null);
-    setDailyWage(settings.dailyWage);
+    const effectiveDailyWage = getPayrollDailyWage(settings);
+    setDailyWage(
+      effectiveDailyWage === null ? "" : String(effectiveDailyWage),
+    );
     setDailyAllowance(settings.dailyAllowance);
     setOvertimeMultiplier(settings.overtimeMultiplier);
     setNightDifferential(settings.nightDifferential);
@@ -2668,7 +2714,9 @@ export default function App() {
           );
           setExpenses(workspace.expenses);
           setTravelPlans(workspace.travelPlans);
-          setShiftTemplates(workspace.shiftTemplates || defaultShiftTemplates);
+          setShiftTemplates(
+            normalizeShiftTemplateDefaults(workspace.shiftTemplates),
+          );
           setLeaveBalances(workspace.leaveBalances);
           setSettingsBalances(workspace.settingsBalances);
           setNightDifferential(localPrivateFinancialDefaults.nightDifferential);
@@ -3885,11 +3933,13 @@ export default function App() {
       return null;
     }
 
-    const startTime = normalizeTwelveHourShiftTime(customShiftStart);
-    const endTime = normalizeTwelveHourShiftTime(customShiftEnd);
+    const startTime = normalizeShiftTime(customShiftStart, shiftTimeFormat);
+    const endTime = normalizeShiftTime(customShiftEnd, shiftTimeFormat);
     if (startTime === null || endTime === null) {
       showToast(
-        "Enter valid custom shift times in 12-hour format, such as 10:00 PM.",
+        shiftTimeFormat === "24h"
+          ? "Enter valid custom shift times in 24-hour format, such as 22:00."
+          : "Enter valid custom shift times in 12-hour format, such as 10:00 PM.",
         "warning",
       );
       return null;
@@ -3935,7 +3985,7 @@ export default function App() {
     else if (selectedIcon.includes("bolt")) iconColor = "text-amber-500";
     else if (selectedIcon.includes("clock")) iconColor = "text-slate-600";
 
-    const range = `${formatTime(startTime)} - ${formatTime(endTime)}`;
+    const range = `${formatTime(startTime, shiftTimeFormat)} - ${formatTime(endTime, shiftTimeFormat)}`;
     const id = editingTemplate?.id || `custom-${crypto.randomUUID()}`;
     return {
       isNew: !editingTemplate,
@@ -3966,6 +4016,85 @@ export default function App() {
     });
     setSelectedShiftTemplate(template.id);
     setEditingShiftTemplateId(template.id);
+  };
+
+  const setDefaultShiftTemplate = (templateId) => {
+    const template = shiftTemplates.find((item) => item.id === templateId);
+    if (!template) return;
+    setShiftTemplates((current) =>
+      normalizeShiftTemplateDefaults(
+        current.map((item) => ({
+          ...item,
+          isDefault: item.id === templateId,
+        })),
+      ),
+    );
+    showToast(
+      `"${template.label || template.name}" is now the default shift preset.`,
+      "success",
+    );
+  };
+
+  const deleteShiftTemplate = (templateId) => {
+    const template = shiftTemplates.find((item) => item.id === templateId);
+    if (!template || template.protected) return;
+    const nextTemplates = normalizeShiftTemplateDefaults(
+      shiftTemplates.filter((item) => item.id !== templateId),
+    );
+    setShiftTemplates(nextTemplates);
+    if (selectedShiftTemplate === templateId) {
+      setSelectedShiftTemplate(getDefaultShiftTemplateId(nextTemplates));
+      setIsCustomShiftActive(false);
+      setEditingShiftTemplateId(null);
+    }
+    showToast(`"${template.label || template.name}" template deleted.`, "success");
+  };
+
+  const createShiftTemplateFromSettings = ({
+    name,
+    startTime: rawStartTime,
+    endTime: rawEndTime,
+    breakDurationMinutes,
+  }) => {
+    const startTime = normalizeShiftTime(rawStartTime, "24h");
+    const endTime = normalizeShiftTime(rawEndTime, "24h");
+    const templateDetails = {
+      startTime,
+      endTime,
+      breakDurationMinutes,
+      breakType: "unpaid",
+    };
+    const expectedPaidMinutes = getExpectedPaidMinutes(templateDetails);
+    if (
+      !name.trim() ||
+      expectedPaidMinutes === null ||
+      expectedPaidMinutes <= 0
+    ) {
+      showToast(
+        "Enter a shift name, valid start and end times, and a break within the shift.",
+        "warning",
+      );
+      return false;
+    }
+
+    const range = `${formatTime(startTime, shiftTimeFormat)} - ${formatTime(endTime, shiftTimeFormat)}`;
+    const template = {
+      ...templateDetails,
+      id: `custom-${crypto.randomUUID()}`,
+      name: name.trim(),
+      label: name.trim(),
+      range,
+      assigned: range,
+      expectedPaidMinutes,
+      icon: "fa-clock",
+      iconColor: "text-slate-600",
+      isDefault: false,
+    };
+    setShiftTemplates((current) =>
+      normalizeShiftTemplateDefaults([...current, template]),
+    );
+    showToast(`"${template.label}" preset added.`, "success");
+    return true;
   };
 
   const handleClick = (event) => {
@@ -4013,7 +4142,7 @@ export default function App() {
       void clearAttendanceDates(dates);
     } else if (action === "openAssignShiftModal()") {
       setCustomShiftName("");
-      setSelectedShiftTemplate("rest-day");
+      setSelectedShiftTemplate(getDefaultShiftTemplateId(shiftTemplates));
       setIsCustomShiftActive(false);
       setEditingShiftTemplateId(null);
       setCustomBreakDuration("0");
@@ -4021,8 +4150,10 @@ export default function App() {
       setActiveModal("assignShiftModal");
     } else if (action === "openNewShiftTemplate()") {
       setCustomShiftName("");
-      setCustomShiftStart("10:00 PM");
-      setCustomShiftEnd("06:00 AM");
+      setCustomShiftStart(
+        shiftTimeFormat === "24h" ? "22:00" : "10:00 PM",
+      );
+      setCustomShiftEnd(shiftTimeFormat === "24h" ? "06:00" : "06:00 AM");
       setCustomBreakDuration("0");
       setCustomBreakType("paid");
       setSelectedIcon("fa-moon");
@@ -4051,8 +4182,8 @@ export default function App() {
       if (!template || !template.startTime || !template.endTime) return;
       setSelectedShiftTemplate(id);
       setCustomShiftName(template.label || template.name || "");
-      setCustomShiftStart(formatTime(template.startTime));
-      setCustomShiftEnd(formatTime(template.endTime));
+      setCustomShiftStart(formatTime(template.startTime, shiftTimeFormat));
+      setCustomShiftEnd(formatTime(template.endTime, shiftTimeFormat));
       setCustomBreakDuration(
         template.breakDurationMinutes === null ||
           template.breakDurationMinutes === undefined
@@ -4064,13 +4195,7 @@ export default function App() {
       setEditingShiftTemplateId(id);
       setIsCustomShiftActive(true);
     } else if (action.startsWith("deleteShiftTemplate(")) {
-      const id = actionArgument(action);
-      const template = shiftTemplates.find((item) => item.id === id);
-      if (!template || template.protected) return;
-      setShiftTemplates((current) => current.filter((item) => item.id !== id));
-      if (selectedShiftTemplate === id) setSelectedShiftTemplate("rest-day");
-      if (selectedShiftTemplate === id) setIsCustomShiftActive(false);
-      showToast(`"${template.label}" template deleted.`, "success");
+      deleteShiftTemplate(actionArgument(action));
     } else if (action.startsWith("handleSaveCustomShift(")) {
       event.preventDefault();
       const draft = buildShiftTemplateDraft();
@@ -5038,6 +5163,7 @@ export default function App() {
           monthIndex={monthIndex}
           dateKey={date}
           shiftTemplates={shiftTemplates}
+          shiftTimeFormat={shiftTimeFormat}
           record={applyNightDifferential(calendarRecord, payrollCalculation)}
           selected={day === selectedDay && !activeCalendarRange}
           hasIncentive={incentiveDates.has(date)}
@@ -5072,6 +5198,7 @@ export default function App() {
     selectedDay,
     selectedLocality,
     shiftTemplates,
+    shiftTimeFormat,
     year,
   ]);
 
@@ -5558,6 +5685,7 @@ export default function App() {
               customShiftStart={customShiftStart}
               setCustomShiftStart={setCustomShiftStart}
               customShiftEnd={customShiftEnd}
+              shiftTimeFormat={shiftTimeFormat}
               setCustomShiftEnd={setCustomShiftEnd}
               customBreakDuration={customBreakDuration}
               setCustomBreakDuration={setCustomBreakDuration}
@@ -5565,8 +5693,11 @@ export default function App() {
               setCustomBreakType={setCustomBreakType}
               expectedPaidHours={(() => {
                 const startTime =
-                  normalizeTwelveHourShiftTime(customShiftStart);
-                const endTime = normalizeTwelveHourShiftTime(customShiftEnd);
+                  normalizeShiftTime(customShiftStart, shiftTimeFormat);
+                const endTime = normalizeShiftTime(
+                  customShiftEnd,
+                  shiftTimeFormat,
+                );
                 if (startTime === null || endTime === null) return null;
                 const expectedPaidMinutes = getExpectedPaidMinutes({
                   startTime,
@@ -5665,6 +5796,7 @@ export default function App() {
                 payrollDeductions={payrollDeductions}
                 nightDifferential={nightDifferential}
                 payrollEffectiveDate={manilaNow.date}
+                shiftTemplates={shiftTemplates}
                 onDeleteAccount={deleteAccount}
                 accountDeletionLoading={accountDeletionLoading}
                 privateFinancialDataStatus={privateFinancialDataStatus}
@@ -5674,24 +5806,75 @@ export default function App() {
                 legacySalaryVaultAvailable={Boolean(legacySalaryVault)}
                 onMigrateLegacySalaryVault={migrateLegacySalaryVault}
                 onReloadPrivateFinancialData={retryWorkspaceLoad}
+                onCreateShiftTemplate={createShiftTemplateFromSettings}
+                onSetDefaultShiftTemplate={setDefaultShiftTemplate}
+                onDeleteShiftTemplate={deleteShiftTemplate}
                 onSettingsValidationError={(message) =>
                   showToast(message, "warning")
                 }
                 onSaveSettings={async (draft) => {
-                  const currentPayrollSettings =
-                    getPayrollDeductionSettingsDefaults(
+                  const currentPayrollSettings = {
+                    ...localPrivateFinancialDefaults,
+                    ...getPayrollDeductionSettingsDefaults(
                       privateFinancialSettings,
-                    );
+                    ),
+                    ...privateFinancialSettings,
+                    dailyWage,
+                    dailyAllowance,
+                    overtimeMultiplier,
+                    nightDifferential,
+                  };
+                  const nextPayrollSettings = {
+                    ...currentPayrollSettings,
+                    dailyWage: draft.dailyWage,
+                    dailyAllowance: draft.dailyAllowance,
+                    workingDaysFactor: draft.workingDaysFactor,
+                    payrollBasis: draft.payrollBasis,
+                    monthlySalary: draft.monthlySalary,
+                    overtimeMultiplier: draft.overtimeMultiplier,
+                    regularHolidayMultiplier:
+                      draft.regularHolidayMultiplier,
+                    specialHolidayMultiplier:
+                      draft.specialHolidayMultiplier,
+                    shiftTimeFormat: draft.shiftTimeFormat,
+                    nightDifferential: draft.nightDifferential,
+                    ...Object.fromEntries(
+                      payrollDeductionSettingKeys.map((key) => [
+                        key,
+                        draft[key],
+                      ]),
+                    ),
+                  };
+                  const nextDailyWage = getPayrollDailyWage(
+                    nextPayrollSettings,
+                  );
                   const financialSettingsChanged =
-                    draft.dailyWage !== dailyWage ||
+                    nextDailyWage !== Number(dailyWage) ||
                     draft.dailyAllowance !== dailyAllowance ||
+                    draft.workingDaysFactor !==
+                      currentPayrollSettings.workingDaysFactor ||
+                    draft.payrollBasis !== currentPayrollSettings.payrollBasis ||
+                    ((draft.payrollBasis === "monthly" ||
+                      currentPayrollSettings.payrollBasis === "monthly") &&
+                      draft.monthlySalary !==
+                        currentPayrollSettings.monthlySalary) ||
                     draft.overtimeMultiplier !== overtimeMultiplier ||
+                    draft.regularHolidayMultiplier !==
+                      currentPayrollSettings.regularHolidayMultiplier ||
+                    draft.specialHolidayMultiplier !==
+                      currentPayrollSettings.specialHolidayMultiplier ||
                     draft.nightDifferential !== nightDifferential ||
                     payrollDeductionSettingKeys.some(
-                      (key) => draft[key] !== currentPayrollSettings[key],
+                      (key) =>
+                        draft[key] !== currentPayrollSettings[key],
                     );
+                  const privatePreferencesChanged =
+                    draft.shiftTimeFormat !==
+                    currentPayrollSettings.shiftTimeFormat;
+                  const privateSettingsChanged =
+                    financialSettingsChanged || privatePreferencesChanged;
                   if (
-                    financialSettingsChanged &&
+                    privateSettingsChanged &&
                     privateFinancialDataStatus !== "ready"
                   ) {
                     addToast(
@@ -5700,58 +5883,42 @@ export default function App() {
                     );
                     return false;
                   }
-                  if (financialSettingsChanged) {
+                  if (privateSettingsChanged) {
                     window.clearTimeout(
                       privateFinancialDataSyncTimerRef.current,
                     );
                     privateFinancialDataSyncTimerRef.current = null;
                     try {
-                      const currentPayrollSettings = {
-                        ...privateFinancialSettings,
-                        dailyWage,
-                        dailyAllowance,
-                        overtimeMultiplier,
-                        nightDifferential,
-                      };
-                      const nextPayrollSettings = {
-                        ...currentPayrollSettings,
-                        dailyWage: draft.dailyWage,
-                        dailyAllowance: draft.dailyAllowance,
-                        overtimeMultiplier: draft.overtimeMultiplier,
-                        nightDifferential: draft.nightDifferential,
-                        ...Object.fromEntries(
-                          payrollDeductionSettingKeys.map((key) => [
-                            key,
-                            draft[key],
-                          ]),
-                        ),
-                      };
-                      const payrollUpdate = createPayrollSettingsUpdate({
-                        currentSettings: currentPayrollSettings,
-                        nextSettings: nextPayrollSettings,
-                        effectiveDate: draft.payrollEffectiveDate,
-                        attendance,
-                        holidays: draft.holidays,
-                        selectedLocality: draft.selectedLocality,
-                        holidayEligibilityConfirmed:
-                          draft.holidayEligibilityConfirmed,
-                      });
+                      const payrollUpdate = financialSettingsChanged
+                        ? createPayrollSettingsUpdate({
+                            currentSettings: currentPayrollSettings,
+                            nextSettings: nextPayrollSettings,
+                            effectiveDate: draft.payrollEffectiveDate,
+                            attendance,
+                            holidays: draft.holidays,
+                            selectedLocality: draft.selectedLocality,
+                            holidayEligibilityConfirmed:
+                              draft.holidayEligibilityConfirmed,
+                          })
+                        : null;
                       await persistPrivateFinancialData({
-                        settings: payrollUpdate.settings,
-                        attendance: payrollUpdate.attendance,
+                        settings:
+                          payrollUpdate?.settings ?? nextPayrollSettings,
+                        attendance:
+                          payrollUpdate?.attendance ??
+                          createPrivateAttendancePayload(),
                         payslips: historicalPayslipsRef.current,
                       });
                       privateFinancialDataSkipNextSyncRef.current = true;
                       setPrivateFinancialSettings((current) => ({
                         ...current,
-                        ...Object.fromEntries(
-                          payrollDeductionSettingKeys.map((key) => [
-                            key,
-                            draft[key],
-                          ]),
-                        ),
-                        payrollSettingsHistory:
-                          payrollUpdate.settings.payrollSettingsHistory,
+                        ...nextPayrollSettings,
+                        ...(payrollUpdate
+                          ? {
+                              payrollSettingsHistory:
+                                payrollUpdate.settings.payrollSettingsHistory,
+                            }
+                          : {}),
                       }));
                     } catch (error) {
                       const conflict = error?.code === "REVISION_CONFLICT";
@@ -5770,7 +5937,9 @@ export default function App() {
                   setHolidayEligibilityConfirmed(
                     draft.holidayEligibilityConfirmed,
                   );
-                  setDailyWage(draft.dailyWage);
+                  setDailyWage(
+                    nextDailyWage === null ? "" : String(nextDailyWage),
+                  );
                   setDailyAllowance(draft.dailyAllowance);
                   setOvertimeMultiplier(draft.overtimeMultiplier);
                   setNightDifferential(draft.nightDifferential);

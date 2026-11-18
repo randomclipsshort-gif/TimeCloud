@@ -1,3 +1,5 @@
+import { getPayrollPeriodForMonth } from "./payrollPeriods.js";
+
 const FREQUENCIES = new Set([
   "every_cutoff",
   "monthly",
@@ -228,4 +230,31 @@ export function sumCutoffPayrollDeductions(...calculations) {
     total,
     employeeContributionTotal: total,
   };
+}
+
+export function calculateMonthlyPayrollDeductions({
+  month,
+  mode,
+  monthlyGrossPay,
+  manualPerPaycheck = {},
+  settings = {},
+}) {
+  const periods = [10, 25].map((cutoffDay) =>
+    getPayrollPeriodForMonth(month, cutoffDay),
+  );
+  if (periods.some((period) => !period)) {
+    throw new RangeError("A valid payroll month is required.");
+  }
+
+  return sumCutoffPayrollDeductions(
+    ...periods.map((period) =>
+      calculateCutoffPayrollDeductions({
+        period,
+        mode,
+        monthlyGrossPay,
+        manualPerPaycheck,
+        settings,
+      }),
+    ),
+  );
 }

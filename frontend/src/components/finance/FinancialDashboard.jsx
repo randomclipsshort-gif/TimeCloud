@@ -1711,7 +1711,7 @@ export default function FinancialDashboard({
                   {!privateFinancialDataHidden && (
                     <div
                       aria-hidden={!isCutoffHistoryVisible}
-                      inert={!isCutoffHistoryVisible}
+                      inert={!isCutoffHistoryVisible ? "" : undefined}
                       className={`accordion-wrapper ${
                         isCutoffHistoryVisible ? "" : "is-collapsed"
                       }`}
@@ -2060,7 +2060,9 @@ export default function FinancialDashboard({
                           <div
                             id={`expense-day-${group.date}`}
                             aria-hidden={collapsedExpenseDays.has(group.date)}
-                            inert={collapsedExpenseDays.has(group.date)}
+                            inert={
+                              collapsedExpenseDays.has(group.date) ? "" : undefined
+                            }
                             className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out motion-reduce:transition-none ${
                               collapsedExpenseDays.has(group.date)
                                 ? "grid-rows-[0fr] opacity-0"

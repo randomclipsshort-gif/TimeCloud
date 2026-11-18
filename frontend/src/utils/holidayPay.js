@@ -52,7 +52,18 @@ export function calculateHolidayPay({
   worked = false,
   hasAttendanceTime = false,
   overtimeMultiplier = holidayPayRules.overtimeMultiplier,
+  regularHolidayMultiplier = holidayPayRules.regularHolidayWorkMultiplier,
+  specialHolidayMultiplier =
+    holidayPayRules.specialNonWorkingWorkMultiplier,
 }) {
+  const configuredRegularHolidayMultiplier =
+    Number.isFinite(regularHolidayMultiplier) && regularHolidayMultiplier > 0
+      ? regularHolidayMultiplier
+      : holidayPayRules.regularHolidayWorkMultiplier;
+  const configuredSpecialHolidayMultiplier =
+    Number.isFinite(specialHolidayMultiplier) && specialHolidayMultiplier > 0
+      ? specialHolidayMultiplier
+      : holidayPayRules.specialNonWorkingWorkMultiplier;
   if (!holiday) return { amount: null, message: "No configured holiday applies to this date." };
   if (holiday.classification === "Local Holiday" || holiday.classification === "Company Break") {
     return {
@@ -129,11 +140,11 @@ export function calculateHolidayPay({
   if (classification === "Regular Holiday") {
     multiplier = isRestDay
       ? holidayPayRules.regularHolidayRestDayMultiplier
-      : holidayPayRules.regularHolidayWorkMultiplier;
+      : configuredRegularHolidayMultiplier;
   } else if (classification === "Special Non-Working Day") {
     multiplier = isRestDay
       ? holidayPayRules.specialNonWorkingRestDayMultiplier
-      : holidayPayRules.specialNonWorkingWorkMultiplier;
+      : configuredSpecialHolidayMultiplier;
   } else {
     multiplier = holidayPayRules.ordinaryWorkMultiplier;
   }

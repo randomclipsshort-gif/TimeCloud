@@ -8,6 +8,14 @@ export function normalizeTwelveHourShiftTime(value) {
   return `${String(hour).padStart(2, "0")}:${match[2]}`;
 }
 
+export function normalizeShiftTime(value, format = "12h") {
+  if (format !== "24h") return normalizeTwelveHourShiftTime(value);
+  if (typeof value !== "string") return null;
+  const match = value.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+  if (!match) return null;
+  return `${String(Number(match[1])).padStart(2, "0")}:${match[2]}`;
+}
+
 export function requiresQuickShiftForManualEntry(record, entryType) {
   return (
     entryType === "Present" &&
