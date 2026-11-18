@@ -118,6 +118,19 @@ export function calculateHolidayPay({
           "Complete clock-in and clock-out times are required to estimate special non-working day pay.",
       };
     }
+    if (holiday.classification === "Special Working Day") {
+      return {
+        amount: 0,
+        regularPay: 0,
+        overtimePay: 0,
+        multiplier: 0,
+        regularPayRateLabel: "0% total including base wage",
+        dailyWage,
+        hoursWorked: 0,
+        breakdown: "No work recorded on a special working day.",
+        estimate: true,
+      };
+    }
 
     return {
       amount: null,

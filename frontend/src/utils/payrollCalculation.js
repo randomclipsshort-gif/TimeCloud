@@ -401,7 +401,9 @@ export function calculateAttendancePayroll({
 
   if (
     holiday &&
-    getHolidayClassification(holiday) === "Special Non-Working Day" &&
+    ["Special Non-Working Day", "Special Working Day"].includes(
+      getHolidayClassification(holiday),
+    ) &&
     !hasAttendanceTimeData(record)
   ) {
     return {

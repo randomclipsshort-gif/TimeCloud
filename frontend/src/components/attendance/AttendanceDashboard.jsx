@@ -96,9 +96,15 @@ export default function AttendanceDashboard({
       if (record.holidayUnworked || record.type === "Absent") return "0%";
       return `${isRestDay ? 150 : 130}%`;
     }
+    if (record.holidayClassification === "Special Working Day") {
+      return record.holidayUnworked || record.type === "Absent"
+        ? "0%"
+        : hasWorkedAttendance
+          ? "100%"
+          : "0%";
+    }
 
     const workedMultiplier = {
-      "Special Working Day": 100,
       "Ordinary Working Day": 100,
     }[record.holidayClassification];
 

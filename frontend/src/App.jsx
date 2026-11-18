@@ -4491,7 +4491,7 @@ export default function App() {
     );
   };
 
-  const markSelectedDateAbsent = () => {
+  const markSelectedDateAbsent = async () => {
     const targetDates = selectedCalendarRange
       ? getInclusiveDateKeys(
           selectedCalendarRange.startDate,
@@ -4503,21 +4503,6 @@ export default function App() {
     if (!targetDates.length) {
       showToast("Choose a date before marking attendance absent.", "warning");
       return;
-    }
-
-    if (selectedCalendarRange) {
-      const conflictingDates = getManualEntryRangeConflicts(
-        attendance,
-        targetDates,
-        activeTimeEntry?.date,
-      );
-      if (conflictingDates.length) {
-        showToast(
-          `Absent was not applied. Attendance already exists or Time In is active on: ${conflictingDates.join(", ")}.`,
-          "warning",
-        );
-        return;
-      }
     }
 
     for (const date of targetDates) {
@@ -4559,6 +4544,37 @@ export default function App() {
         );
         return;
       }
+    }
+
+    const datesWithExistingStatus = targetDates.filter((date) => {
+      const record = attendance[date] || defaultAttendance;
+      return (
+        record.type !== "Unassigned" &&
+        record.type !== "Regular" &&
+        record.type !== "Absent"
+      ) ||
+        record.clockedIn ||
+        hasValidAttendanceRecord(record) ||
+        ["workStartTime", "workEndTime", "in", "out"].some((field) => {
+          const value = record[field];
+          return typeof value === "string" && value.trim() !== "" && value.trim() !== "—";
+        });
+    });
+
+    if (datesWithExistingStatus.length) {
+      const confirmed = await requestConfirmation({
+        title:
+          targetDates.length > 1
+            ? "Replace existing attendance?"
+            : "Replace existing status?",
+        message:
+          targetDates.length > 1
+            ? `Existing attendance or status records on ${datesWithExistingStatus.join(", ")} will be changed to Absent. Continue?`
+            : `${selectedDate} already has an attendance status. Marking it Absent will replace the existing status. Continue?`,
+        confirmLabel: "Mark Absent",
+        variant: "danger",
+      });
+      if (!confirmed) return;
     }
 
     setAttendance((state) => {

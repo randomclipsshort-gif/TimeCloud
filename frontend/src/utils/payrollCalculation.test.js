@@ -854,6 +854,33 @@ test("holiday overtime excludes the scheduled one-hour break on a nine-hour shif
   assert.equal(extraHour.breakdown.overtime, 0);
 });
 
+test("special working holidays pay zero without work and 100 percent with work", () => {
+  const holiday = {
+    date: "2026-02-25",
+    classification: "Special Working Day",
+  };
+  const unworkedPay = calculateHolidayPay({
+    holiday,
+    dailyWage: 1000,
+    hoursWorked: 0,
+    hasSchedule: true,
+    worked: false,
+  });
+  assert.equal(unworkedPay.amount, 0);
+  assert.equal(unworkedPay.regularPayRateLabel, "0% total including base wage");
+
+  const workedPay = calculateHolidayPay({
+    holiday,
+    dailyWage: 1000,
+    hoursWorked: 8,
+    hasSchedule: true,
+    eligibilityKnown: true,
+    worked: true,
+  });
+  assert.equal(workedPay.amount, 1000);
+  assert.equal(workedPay.regularPayRateLabel, "100% total including base wage");
+});
+
 test("unworked special non-working holidays are ready at zero while partial attendance remains pending", () => {
   const holiday = {
     date: "2026-11-01",
