@@ -498,6 +498,7 @@ function getPercentageWidth(value) {
 }
 
 export default function FinancialDashboard({
+  payslipHistoryNavigationRequest,
   requestConfirmation,
   monthExpenses,
   expenses,
@@ -615,6 +616,10 @@ export default function FinancialDashboard({
     if (payslipFilterMode === "month") setPayslipMonth(monthValue);
     if (payslipFilterMode === "year") setPayslipYear(monthValue.slice(0, 4));
   }, [monthValue, payslipFilterMode]);
+
+  useEffect(() => {
+    if (payslipHistoryNavigationRequest > 0) setActiveTab("payslips");
+  }, [payslipHistoryNavigationRequest]);
 
   useEffect(() => {
     if (!isCutoffDirectoryOpen) return undefined;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { authClient } from "../lib/authClient.js";
 
 const fieldClassName =
@@ -6,6 +6,33 @@ const fieldClassName =
 
 function getAuthErrorMessage(error, fallback) {
   return error?.message || fallback;
+}
+
+function getAuthToastMessage(error) {
+  const code = String(error?.code || "").toUpperCase();
+  const message = String(error?.message || "");
+  if (
+    error?.status === 429 ||
+    code === "TOO_MANY_REQUESTS" ||
+    code === "RATE_LIMITED" ||
+    code === "RATE_LIMIT_EXCEEDED" ||
+    /too many requests|rate limit/i.test(message)
+  ) {
+    return "Too many requests. Please try again later.";
+  }
+  if (code === "INVALID_EMAIL_OR_PASSWORD") {
+    return "The email address or password was not accepted.";
+  }
+  if (code === "SESSION_NOT_ESTABLISHED") {
+    return "The sign-in request did not establish an authenticated session.";
+  }
+  if (
+    error?.name === "TypeError" ||
+    /could not be reached|failed to fetch|network error/i.test(message)
+  ) {
+    return "The authentication server could not be reached.";
+  }
+  return "";
 }
 
 function AuthField({ id, label, icon, ...inputProps }) {
@@ -25,11 +52,18 @@ function AuthField({ id, label, icon, ...inputProps }) {
   );
 }
 
-export default function AuthPage({ open, recoveryMode = false, onRecoveryComplete }) {
+export default function AuthPage({
+  open,
+  recoveryMode = false,
+  onRecoveryComplete,
+  onLoginStart,
+  onLoginFailure,
+}) {
   const [activeTab, setActiveTab] = useState("login");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const loginFormRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
@@ -51,16 +85,30 @@ export default function AuthPage({ open, recoveryMode = false, onRecoveryComplet
     const password = String(formData.get("password"));
     setLoading(true);
     setError("");
+    onLoginStart?.(email);
     try {
       const { error: signInError } = await authClient.signIn.email({ email, password });
       if (signInError) {
-        setError(getAuthErrorMessage(signInError, "Sign in failed. Try again."));
+        const message = getAuthErrorMessage(
+          signInError,
+          "Sign in failed. Try again.",
+        );
+        setError(message);
+        onLoginFailure?.(getAuthToastMessage(signInError), () => {
+          loginFormRef.current?.requestSubmit();
+          return false;
+        });
       }
     } catch (signInError) {
-      setError(getAuthErrorMessage(
+      const message = getAuthErrorMessage(
         signInError,
         "Sign in failed because the authentication service could not be reached. Try again.",
-      ));
+      );
+      setError(message);
+      onLoginFailure?.(getAuthToastMessage(signInError), () => {
+        loginFormRef.current?.requestSubmit();
+        return false;
+      });
     } finally {
       setLoading(false);
     }
@@ -283,6 +331,7 @@ export default function AuthPage({ open, recoveryMode = false, onRecoveryComplet
           <form
             key="login"
             id="auth-panel-login"
+            ref={loginFormRef}
             role="tabpanel"
             aria-labelledby="auth-tab-login"
             onSubmit={handleLogin}

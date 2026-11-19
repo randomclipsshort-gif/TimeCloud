@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock3,
   DollarSign,
+  LoaderCircle,
   Plus,
   Search,
   ShieldCheck,
@@ -96,6 +97,8 @@ export default function SettingsModal({
   privateFinancialDataError,
   privateFinancialDataConflict,
   privateFinancialDataSyncing,
+  settingsRestoreRevision,
+  settingsUndoing,
   legacySalaryVaultAvailable,
   shiftTemplates,
   onMigrateLegacySalaryVault,
@@ -123,6 +126,36 @@ export default function SettingsModal({
   const [newShiftBreakMinutes, setNewShiftBreakMinutes] = useState("60");
   const previousPrivateFinancialDataStatus = useRef(privateFinancialDataStatus);
 
+  const createSettingsDraft = () => ({
+    holidays: holidays.map((holiday) => ({ ...holiday })),
+    selectedLocality,
+    holidayEligibilityConfirmed,
+    dailyWage,
+    dailyAllowance,
+    workingDaysFactor: payrollSettings?.workingDaysFactor ?? "26",
+    payrollBasis: payrollSettings?.payrollBasis ?? "daily",
+    monthlySalary:
+      Number(payrollSettings?.monthlySalary) > 0
+        ? payrollSettings.monthlySalary
+        : String(
+            (Number(dailyWage) || 0) *
+              (Number(payrollSettings?.workingDaysFactor) || 26),
+          ),
+    overtimeMultiplier,
+    regularHolidayMultiplier:
+      payrollSettings?.regularHolidayMultiplier ?? "2",
+    specialHolidayMultiplier:
+      payrollSettings?.specialHolidayMultiplier ?? "1.3",
+    shiftTimeFormat: payrollSettings?.shiftTimeFormat ?? "24h",
+    primaryTimezone: payrollSettings?.primaryTimezone ?? "Asia/Manila",
+    dateFormat: payrollSettings?.dateFormat ?? "MM/DD/YYYY",
+    displayCurrency: payrollSettings?.displayCurrency ?? "PHP",
+    ...getPayrollDeductionSettingsDefaults(payrollSettings),
+    nightDifferential,
+    payrollEffectiveDate,
+    settingsBalances: { ...settingsBalances },
+  });
+
   useEffect(() => {
     if (!open) {
       setSettingsDraft(null);
@@ -132,36 +165,13 @@ export default function SettingsModal({
       setEditingHolidayDateId(null);
       return;
     }
-    setSettingsDraft({
-      holidays: holidays.map((holiday) => ({ ...holiday })),
-      selectedLocality,
-      holidayEligibilityConfirmed,
-      dailyWage,
-      dailyAllowance,
-      workingDaysFactor: payrollSettings?.workingDaysFactor ?? "26",
-      payrollBasis: payrollSettings?.payrollBasis ?? "daily",
-      monthlySalary:
-        Number(payrollSettings?.monthlySalary) > 0
-          ? payrollSettings.monthlySalary
-          : String(
-              (Number(dailyWage) || 0) *
-                (Number(payrollSettings?.workingDaysFactor) || 26),
-            ),
-      overtimeMultiplier,
-      regularHolidayMultiplier:
-        payrollSettings?.regularHolidayMultiplier ?? "2",
-      specialHolidayMultiplier:
-        payrollSettings?.specialHolidayMultiplier ?? "1.3",
-      shiftTimeFormat: payrollSettings?.shiftTimeFormat ?? "24h",
-      primaryTimezone: payrollSettings?.primaryTimezone ?? "Asia/Manila",
-      dateFormat: payrollSettings?.dateFormat ?? "MM/DD/YYYY",
-      displayCurrency: payrollSettings?.displayCurrency ?? "PHP",
-      ...getPayrollDeductionSettingsDefaults(payrollSettings),
-      nightDifferential,
-      payrollEffectiveDate,
-      settingsBalances: { ...settingsBalances },
-    });
+    setSettingsDraft(createSettingsDraft());
   }, [open]);
+
+  useEffect(() => {
+    if (!open || settingsRestoreRevision === 0) return;
+    setSettingsDraft(createSettingsDraft());
+  }, [open, settingsRestoreRevision]);
 
   useEffect(() => {
     const wasWaitingForPrivateData =
@@ -216,6 +226,10 @@ export default function SettingsModal({
 
   const updateDraft = (key, value) => {
     setSettingsDraft((current) => ({ ...current, [key]: value }));
+  };
+  const resetSettings = () => {
+    setSettingsDraft(createSettingsDraft());
+    setMigrationError("");
   };
   const addShiftPreset = (event) => {
     event.preventDefault();
@@ -501,7 +515,7 @@ export default function SettingsModal({
     }
     setSettingsSaving(true);
     try {
-      await onSaveSettings({
+      const saved = await onSaveSettings({
         ...settingsDraft,
         holidays: settingsDraft.holidays.map((holiday) =>
           isSupportedHolidayClassification(holiday)
@@ -509,6 +523,7 @@ export default function SettingsModal({
             : { ...holiday, enabled: false },
         ),
       });
+      if (saved === false) return;
     } catch {
       setMigrationError("Settings could not be saved.");
     } finally {
@@ -627,15 +642,28 @@ export default function SettingsModal({
       role="dialog"
       aria-modal="true"
       aria-hidden={!open}
+      aria-busy={settingsSaving || settingsUndoing}
       style={{ display: open ? "flex" : "none" }}
     >
       <div
-        className="flex h-[90vh] max-h-[calc(100vh-12px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xl"
+        className="relative flex h-[90vh] max-h-[calc(100vh-12px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xl"
         style={{
           fontFamily:
             '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         }}
       >
+        {settingsUndoing && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-white/70 backdrop-blur-[1px]">
+            <span className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-md">
+              <LoaderCircle
+                size={17}
+                className="animate-spin text-teal-700"
+                aria-hidden="true"
+              />
+              Undoing configuration...
+            </span>
+          </div>
+        )}
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700">
@@ -2535,19 +2563,32 @@ export default function SettingsModal({
           <div className="flex shrink-0 flex-col-reverse gap-2 sm:flex-row">
             <button
               type="button"
-              data-action="closeModal(&#x27;settingsModal&#x27;)"
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 font-medium text-slate-700 transition hover:bg-slate-100"
+              onClick={resetSettings}
+              disabled={settingsSaving || settingsUndoing}
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Cancel
+              Reset
             </button>
             <button
               type="button"
               onClick={handleSaveSettings}
-              disabled={settingsSaving}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={settingsSaving || settingsUndoing}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-teal-800 to-emerald-700 px-5 py-2.5 font-bold text-white shadow-md shadow-emerald-900/15 transition hover:from-teal-900 hover:to-emerald-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/25 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {!settingsSaving && <Check size={16} aria-hidden="true" />}
-              {settingsSaving ? "Saving..." : "Save Configuration"}
+              {settingsSaving || settingsUndoing ? (
+                <LoaderCircle
+                  size={16}
+                  className="animate-spin"
+                  aria-hidden="true"
+                />
+              ) : (
+                <Check size={16} aria-hidden="true" />
+              )}
+              {settingsUndoing
+                ? "Undoing configuration..."
+                : settingsSaving
+                  ? "Saving configuration..."
+                  : "Save Configuration"}
             </button>
           </div>
         </div>

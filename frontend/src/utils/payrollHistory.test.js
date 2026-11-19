@@ -5,7 +5,7 @@ import {
   createPayslipSnapshot,
   findPayslipSnapshot,
   getPayslipDirectoryPeriods,
-  getPayslipPeriodsThroughYearEnd,
+  getPayslipPeriodsThroughNextJanuary,
   getUpcomingPayslipPeriods,
   removePayslipSnapshot,
 } from "./payrollHistory.js";
@@ -81,9 +81,9 @@ test("active payslip periods include the current period and one future period", 
   );
 });
 
-test("payslip cutoff directory includes future periods through year end", () => {
+test("payslip cutoff directory includes future periods through the next January", () => {
   const currentPeriod = getPayrollPeriodForDate("2026-11-15");
-  const periods = getPayslipPeriodsThroughYearEnd(currentPeriod, 2026);
+  const periods = getPayslipPeriodsThroughNextJanuary(currentPeriod, 2026);
 
   assert.deepEqual(
     periods.map(({ period, isCurrent }) => [period.endDate, isCurrent]),
@@ -91,8 +91,25 @@ test("payslip cutoff directory includes future periods through year end", () => 
       ["2026-11-25", true],
       ["2026-12-10", false],
       ["2026-12-25", false],
+      ["2027-01-10", false],
+      ["2027-01-25", false],
     ],
   );
+});
+
+test("payslip directory expands to the full year when the year begins", () => {
+  const currentPeriod = getPayrollPeriodForDate("2027-01-15");
+  const periods = getPayslipPeriodsThroughNextJanuary(currentPeriod, 2027);
+  const endDates = periods.map(({ period }) => period.endDate);
+
+  assert.equal(endDates.length, 25);
+  assert.equal(endDates[0], "2027-01-25");
+  assert.deepEqual(endDates.slice(-4), [
+    "2027-12-10",
+    "2027-12-25",
+    "2028-01-10",
+    "2028-01-25",
+  ]);
 });
 
 test("snapshotted periods disappear from active payslip periods", () => {

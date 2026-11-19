@@ -51,13 +51,18 @@ export function getUpcomingPayslipPeriods(
   return periods;
 }
 
-export function getPayslipPeriodsThroughYearEnd(currentPeriod, year) {
+export function getPayslipPeriodsThroughNextJanuary(currentPeriod, year) {
   if (!currentPeriod || !Number.isInteger(year)) return [];
 
   const yearKey = String(year);
+  const firstMonthOfNextYear = `${String(year + 1).padStart(4, "0")}-01-`;
   const periods = [];
   let period = currentPeriod;
-  while (period?.endDate?.startsWith(yearKey)) {
+  while (
+    period &&
+    (period.endDate.startsWith(yearKey) ||
+      period.endDate.startsWith(firstMonthOfNextYear))
+  ) {
     periods.push({
       period,
       isCurrent:

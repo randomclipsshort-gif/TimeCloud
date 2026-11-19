@@ -6,6 +6,7 @@ import { CalendarDays, Wallet } from "lucide-react";
 export default function DashboardContent(props) {
   const {
     page,
+    payslipHistoryNavigationRequest,
     requestConfirmation,
     monthTabs,
     monthCarouselOffset,
@@ -175,6 +176,9 @@ export default function DashboardContent(props) {
           <FeatureErrorBoundary name="Finance">
             <FinancialDashboard
               requestConfirmation={requestConfirmation}
+              payslipHistoryNavigationRequest={
+                payslipHistoryNavigationRequest
+              }
               monthExpenses={monthExpenses}
               expenses={expenses}
               financeTrackingScope={financeTrackingScope}

@@ -263,7 +263,7 @@ function PayslipCutoffDirectory({
                 setPage(1);
               }}
               aria-label="Search payslip cutoffs by date or month"
-              placeholder="Search cutoff by date or month (e.g., Nov, Oct 26, 2026-11-10)…"
+              placeholder="Search cutoff by date or month (e.g., Nov, Oct 26, 2026-11-10)..."
               className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/15"
             />
           </label>
@@ -327,7 +327,7 @@ function PayslipCutoffDirectory({
                       }
                       setIsOpen(false);
                     }}
-                    className="cutoff-card w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-sm hover:border-emerald-300 hover:bg-emerald-50/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
+                    className="cutoff-card group w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
                   >
                     <div className="flex min-h-9 items-start justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
@@ -345,12 +345,29 @@ function PayslipCutoffDirectory({
                         className={`shrink-0 rounded-md px-2 py-1 text-[9px] font-bold ${
                           status === "Current Estimate"
                             ? "bg-teal-50 text-teal-700"
-                            : "bg-slate-100 text-slate-600"
+                            : status === "Incoming"
+                              ? "bg-sky-50 text-sky-700"
+                              : status === "Saved payslip"
+                                ? "bg-slate-100 text-slate-600"
+                                : "bg-slate-100 text-slate-600"
                         }`}
                       >
                         {status}
                       </span>
                     </div>
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      {entry.snapshot
+                        ? "Saved payslip"
+                        : entry.isFuture
+                          ? `Payout ${PAYSLIP_DATE_FORMATTER.format(
+                              new Date(`${entry.period.endDate}T00:00:00Z`),
+                            )}, ${entry.period.endDate.slice(0, 4)}`
+                          : entry.isCurrent
+                            ? `Payout ${PAYSLIP_DATE_FORMATTER.format(
+                                new Date(`${entry.period.endDate}T00:00:00Z`),
+                              )}, ${entry.period.endDate.slice(0, 4)}`
+                            : ""}
+                    </p>
                     <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5 text-[10px]">
                       {hasPayrollTotals ? (
                         <>
@@ -368,9 +385,16 @@ function PayslipCutoffDirectory({
                           </span>
                         </>
                       ) : (
-                        <span className="text-slate-500">
-                          Select to view this cutoff&apos;s estimate
-                        </span>
+                        <>
+                          <span className="text-slate-500">
+                            Select to view this cutoff&apos;s estimate
+                          </span>
+                          <ChevronRight
+                            size={13}
+                            aria-hidden="true"
+                            className="shrink-0 text-slate-400 transition duration-200 group-hover:translate-x-0.5 group-hover:scale-110 group-hover:text-teal-700"
+                          />
+                        </>
                       )}
                     </div>
                   </button>

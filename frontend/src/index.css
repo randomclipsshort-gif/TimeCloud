@@ -10,6 +10,95 @@
   --color-textMuted: #64748b;
 }
 
+@keyframes toast-enter-top {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-exit-top {
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+}
+
+@keyframes toast-icon-morph {
+  0% {
+    opacity: 0;
+    transform: scale(0.72) rotate(-8deg);
+  }
+
+  65% {
+    opacity: 1;
+    transform: scale(1.06) rotate(2deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes toast-content-morph {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.toast-enter-top {
+  animation: toast-enter-top 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.toast-exit-top {
+  animation: toast-exit-top 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+
+.toast-icon-morph {
+  animation: toast-icon-morph 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.toast-content-morph {
+  animation: toast-content-morph 220ms ease-out both;
+}
+
+.spinner-ring {
+  animation: toast-spin 850ms linear infinite;
+}
+
+.shadow-toast {
+  box-shadow:
+    0 12px 32px -6px rgb(15 23 42 / 0.12),
+    0 4px 12px -4px rgb(15 23 42 / 0.06),
+    0 0 0 1px rgb(15 23 42 / 0.05);
+}
+
+.shadow-toast-hover {
+  box-shadow:
+    0 16px 38px -6px rgb(15 23 42 / 0.16),
+    0 6px 16px -4px rgb(15 23 42 / 0.08),
+    0 0 0 1px rgb(15 23 42 / 0.08);
+}
+
 .settings-modal {
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     sans-serif;
@@ -93,6 +182,19 @@ body {
   to {
     opacity: 0;
   }
+}
+
+@keyframes toast-countdown {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.toast-countdown {
+  transform-origin: left;
+  animation-name: toast-countdown;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
 }
 
 .budget-utilization-ghost {
@@ -181,6 +283,19 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .toast-enter-top,
+  .toast-exit-top,
+  .toast-icon-morph,
+  .toast-content-morph,
+  .spinner-ring {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .toast-countdown {
+    animation: none !important;
+  }
+
   .budget-track,
   .budget-track::before,
   .cat-segment,

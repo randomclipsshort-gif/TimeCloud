@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle } from "lucide-react";
 import Header from "./components/layout/Header.jsx";
 import AuthPage from "./components/AuthPage.jsx";
 import DashboardContent from "./components/DashboardContent.jsx";
@@ -10,8 +9,8 @@ import PayslipModal from "./components/modals/PayslipModal.jsx";
 import SettingsModal from "./components/modals/SettingsModal.jsx";
 import ConfirmationDialog from "./components/ui/ConfirmationDialog.jsx";
 import ShiftIcon from "./components/ui/ShiftIcon.jsx";
-import ToastContainer from "./components/ui/ToastContainer.jsx";
 import FeatureErrorBoundary from "./components/ui/FeatureErrorBoundary.jsx";
+import { useToast } from "./components/ui/ToastProvider.jsx";
 import { holidayCalendarByYear } from "./data/holidayCalendar.js";
 import {
   getHolidayClassification,
@@ -34,6 +33,7 @@ import {
 import {
   calculateCutoffPayrollDeductions,
   getPayrollDeductionSettingsDefaults,
+  payrollContributions,
   payrollDeductionSettingKeys,
   sumCutoffPayrollDeductions,
 } from "./utils/payrollDeductions.js";
@@ -74,7 +74,7 @@ import {
   createPayslipSnapshot,
   findPayslipSnapshot,
   getPayslipDirectoryPeriods,
-  getPayslipPeriodsThroughYearEnd,
+  getPayslipPeriodsThroughNextJanuary,
   getUpcomingPayslipPeriods,
   removePayslipSnapshot,
 } from "./utils/payrollHistory.js";
@@ -278,16 +278,12 @@ function getManilaTimestamp(date, minuteOffset) {
 }
 
 function getWorkspaceLoadErrorMessage(error) {
-  const detail =
-    typeof error?.message === "string"
-      ? error.message
-      : "The server returned no error message.";
   const code = typeof error?.code === "string" ? error.code : "";
 
   if (code === "AUTH_REQUIRED") {
     return "This cloud-data request was rejected because the server did not recognize an authenticated session. Refresh and try again; if the problem continues, sign in again.";
   }
-  return `Cloud data could not be loaded${code ? ` (${code})` : ""}: ${detail}`;
+  return "Cloud data could not be loaded. Check your connection and try again.";
 }
 
 function formatPayAmount(amount) {
@@ -1017,6 +1013,11 @@ function CalendarDay({
 export default function App() {
   const [confirmation, setConfirmation] = useState(null);
   const {
+    notify,
+    update: updateToast,
+    dismiss: dismissToast,
+  } = useToast();
+  const {
     data: authSession,
     isPending: authLoading,
     error: authError,
@@ -1043,6 +1044,11 @@ export default function App() {
   const [payslipHistorySaving, setPayslipHistorySaving] = useState(false);
   const [workspaceLoadAttempt, setWorkspaceLoadAttempt] = useState(0);
   const [saveRequest, setSaveRequest] = useState(0);
+  const [settingsRestoreRevision, setSettingsRestoreRevision] = useState(0);
+  const [settingsUndoing, setSettingsUndoing] = useState(false);
+  const settingsUndoInProgressRef = useRef(false);
+  const settingsUndoToastRef = useRef(null);
+  const saveSettingsHandlerRef = useRef(null);
   const [recoveryMode, setRecoveryMode] = useState(() => {
     const searchToken = new URLSearchParams(window.location.search).get(
       "token",
@@ -1058,6 +1064,8 @@ export default function App() {
     useState("Present");
   const [activeSettingsTab, setActiveSettingsTab] = useState("earnings");
   const [page, setPage] = useState(0);
+  const [payslipHistoryNavigationRequest, setPayslipHistoryNavigationRequest] =
+    useState(0);
   const [initialCalendarDate] = useState(() => getManilaDateTime().date);
   const [selectedPayslipPeriodEndDate, setSelectedPayslipPeriodEndDate] =
     useState(null);
@@ -1118,8 +1126,9 @@ export default function App() {
   const [expensePaymentMethod, setExpensePaymentMethod] = useState("GCash");
   const [expenseNote, setExpenseNote] = useState("");
   const [editingExpenseId, setEditingExpenseId] = useState(null);
-  const [toasts, setToasts] = useState([]);
-  const timers = useRef(new Map());
+  const loginToastFlowRef = useRef(null);
+  const startupToastRef = useRef(null);
+  const handleLogoutRef = useRef(null);
   const confirmationResolver = useRef(null);
   const monthCarouselTimer = useRef(null);
   const [clock, setClock] = useState(() =>
@@ -1911,7 +1920,7 @@ export default function App() {
   ]);
   const payslipDirectoryActivePeriods = useMemo(
     () =>
-      getPayslipPeriodsThroughYearEnd(
+      getPayslipPeriodsThroughNextJanuary(
         currentPayrollPeriod,
         new Date().getFullYear(),
       ),
@@ -2177,33 +2186,165 @@ export default function App() {
     ],
   );
 
-  const addToast = useCallback((message, type = "success") => {
-    const id = Date.now() + Math.random();
-    setToasts((current) => [...current, { id, message, type }]);
-    timers.current.set(
-      id,
-      window.setTimeout(() => {
-        setToasts((current) => current.filter((toast) => toast.id !== id));
-        timers.current.delete(id);
-      }, 3500),
-    );
-  }, []);
-
-  const showToast = useCallback(
-    (message, type = "success") => {
-      if (type === "success" && workspaceLoadedRef.current && userRef.current) {
-        pendingSuccessToasts.current.push(message);
-        setSaveRequest((request) => request + 1);
-        return;
-      }
-      addToast(message, type);
-    },
-    [addToast],
+  const addToast = useCallback(
+    (message, type = "success") =>
+      notify({
+        variant: type,
+        title: message,
+      }),
+    [notify],
   );
 
+  const beginLoginToast = useCallback(
+    () => {
+      if (loginToastFlowRef.current) {
+        dismissToast(loginToastFlowRef.current);
+      }
+      const toast = notify({
+        variant: "loading",
+        title: "Signing in...",
+        description: "Verifying your SSO assertion and session token...",
+        persistent: true,
+      });
+      loginToastFlowRef.current = toast?.id ?? null;
+      return toast?.id ?? null;
+    },
+    [dismissToast, notify],
+  );
+
+  const updateLoginToast = useCallback(
+    (description, title = "Signing in...") => {
+      const id = loginToastFlowRef.current;
+      if (id) updateToast(id, { variant: "loading", title, description });
+    },
+    [updateToast],
+  );
+
+  const completeLoginToast = useCallback(
+    ({ title, message, type, actionLabel = "", onAction = null }) => {
+      const id = loginToastFlowRef.current;
+      loginToastFlowRef.current = null;
+      if (!id) return;
+      updateToast(id, {
+        variant: type,
+        title,
+        description: message,
+        actionLabel,
+        onAction,
+        duration: 4500,
+      });
+    },
+    [updateToast],
+  );
+
+  const showToast = useCallback(
+    (message, type = "success", options = {}) => {
+      const workspaceAvailable =
+        workspaceLoadedRef.current && userRef.current;
+      if (options.toastId && (type !== "success" || !workspaceAvailable)) {
+        updateToast(options.toastId, {
+          variant: type,
+          title: message,
+          description: options.description || "",
+          duration: options.duration || 4500,
+        });
+        return { id: options.toastId };
+      }
+      if (type === "success" && workspaceAvailable) {
+        const toast = options.toastId
+          ? { id: options.toastId }
+          : notify({
+              variant: "loading",
+              title: options.loadingTitle || "Saving changes...",
+              description:
+                options.loadingDescription ||
+                "Waiting for cloud confirmation.",
+              persistent: true,
+              dedupeKey: options.dedupeKey,
+            });
+        if (toast) {
+          let resolveConfirmation;
+          const confirmation = options.awaitConfirmation
+            ? new Promise((resolve) => {
+                resolveConfirmation = resolve;
+              })
+            : null;
+          pendingSuccessToasts.current.push({
+            id: toast.id,
+            message,
+            description: options.description || "",
+            actionLabel: options.actionLabel || "",
+            onAction: options.onAction,
+            errorTitle: options.errorTitle || "Changes were not saved",
+            errorDescription: options.errorDescription,
+            resolveConfirmation,
+          });
+          setSaveRequest((request) => request + 1);
+          return confirmation ? { ...toast, confirmation } : toast;
+        }
+        setSaveRequest((request) => request + 1);
+        return toast;
+      }
+      addToast(message, type);
+      return undefined;
+    },
+    [addToast, notify, updateToast],
+  );
+
+  const resolvePendingWorkspaceToasts = useCallback(
+    (saved, errorMessage) => {
+      const pending = pendingSuccessToasts.current.splice(0);
+      pending.forEach(
+        ({
+          id,
+          message,
+          description,
+          actionLabel,
+          onAction,
+          errorTitle,
+          errorDescription,
+          resolveConfirmation,
+        }) => {
+          updateToast(
+            id,
+            saved
+              ? {
+                  variant: "success",
+                  title: message,
+                  description,
+                  actionLabel,
+                  onAction,
+                  duration: 4500,
+                }
+              : {
+                  variant: "error",
+                  title: errorTitle,
+                  description: errorDescription || errorMessage,
+                  actionLabel: "",
+                  onAction: null,
+                  duration: 4500,
+                },
+          );
+          resolveConfirmation?.(saved);
+        },
+      );
+    },
+    [updateToast],
+  );
+
+  const discardPendingWorkspaceToasts = useCallback(() => {
+    pendingSuccessToasts.current
+      .splice(0)
+      .forEach(({ id, resolveConfirmation }) => {
+        dismissToast(id);
+        resolveConfirmation?.(false);
+      });
+  }, [dismissToast]);
+
   const queueWorkspaceSave = useCallback(
-    (userId, snapshot) => {
+    (userId, snapshot, onSaveStart) => {
       const write = async () => {
+        onSaveStart?.();
         workspaceRevisionRef.current = await saveWorkspace(
           snapshot,
           workspaceRevisionRef.current,
@@ -2301,7 +2442,7 @@ export default function App() {
   );
 
   const persistPrivateFinancialData = useCallback(
-    (payload = createPrivateFinancialPayload()) => {
+    (payload = createPrivateFinancialPayload(), { expectedRevision } = {}) => {
       if (!user?.id || privateFinancialDataStatus !== "ready") {
         return Promise.reject(
           new Error("Private financial data is not ready to sync."),
@@ -2312,6 +2453,16 @@ export default function App() {
           throw new Error(
             "The signed-in account changed before private financial data could be saved.",
           );
+        }
+        if (
+          expectedRevision !== undefined &&
+          privateFinancialDataRevisionRef.current !== expectedRevision
+        ) {
+          const error = new Error(
+            "Private financial data changed before the operation could be applied.",
+          );
+          error.code = "REVISION_CONFLICT";
+          throw error;
         }
         const revision = await savePrivateFinancialData(
           payload,
@@ -2388,20 +2539,59 @@ export default function App() {
     [user?.id, legacySalaryVault, applyPrivateFinancialData],
   );
 
-  const dismissToast = useCallback((id) => {
-    window.clearTimeout(timers.current.get(id));
-    timers.current.delete(id);
-    setToasts((current) => current.filter((toast) => toast.id !== id));
-  }, []);
+  useEffect(() => {
+    if (!authLoading || startupToastRef.current) return;
+    const toast = notify({
+      variant: "loading",
+      title: "Restoring your secure session...",
+      description: "Checking for an active account session.",
+      persistent: true,
+    });
+    startupToastRef.current = toast?.id ?? null;
+  }, [authLoading, notify]);
 
   useEffect(() => {
-    if (!authError) return;
-    console.error("Could not restore the sign-in session:", authError.message);
-    addToast(
-      "Unable to restore the sign-in session. Please check the server configuration and try again.",
-      "warning",
-    );
-  }, [authError, addToast]);
+    if (authLoading) return;
+    const toastId = startupToastRef.current;
+    if (authError) {
+      console.error("Could not restore the sign-in session:", authError.message);
+      if (toastId) {
+        startupToastRef.current = null;
+        updateToast(toastId, {
+          variant: "error",
+          title: "Session could not be restored",
+          description:
+            "The saved session could not be confirmed. Sign in to continue.",
+        });
+      } else {
+        addToast(
+          "Unable to restore the saved session. Sign in to continue.",
+          "warning",
+        );
+      }
+      return;
+    }
+    if (!toastId) return;
+    startupToastRef.current = null;
+    if (user?.id) {
+      loginToastFlowRef.current = toastId;
+      updateToast(toastId, {
+        variant: "loading",
+        title: "Loading your workspace...",
+        description: "Fetching your workspace and private data from the cloud.",
+        persistent: true,
+      });
+    } else {
+      dismissToast(toastId);
+    }
+  }, [
+    authLoading,
+    authError,
+    user?.id,
+    addToast,
+    dismissToast,
+    updateToast,
+  ]);
 
   useEffect(() => {
     if (!user?.id) return undefined;
@@ -2457,31 +2647,66 @@ export default function App() {
       if (signOutStarted) return;
       signOutStarted = true;
       if (expirationTimer !== null) window.clearInterval(expirationTimer);
-      authClient
-        .signOut()
-        .then(({ error }) => {
+      const expiryToast = notify({
+        variant: "loading",
+        title: "Signing out...",
+        description: "Your session expired due to inactivity.",
+        persistent: true,
+      });
+      const retrySignOut = async () => {
+        updateToast(expiryToast.id, {
+          variant: "loading",
+          title: "Signing out...",
+          description: "Your session expired due to inactivity.",
+          persistent: true,
+          actionLabel: "",
+          onAction: null,
+        });
+        try {
+          const { error } = await authClient.signOut();
           if (error) {
             console.error("Automatic inactivity sign-out failed:", error);
-            addToast(
-              "Automatic sign-out failed. Please sign out manually to secure this account.",
-              "error",
-            );
-            return;
+            updateToast(expiryToast.id, {
+              variant: "error",
+              title: "Sign-out incomplete",
+              description:
+                "Could not reach the auth server to revoke your session. Retry sign out.",
+              actionLabel: "Retry Sign Out",
+              onAction: async () => {
+                await retrySignOut();
+                return false;
+              },
+            });
+            return false;
           }
           try {
             window.localStorage.removeItem(activityKey);
           } catch (error) {
             warnStorageFailure(error);
           }
-          addToast("You were signed out after one hour of inactivity.", "info");
-        })
-        .catch((error) => {
+          updateToast(expiryToast.id, {
+            variant: "sync",
+            title: "Signed out",
+            description: "Your session expired due to inactivity.",
+          });
+          return false;
+        } catch (error) {
           console.error("Automatic inactivity sign-out failed:", error);
-          addToast(
-            "Automatic sign-out failed. Please sign out manually to secure this account.",
-            "error",
-          );
-        });
+          updateToast(expiryToast.id, {
+            variant: "error",
+            title: "Sign-out incomplete",
+            description:
+              "The auth server could not confirm sign-out. Retry sign out.",
+            actionLabel: "Retry Sign Out",
+            onAction: async () => {
+              await retrySignOut();
+              return false;
+            },
+          });
+          return false;
+        }
+      };
+      void retrySignOut();
     };
 
     const checkExpiration = () => {
@@ -2549,7 +2774,7 @@ export default function App() {
         }
       }
     };
-  }, [user?.id, authSession?.session?.createdAt, addToast]);
+  }, [user?.id, authSession?.session?.createdAt, addToast, notify, updateToast]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -2576,7 +2801,7 @@ export default function App() {
       setWorkspaceLoading(false);
       setAttendancePunchError("");
       setWorkspaceDataWarning("");
-      pendingSuccessToasts.current = [];
+      discardPendingWorkspaceToasts();
       pendingExpenseClearRef.current = false;
       setAttendance({});
       setActiveTimeEntry(null);
@@ -2619,6 +2844,10 @@ export default function App() {
     setPrivateFinancialDataConflict(false);
     setPrivateFinancialDataSyncing(false);
     setLegacySalaryVault(null);
+    updateLoginToast(
+      "Fetching your workspace and private data from the cloud.",
+      "Loading your workspace...",
+    );
 
     loadWorkspace(user.id)
       .then(
@@ -2749,18 +2978,43 @@ export default function App() {
           workspaceLoadedRef.current = true;
           setWorkspaceSaveError("");
           setWorkspaceLoading(false);
+          completeLoginToast({
+            title: `Welcome back, ${user.name}`,
+            message: user.email
+              ? `Signed in as ${user.email}.`
+              : "Your workspace is ready.",
+            type: "info",
+            actionLabel: "Workspace",
+            onAction: () => {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+              return true;
+            },
+          });
         },
       )
       .catch((loadError) => {
         if (!active) return;
-        setWorkspaceError(getWorkspaceLoadErrorMessage(loadError));
+        const message = getWorkspaceLoadErrorMessage(loadError);
+        setWorkspaceError(message);
         setWorkspaceLoading(false);
+        completeLoginToast({
+          title: "Workspace could not be loaded",
+          message,
+          type: "error",
+        });
       });
 
     return () => {
       active = false;
     };
-  }, [user?.id, workspaceLoadAttempt, applyPrivateFinancialData]);
+  }, [
+    user?.id,
+    workspaceLoadAttempt,
+    applyPrivateFinancialData,
+    updateLoginToast,
+    completeLoginToast,
+    discardPendingWorkspaceToasts,
+  ]);
 
   useEffect(() => {
     if (
@@ -2778,9 +3032,23 @@ export default function App() {
     privateFinancialDataSyncTimerRef.current = window.setTimeout(() => {
       privateFinancialDataSyncTimerRef.current = null;
       setPrivateFinancialDataSyncing(true);
+      const syncToast = notify({
+        variant: "loading",
+        title: "Syncing private data...",
+        description: "Saving encrypted data to your account.",
+        persistent: true,
+        dedupeKey: "private-financial-data-sync",
+      });
       persistPrivateFinancialData(payload)
         .then(() => {
           setPrivateFinancialDataSyncing(false);
+          if (syncToast) {
+            updateToast(syncToast.id, {
+              variant: "sync",
+              title: "Background Sync",
+              description: "Your private data is up to date.",
+            });
+          }
         })
         .catch((error) => {
           setPrivateFinancialDataSyncing(false);
@@ -2789,7 +3057,15 @@ export default function App() {
             ? "Private financial data changed on another device. Reload before retrying."
             : "Private financial data could not be saved. Your changes remain in memory; retry after checking your connection.";
           setPrivateFinancialDataError(message);
-          addToast(message, "error");
+          if (syncToast) {
+            updateToast(syncToast.id, {
+            variant: "error",
+            title: "Private data sync failed",
+            description: conflict
+              ? "The data changed on another device. Reload before retrying."
+              : "Your changes remain in memory. Check your connection and retry.",
+            });
+          }
         });
     }, 500);
     return () => {
@@ -2808,7 +3084,8 @@ export default function App() {
     attendance,
     createPrivateFinancialPayload,
     persistPrivateFinancialData,
-    addToast,
+    notify,
+    updateToast,
   ]);
 
   useEffect(() => {
@@ -2822,10 +3099,49 @@ export default function App() {
 
     const snapshot = workspaceData;
     const timer = window.setTimeout(() => {
-      const saveOperation = queueWorkspaceSave(user.id, snapshot);
+      const loginToastId = loginToastFlowRef.current;
+      let syncToast = loginToastId
+        ? { id: loginToastId, isLoginFlow: true }
+        : null;
+      if (!syncToast && pendingSuccessToasts.current.length === 0) {
+        const toast = notify({
+          variant: "loading",
+          title: "Syncing workspace data...",
+          description: "Queuing the latest workspace update...",
+          persistent: true,
+          dedupeKey: "workspace-sync",
+        });
+        syncToast = toast ? { id: toast.id, isLoginFlow: false } : null;
+      }
+      if (syncToast?.isLoginFlow) {
+        updateToast(syncToast.id, {
+          variant: "loading",
+          title: "Syncing workspace data...",
+          description: "Queuing the latest workspace update...",
+          persistent: true,
+        });
+      }
+      const saveOperation = queueWorkspaceSave(user.id, snapshot, () => {
+        if (syncToast && userRef.current === user.id) {
+          updateToast(syncToast.id, {
+            variant: "loading",
+            title: "Syncing workspace data...",
+            description: "Saving workspace changes to the cloud...",
+            persistent: true,
+          });
+        }
+      });
       saveOperation
         .then(() => {
-          if (userRef.current !== user.id) return;
+          if (userRef.current !== user.id) {
+            if (syncToast) {
+              dismissToast(syncToast.id);
+              if (loginToastFlowRef.current === syncToast.id) {
+                loginToastFlowRef.current = null;
+              }
+            }
+            return;
+          }
           setWorkspaceSaveError("");
           if (pendingExpenseClearRef.current) {
             pendingExpenseClearRef.current = false;
@@ -2833,19 +3149,69 @@ export default function App() {
             setExpenseAmount("");
             setExpenseNote("");
           }
-          const savedMessages = pendingSuccessToasts.current.splice(0);
-          savedMessages.forEach((message) => addToast(message, "success"));
+          resolvePendingWorkspaceToasts(true);
+          if (syncToast) {
+            if (
+              syncToast.isLoginFlow &&
+              loginToastFlowRef.current === syncToast.id
+            ) {
+              completeLoginToast({
+                title: "Workspace synced",
+                message: "Your workspace data is up to date.",
+                type: "sync",
+              });
+            } else {
+              updateToast(syncToast.id, {
+                variant: "sync",
+                title: "Workspace synced",
+                description: "Your workspace data is up to date.",
+              });
+            }
+          }
         })
         .catch(() => {
-          if (userRef.current !== user.id) return;
-          pendingSuccessToasts.current = [];
+          if (userRef.current !== user.id) {
+            if (syncToast) {
+              dismissToast(syncToast.id);
+              if (loginToastFlowRef.current === syncToast.id) {
+                loginToastFlowRef.current = null;
+              }
+            }
+            return;
+          }
+          resolvePendingWorkspaceToasts(
+            false,
+            "Cloud save failed. Your changes are not confirmed as saved.",
+          );
+          if (syncToast) {
+            const message =
+              "Your changes are not confirmed as saved. Retry after checking your connection.";
+            if (
+              syncToast.isLoginFlow &&
+              loginToastFlowRef.current === syncToast.id
+            ) {
+              completeLoginToast({
+                title: "Workspace sync failed",
+                message,
+                type: "error",
+              });
+            } else {
+              updateToast(syncToast.id, {
+                variant: "error",
+                title: "Workspace sync failed",
+                description: message,
+              });
+            }
+          }
           setWorkspaceSaveError(
             "Cloud save failed. Changes are not confirmed. Retry, or reload to discard unsynced changes and load the latest cloud copy.",
           );
-          addToast(
-            "Cloud save failed. Your changes are not confirmed as saved.",
-            "error",
-          );
+          if (!syncToast) {
+            addToast(
+              "Cloud save failed. Your changes are not confirmed as saved.",
+              "error",
+            );
+          }
         });
     }, 500);
 
@@ -2859,12 +3225,16 @@ export default function App() {
     workspaceData,
     saveRequest,
     addToast,
+    notify,
+    updateToast,
+    dismissToast,
+    completeLoginToast,
+    resolvePendingWorkspaceToasts,
     queueWorkspaceSave,
   ]);
 
   useEffect(
     () => () => {
-      timers.current.forEach(window.clearTimeout);
       window.clearTimeout(monthCarouselTimer.current);
       const pointer = calendarRangePointerRef.current;
       if (pointer?.target?.hasPointerCapture?.(pointer.pointerId)) {
@@ -3672,13 +4042,8 @@ export default function App() {
         historicalPayslipsRef.current,
         snapshot,
       );
-    } catch (error) {
-      showToast(
-        error instanceof Error
-          ? error.message
-          : "Payslip history could not be updated.",
-        "warning",
-      );
+    } catch {
+      showToast("Payslip history could not be updated.", "warning");
       return false;
     }
 
@@ -3686,6 +4051,12 @@ export default function App() {
     privateFinancialDataSyncTimerRef.current = null;
     setPayslipHistorySaving(true);
     setPrivateFinancialDataSyncing(true);
+    const saveToast = notify({
+      variant: "loading",
+      title: "Saving payslip...",
+      description: "Saving the snapshot to your private data.",
+      persistent: true,
+    });
     try {
       await persistPrivateFinancialData(
         createPrivateFinancialPayload(nextHistory),
@@ -3693,16 +4064,32 @@ export default function App() {
       historicalPayslipsRef.current = nextHistory;
       setHistoricalPayslips(nextHistory);
       privateFinancialDataSkipNextSyncRef.current = true;
-      addToast("Payslip estimate saved to history.", "success");
+      updateToast(saveToast.id, {
+        variant: "success",
+        title: "Payslip saved",
+        description: "The snapshot was saved to your history.",
+        actionLabel: "View payslip history",
+        onAction: () => {
+          setActiveModal(null);
+          setActiveHistoricalPayslip(null);
+          setPage(1);
+          setPayslipHistoryNavigationRequest((request) => request + 1);
+        },
+      });
       return true;
     } catch (error) {
-      const detail = error instanceof Error ? ` ${error.message}` : "";
-      const message =
-        error?.code === "REVISION_CONFLICT"
-          ? "Private financial data changed on another device. Reload before saving this payslip."
-          : `Payslip history could not be saved. No success was recorded.${detail}`;
+      const conflict = error?.code === "REVISION_CONFLICT";
+      const message = conflict
+        ? "Private financial data changed on another device. Reload before saving this payslip."
+        : "Payslip history could not be saved. No success was recorded.";
       setPrivateFinancialDataError(message);
-      addToast(message, "error");
+      updateToast(saveToast.id, {
+        variant: "error",
+        title: "Payslip not saved",
+        description: conflict
+          ? "Private data changed on another device. Reload and retry."
+          : "The server could not confirm the save. Please retry.",
+      });
       return false;
     } finally {
       setPrivateFinancialDataSyncing(false);
@@ -3720,6 +4107,93 @@ export default function App() {
     setActiveModal("payslipModal");
   }, []);
 
+  const undoDeleteHistoricalPayslip = async (snapshot, toastId) => {
+    const stopUndo = (variant, title, description) => {
+      updateToast(toastId, {
+        variant,
+        title,
+        description,
+        actionLabel: "",
+        onAction: null,
+      });
+      return false;
+    };
+
+    if (payslipHistorySaving) {
+      return stopUndo(
+        "warning",
+        "Payslip not restored",
+        "Finish the current payslip update before undoing this deletion.",
+      );
+    }
+    if (privateFinancialDataStatus !== "ready" || !user?.id) {
+      return stopUndo(
+        "error",
+        "Payslip not restored",
+        "Private payslip history is unavailable. Reload it before restoring this snapshot.",
+      );
+    }
+
+    let restoredHistory;
+    try {
+      restoredHistory = appendPayslipSnapshot(
+        historicalPayslipsRef.current,
+        snapshot,
+      );
+    } catch {
+      return stopUndo(
+        "error",
+        "Payslip not restored",
+        "This payslip could not be added back to your history.",
+      );
+    }
+
+    window.clearTimeout(privateFinancialDataSyncTimerRef.current);
+    privateFinancialDataSyncTimerRef.current = null;
+    setPayslipHistorySaving(true);
+    setPrivateFinancialDataSyncing(true);
+    updateToast(toastId, {
+      variant: "loading",
+      title: "Restoring payslip...",
+      description: `Saving ${formatPayrollPeriod(snapshot.period)} back to your private history.`,
+      persistent: true,
+      actionLabel: "",
+      onAction: null,
+    });
+    try {
+      await persistPrivateFinancialData(
+        createPrivateFinancialPayload(restoredHistory),
+      );
+      historicalPayslipsRef.current = restoredHistory;
+      setHistoricalPayslips(restoredHistory);
+      privateFinancialDataSkipNextSyncRef.current = true;
+      updateToast(toastId, {
+        variant: "success",
+        title: "Payslip restored",
+        description: "The saved snapshot is back in your payslip history.",
+        actionLabel: "",
+        onAction: null,
+      });
+      return false;
+    } catch (error) {
+      const conflict = error?.code === "REVISION_CONFLICT";
+      const message = conflict
+        ? "Private financial data changed on another device. Reload before restoring this payslip."
+        : "The saved payslip could not be restored. Please retry.";
+      setPrivateFinancialDataError(message);
+      return stopUndo(
+        "error",
+        "Payslip not restored",
+        conflict
+          ? "Private data changed on another device. Reload and retry."
+          : "The server could not confirm the restore.",
+      );
+    } finally {
+      setPrivateFinancialDataSyncing(false);
+      setPayslipHistorySaving(false);
+    }
+  };
+
   const deleteHistoricalPayslip = async (snapshot) => {
     if (payslipHistorySaving) return false;
     if (privateFinancialDataStatus !== "ready" || !user?.id) {
@@ -3736,13 +4210,8 @@ export default function App() {
         historicalPayslipsRef.current,
         snapshot.id,
       );
-    } catch (error) {
-      showToast(
-        error instanceof Error
-          ? error.message
-          : "The saved payslip could not be deleted.",
-        "error",
-      );
+    } catch {
+      showToast("The saved payslip could not be deleted.", "error");
       return false;
     }
 
@@ -3750,6 +4219,12 @@ export default function App() {
     privateFinancialDataSyncTimerRef.current = null;
     setPayslipHistorySaving(true);
     setPrivateFinancialDataSyncing(true);
+    const deleteToast = notify({
+      variant: "loading",
+      title: `Deleting payslip for ${formatPayrollPeriod(snapshot.period)}...`,
+      description: "Keeping a temporary recovery copy before removing it from your history.",
+      persistent: true,
+    });
     try {
       await persistPrivateFinancialData(
         createPrivateFinancialPayload(nextHistory),
@@ -3760,16 +4235,28 @@ export default function App() {
         setActiveHistoricalPayslip(null);
       }
       privateFinancialDataSkipNextSyncRef.current = true;
-      addToast("Saved payslip deleted.", "success");
+      updateToast(deleteToast.id, {
+        variant: "success",
+        title: "Payslip deleted",
+        description: `${formatPayrollPeriod(snapshot.period)} was removed from your payslip history.`,
+        actionLabel: "Undo",
+        onAction: () =>
+          undoDeleteHistoricalPayslip(snapshot, deleteToast.id),
+      });
       return true;
     } catch (error) {
-      const detail = error instanceof Error ? ` ${error.message}` : "";
-      const message =
-        error?.code === "REVISION_CONFLICT"
-          ? "Private financial data changed on another device. Reload before deleting this payslip."
-          : `Saved payslip could not be deleted. No deletion was recorded.${detail}`;
+      const conflict = error?.code === "REVISION_CONFLICT";
+      const message = conflict
+        ? "Private financial data changed on another device. Reload before deleting this payslip."
+        : "Saved payslip could not be deleted. No deletion was recorded.";
       setPrivateFinancialDataError(message);
-      addToast(message, "error");
+      updateToast(deleteToast.id, {
+        variant: "error",
+        title: "Payslip not deleted",
+        description: conflict
+          ? "Private data changed on another device. Reload and retry."
+          : "The server could not confirm the deletion. Please retry.",
+      });
       return false;
     } finally {
       setPrivateFinancialDataSyncing(false);
@@ -3777,7 +4264,7 @@ export default function App() {
     }
   };
 
-  const flushWorkspace = async () => {
+  const flushWorkspace = async ({ notifyError = true } = {}) => {
     if (!user?.id || !workspaceLoadedRef.current) return true;
     if (privateFinancialDataNeedsInitialSaveRef.current) {
       setWorkspaceSaveError(
@@ -3795,23 +4282,27 @@ export default function App() {
         setExpenseAmount("");
         setExpenseNote("");
       }
-      pendingSuccessToasts.current
-        .splice(0)
-        .forEach((message) => addToast(message, "success"));
+      resolvePendingWorkspaceToasts(true);
       return true;
     } catch {
+      resolvePendingWorkspaceToasts(
+        false,
+        "Cloud save failed. Your changes are not confirmed as saved.",
+      );
       setWorkspaceSaveError(
         "Cloud save failed. Changes are not confirmed. Retry, or reload to discard unsynced changes and load the latest cloud copy.",
       );
-      addToast(
-        "Cloud save failed. Your changes are not confirmed as saved.",
-        "error",
-      );
+      if (notifyError) {
+        addToast(
+          "Cloud save failed. Your changes are not confirmed as saved.",
+          "error",
+        );
+      }
       return false;
     }
   };
 
-  const flushPrivateFinancialData = async () => {
+  const flushPrivateFinancialData = async ({ notifyError = true } = {}) => {
     if (privateFinancialDataStatus !== "ready") return true;
     window.clearTimeout(privateFinancialDataSyncTimerRef.current);
     privateFinancialDataSyncTimerRef.current = null;
@@ -3827,7 +4318,7 @@ export default function App() {
           ? "Private financial data changed on another device. Reload before signing out."
           : "Private financial data could not be saved. Stay signed in and retry before signing out.";
       setPrivateFinancialDataError(message);
-      addToast(message, "error");
+      if (notifyError) addToast(message, "error");
       return false;
     }
   };
@@ -3889,17 +4380,25 @@ export default function App() {
     if (password === null || password.length === 0) return;
 
     setAccountDeletionLoading(true);
+    const deletionToast = notify({
+      variant: "loading",
+      title: "Deleting account...",
+      description: "Waiting for the account service to confirm deletion.",
+      persistent: true,
+    });
     try {
       const { error } = await authClient.deleteUser({ password });
       if (error) {
-        showToast(
-          `Account deletion could not be confirmed: ${error.message}`,
-          "error",
-        );
+        updateToast(deletionToast.id, {
+          variant: "error",
+          title: "Account deletion not confirmed",
+          description:
+            "The account service could not confirm deletion. Check your account status before retrying.",
+        });
         return;
       }
 
-      pendingSuccessToasts.current = [];
+      discardPendingWorkspaceToasts();
       await refetchAuthSession();
       setWorkspaceLoadedForUser(null);
       setActiveModal(null);
@@ -3909,18 +4408,19 @@ export default function App() {
       setLegacySalaryVault(null);
       setPrivateFinancialDataStatus("loading");
       setPrivateFinancialDataError("");
-      addToast(
-        "Account and all associated TimeCloud app data were deleted.",
-        "info",
-      );
+      updateToast(deletionToast.id, {
+        variant: "success",
+        title: "Account deleted",
+        description: "Your account deletion was confirmed.",
+      });
     } catch (error) {
       console.error("Account deletion request failed:", error);
-      showToast(
-        error instanceof Error
-          ? `Account deletion could not be confirmed: ${error.message}`
-          : "Account deletion could not be confirmed. Check your account status before retrying.",
-        "error",
-      );
+      updateToast(deletionToast.id, {
+        variant: "error",
+        title: "Account deletion not confirmed",
+        description:
+          "Check your account status before retrying or contacting support.",
+      });
     } finally {
       setAccountDeletionLoading(false);
     }
@@ -4279,6 +4779,12 @@ export default function App() {
         );
         return;
       }
+      const punchToast = notify({
+        variant: "loading",
+        title: "Saving Time Out...",
+        description: "Waiting for attendance confirmation.",
+        persistent: true,
+      });
       try {
         const punch = await clockOutForShift(date, user?.id);
         const timeOut = getManilaTime(new Date(punch.timeAt));
@@ -4310,30 +4816,37 @@ export default function App() {
         );
         setAttendance((state) => ({ ...state, [date]: completedRecord }));
         setActiveTimeEntry(null);
-        showToast(
-          `Timed out at ${outValue}. Attendance saved for ${date}.`,
-          "success",
-        );
+        updateToast(punchToast.id, {
+          variant: "success",
+          title: "Time Out saved",
+          description: "Your attendance record was confirmed.",
+        });
       } catch (error) {
         if (error?.code === "ACTIVE_PUNCH_REQUIRED") {
-          showToast(
-            "Time Out requires an active cloud-recorded Time In and can only be recorded once.",
-            "warning",
-          );
+          updateToast(punchToast.id, {
+            variant: "warning",
+            title: "Time Out not recorded",
+            description:
+              "An active cloud-recorded Time In is required and can only be recorded once.",
+          });
         } else if (
           error?.code === "INVALID_SCHEDULE" ||
           error?.code === "PUNCH_WINDOW_CLOSED"
         ) {
-          showToast(
-            "The server rejected Time Out because the shift time is invalid or the clock-out window has ended. Use Manual Entry to correct a missed punch.",
-            "error",
-          );
+          updateToast(punchToast.id, {
+            variant: "error",
+            title: "Time Out not recorded",
+            description:
+              "The schedule or clock-out window is invalid. Use Manual Entry to correct a missed punch.",
+          });
         } else {
           console.error("Time Out cloud save failed:", error);
-          showToast(
-            `Time Out could not be saved to the cloud${error?.message ? `: ${error.message}` : ". Check your connection and try again."}`,
-            "error",
-          );
+          updateToast(punchToast.id, {
+            variant: "error",
+            title: "Time Out could not be saved",
+            description:
+              "The server did not confirm this clock-out. Verify the attendance entry before retrying.",
+          });
         }
         return;
       }
@@ -4394,8 +4907,22 @@ export default function App() {
     const hasScheduledShift =
       currentRecord.hasAssignedShift === true ||
       Boolean(currentRecord.shiftStartTime && currentRecord.shiftEndTime);
+    const punchToast = notify({
+      variant: "loading",
+      title: "Saving Time In...",
+      description: "Preparing and confirming your attendance record.",
+      persistent: true,
+    });
     try {
-      if (!(await flushWorkspace())) return;
+      if (!(await flushWorkspace({ notifyError: false }))) {
+        updateToast(punchToast.id, {
+          variant: "error",
+          title: "Time In not recorded",
+          description:
+            "Workspace changes could not be saved. Check your connection and retry.",
+        });
+        return;
+      }
       const punch = await clockInForShift(targetDate, user?.id);
       const time = punch.record.workStartTime;
       const inValue = formatTime(time);
@@ -4415,21 +4942,26 @@ export default function App() {
       );
       setAttendance((state) => ({ ...state, [targetDate]: clockedInRecord }));
       setActiveTimeEntry({ date: targetDate, time });
-      showToast(
-        `Timed in at ${inValue}. Remember to time out when your shift ends.`,
-        "success",
-      );
+      updateToast(punchToast.id, {
+        variant: "success",
+        title: "Time In saved",
+        description: "Your attendance record was confirmed.",
+      });
     } catch (error) {
       if (error?.code === "PUNCH_ALREADY_EXISTS") {
-        showToast(
-          "A Time In was already recorded for this shift, possibly in another browser.",
-          "warning",
-        );
+        updateToast(punchToast.id, {
+          variant: "warning",
+          title: "Time In already recorded",
+          description:
+            "A record already exists for this shift. Refresh to see the latest attendance.",
+        });
       } else {
-        showToast(
-          "Time In could not be saved to the cloud. Check your connection and try again.",
-          "error",
-        );
+        updateToast(punchToast.id, {
+          variant: "error",
+          title: "Time In could not be saved",
+          description:
+            "The server did not confirm this clock-in. Verify attendance before submitting again.",
+        });
       }
     }
   };
@@ -5355,6 +5887,644 @@ export default function App() {
     );
   });
 
+  const saveConfigurationSettings = async (draft, options = {}) => {
+    if (!options.isUndo && settingsUndoToastRef.current) {
+      dismissToast(settingsUndoToastRef.current);
+      settingsUndoToastRef.current = null;
+    }
+
+    const currentPayrollSettings = {
+      ...localPrivateFinancialDefaults,
+      ...getPayrollDeductionSettingsDefaults(privateFinancialSettings),
+      ...privateFinancialSettings,
+      dailyWage,
+      dailyAllowance,
+      overtimeMultiplier,
+      nightDifferential,
+    };
+    const previousPrivateFinancialPayload = options.isUndo
+      ? null
+      : createPrivateFinancialPayload();
+    const previousDraft = {
+      ...currentPayrollSettings,
+      holidays: holidays.map((holiday) => ({ ...holiday })),
+      selectedLocality,
+      holidayEligibilityConfirmed,
+      dailyWage,
+      dailyAllowance,
+      overtimeMultiplier,
+      regularHolidayMultiplier:
+        currentPayrollSettings.regularHolidayMultiplier,
+      specialHolidayMultiplier:
+        currentPayrollSettings.specialHolidayMultiplier,
+      shiftTimeFormat: currentPayrollSettings.shiftTimeFormat,
+      primaryTimezone: currentPayrollSettings.primaryTimezone,
+      dateFormat: currentPayrollSettings.dateFormat,
+      displayCurrency: currentPayrollSettings.displayCurrency,
+      nightDifferential,
+      payrollEffectiveDate: draft.payrollEffectiveDate,
+      settingsBalances: { ...settingsBalances },
+    };
+    const nextPayrollSettings = {
+      ...currentPayrollSettings,
+      dailyWage: draft.dailyWage,
+      dailyAllowance: draft.dailyAllowance,
+      workingDaysFactor: draft.workingDaysFactor,
+      payrollBasis: draft.payrollBasis,
+      monthlySalary: draft.monthlySalary,
+      overtimeMultiplier: draft.overtimeMultiplier,
+      regularHolidayMultiplier: draft.regularHolidayMultiplier,
+      specialHolidayMultiplier: draft.specialHolidayMultiplier,
+      shiftTimeFormat: draft.shiftTimeFormat,
+      nightDifferential: draft.nightDifferential,
+      primaryTimezone: draft.primaryTimezone,
+      dateFormat: draft.dateFormat,
+      displayCurrency: draft.displayCurrency,
+      ...Object.fromEntries(
+        payrollDeductionSettingKeys.map((key) => [key, draft[key]]),
+      ),
+    };
+    const nextDailyWage = getPayrollDailyWage(nextPayrollSettings);
+    const payrollRatesChanged =
+      nextDailyWage !== Number(dailyWage) ||
+      draft.dailyAllowance !== dailyAllowance ||
+      draft.workingDaysFactor !== currentPayrollSettings.workingDaysFactor ||
+      draft.payrollBasis !== currentPayrollSettings.payrollBasis ||
+      ((draft.payrollBasis === "monthly" ||
+        currentPayrollSettings.payrollBasis === "monthly") &&
+        draft.monthlySalary !== currentPayrollSettings.monthlySalary);
+    const payrollRulesChanged =
+      draft.overtimeMultiplier !== overtimeMultiplier ||
+      draft.regularHolidayMultiplier !==
+        currentPayrollSettings.regularHolidayMultiplier ||
+      draft.specialHolidayMultiplier !==
+        currentPayrollSettings.specialHolidayMultiplier ||
+      draft.nightDifferential !== nightDifferential;
+    const payrollDeductionsChanged = payrollDeductionSettingKeys.some(
+      (key) => draft[key] !== currentPayrollSettings[key],
+    );
+    const financialSettingsChanged =
+      payrollRatesChanged || payrollRulesChanged || payrollDeductionsChanged;
+    const privatePreferencesChanged =
+      draft.shiftTimeFormat !== currentPayrollSettings.shiftTimeFormat ||
+      draft.primaryTimezone !== currentPayrollSettings.primaryTimezone ||
+      draft.dateFormat !== currentPayrollSettings.dateFormat ||
+      draft.displayCurrency !== currentPayrollSettings.displayCurrency;
+    const privateSettingsChanged =
+      financialSettingsChanged || privatePreferencesChanged;
+    const changedPrivateItems = [];
+    if (payrollRatesChanged) changedPrivateItems.push("pay rates and allowances");
+    if (payrollRulesChanged) {
+      changedPrivateItems.push("overtime, holiday, and night-differential rates");
+    }
+    if (
+      draft.payrollDeductionMode !== currentPayrollSettings.payrollDeductionMode
+    ) {
+      changedPrivateItems.push("payroll deduction method");
+    }
+    const changedContributionLabels = payrollContributions
+      .filter(({ id, manualAmountKey }) =>
+        [
+          manualAmountKey,
+          `${id}Frequency`,
+          `${id}MonthlyCutoff`,
+          `${id}FirstCutoffAmount`,
+          `${id}SecondCutoffAmount`,
+        ].some((key) => draft[key] !== currentPayrollSettings[key]),
+      )
+      .map(({ label }) => `${label} contribution settings`);
+    changedPrivateItems.push(...changedContributionLabels);
+    if (draft.shiftTimeFormat !== currentPayrollSettings.shiftTimeFormat) {
+      changedPrivateItems.push("shift time format");
+    }
+    if (draft.primaryTimezone !== currentPayrollSettings.primaryTimezone) {
+      changedPrivateItems.push("timezone");
+    }
+    if (draft.dateFormat !== currentPayrollSettings.dateFormat) {
+      changedPrivateItems.push("date format");
+    }
+    if (draft.displayCurrency !== currentPayrollSettings.displayCurrency) {
+      changedPrivateItems.push("display currency");
+    }
+    const changedWorkspaceItems = [];
+    if (JSON.stringify(draft.holidays) !== JSON.stringify(holidays)) {
+      changedWorkspaceItems.push("holiday calendar");
+    }
+    if (
+      draft.selectedLocality !== selectedLocality ||
+      draft.holidayEligibilityConfirmed !== holidayEligibilityConfirmed
+    ) {
+      changedWorkspaceItems.push("holiday locality and eligibility");
+    }
+    if (
+      ["VL", "SL", "EL"].some(
+        (code) =>
+          Number(draft.settingsBalances?.[code]) !==
+          Number(settingsBalances?.[code]),
+      )
+    ) {
+      changedWorkspaceItems.push("leave balances");
+    }
+    const describeItems = (items) => {
+      if (items.length < 2) return items[0] || "settings";
+      if (items.length === 2) return `${items[0]} and ${items[1]}`;
+      return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+    };
+    const privateSaveDescription =
+      changedPrivateItems.length > 0
+        ? `Saving ${describeItems(changedPrivateItems)} to private financial data...`
+        : "";
+    const workspaceSaveDescription =
+      changedWorkspaceItems.length > 0
+        ? `Saving ${describeItems(changedWorkspaceItems)} to your workspace...`
+        : "Saving your workspace snapshot to the cloud...";
+    const updatedPreferenceDetails = [];
+    if (
+      nextDailyWage !== Number(dailyWage) ||
+      draft.payrollBasis !== currentPayrollSettings.payrollBasis ||
+      ((draft.payrollBasis === "monthly" ||
+        currentPayrollSettings.payrollBasis === "monthly") &&
+        draft.monthlySalary !== currentPayrollSettings.monthlySalary)
+    ) {
+      updatedPreferenceDetails.push(
+        draft.payrollBasis === "monthly"
+          ? "Monthly pay settings updated."
+          : "Daily pay rate updated.",
+      );
+    }
+    if (draft.dailyAllowance !== dailyAllowance) {
+      updatedPreferenceDetails.push("Daily allowance updated.");
+    }
+    if (
+      draft.workingDaysFactor !== currentPayrollSettings.workingDaysFactor
+    ) {
+      updatedPreferenceDetails.push("Working-days factor updated.");
+    }
+    if (draft.overtimeMultiplier !== overtimeMultiplier) {
+      updatedPreferenceDetails.push("Overtime rate updated.");
+    }
+    if (
+      draft.regularHolidayMultiplier !==
+      currentPayrollSettings.regularHolidayMultiplier
+    ) {
+      updatedPreferenceDetails.push("Regular holiday rate updated.");
+    }
+    if (
+      draft.specialHolidayMultiplier !==
+      currentPayrollSettings.specialHolidayMultiplier
+    ) {
+      updatedPreferenceDetails.push("Special holiday rate updated.");
+    }
+    if (draft.nightDifferential !== nightDifferential) {
+      updatedPreferenceDetails.push("Night differential updated.");
+    }
+    if (
+      draft.payrollDeductionMode !== currentPayrollSettings.payrollDeductionMode
+    ) {
+      updatedPreferenceDetails.push("Payroll deduction method updated.");
+    }
+    updatedPreferenceDetails.push(
+      ...changedContributionLabels.map((label) => `${label} updated.`),
+    );
+    if (draft.shiftTimeFormat !== currentPayrollSettings.shiftTimeFormat) {
+      const timeFormat =
+        draft.shiftTimeFormat === "12h" ? "12-hour" : "24-hour";
+      updatedPreferenceDetails.push(
+        `Shift time format set to ${timeFormat}.`,
+      );
+    }
+    if (draft.primaryTimezone !== currentPayrollSettings.primaryTimezone) {
+      updatedPreferenceDetails.push(
+        `Timezone set to ${draft.primaryTimezone}.`,
+      );
+    }
+    if (draft.dateFormat !== currentPayrollSettings.dateFormat) {
+      updatedPreferenceDetails.push(`Date format set to ${draft.dateFormat}.`);
+    }
+    if (draft.displayCurrency !== currentPayrollSettings.displayCurrency) {
+      updatedPreferenceDetails.push(
+        `Display currency set to ${draft.displayCurrency}.`,
+      );
+    }
+    if (JSON.stringify(draft.holidays) !== JSON.stringify(holidays)) {
+      updatedPreferenceDetails.push("Holiday calendar updated.");
+    }
+    if (draft.selectedLocality !== selectedLocality) {
+      updatedPreferenceDetails.push(
+        `Holiday locality set to ${draft.selectedLocality || "none"}.`,
+      );
+    }
+    if (draft.holidayEligibilityConfirmed !== holidayEligibilityConfirmed) {
+      updatedPreferenceDetails.push(
+        draft.holidayEligibilityConfirmed
+          ? "Holiday eligibility confirmed."
+          : "Holiday eligibility confirmation cleared.",
+      );
+    }
+    const leaveLabels = {
+      VL: "Vacation leave",
+      SL: "Sick leave",
+      EL: "Emergency leave",
+    };
+    for (const code of ["VL", "SL", "EL"]) {
+      if (
+        Number(draft.settingsBalances?.[code]) !==
+        Number(settingsBalances?.[code])
+      ) {
+        const days = Number(draft.settingsBalances?.[code]) || 0;
+        updatedPreferenceDetails.push(
+          `${leaveLabels[code]} set to ${days.toLocaleString()} ${days === 1 ? "day" : "days"}.`,
+        );
+      }
+    }
+    const updatedPreferencesDescription =
+      updatedPreferenceDetails.join(" ") ||
+      "No preference changes were detected.";
+    const settingsToast = options.toastId
+      ? { id: options.toastId }
+      : notify({
+          variant: "loading",
+          title: "Updating preferences...",
+          description:
+            privateSaveDescription ||
+            (changedWorkspaceItems.length > 0
+              ? `Preparing ${describeItems(changedWorkspaceItems)} for your workspace...`
+              : "Preparing the current settings snapshot..."),
+          persistent: true,
+        });
+
+    if (options.isUndo) {
+      updateToast(settingsToast.id, {
+        variant: "loading",
+        title: "Undoing preferences...",
+        description:
+          options.restorePrivateFinancialData
+            ? "Restoring payroll settings, attendance records, and payslip history..."
+            : `Restoring ${describeItems(changedWorkspaceItems)}...`,
+        persistent: true,
+        actionLabel: "",
+        onAction: null,
+      });
+    }
+
+    const restoresPrivateFinancialData =
+      options.isUndo && options.restorePrivateFinancialData;
+    const needsPrivateData =
+      privateSettingsChanged || restoresPrivateFinancialData;
+    if (needsPrivateData && privateFinancialDataStatus !== "ready") {
+      updateToast(settingsToast.id, {
+        variant: "warning",
+        title: options.isUndo
+          ? "Preferences not reverted"
+          : "Settings not saved",
+        description:
+          "Private financial settings are still loading, so this configuration change was not applied.",
+        actionLabel: "",
+        onAction: null,
+      });
+      return false;
+    }
+
+    if (needsPrivateData) {
+      window.clearTimeout(privateFinancialDataSyncTimerRef.current);
+      privateFinancialDataSyncTimerRef.current = null;
+      try {
+        if (restoresPrivateFinancialData) {
+          await persistPrivateFinancialData(
+            options.previousPrivateFinancialPayload,
+            { expectedRevision: options.expectedPrivateRevision },
+          );
+          applyPrivateFinancialData(options.previousPrivateFinancialPayload);
+        } else {
+          const payrollUpdate = financialSettingsChanged
+            ? createPayrollSettingsUpdate({
+                currentSettings: currentPayrollSettings,
+                nextSettings: nextPayrollSettings,
+                effectiveDate: draft.payrollEffectiveDate,
+                attendance,
+                holidays: draft.holidays,
+                selectedLocality: draft.selectedLocality,
+                holidayEligibilityConfirmed:
+                  draft.holidayEligibilityConfirmed,
+              })
+            : null;
+          await persistPrivateFinancialData({
+            settings: payrollUpdate?.settings ?? nextPayrollSettings,
+            attendance:
+              payrollUpdate?.attendance ?? createPrivateAttendancePayload(),
+            payslips: historicalPayslipsRef.current,
+          });
+          privateFinancialDataSkipNextSyncRef.current = true;
+          setPrivateFinancialSettings((current) => ({
+            ...current,
+            ...nextPayrollSettings,
+            ...(payrollUpdate
+              ? {
+                  payrollSettingsHistory:
+                    payrollUpdate.settings.payrollSettingsHistory,
+                }
+              : {}),
+          }));
+        }
+      } catch (error) {
+        const conflict = error?.code === "REVISION_CONFLICT";
+        const message = conflict
+          ? options.isUndo
+            ? "Private financial data changed on another device. Reload before undoing."
+            : "Private financial data changed on another device. Reload before saving."
+          : error instanceof Error
+            ? error.message
+            : options.isUndo
+              ? "The previous configuration could not be restored."
+              : "Salary settings could not be saved. Your settings were not confirmed as saved.";
+        setPrivateFinancialDataError(message);
+        updateToast(settingsToast.id, {
+          variant: "error",
+          title: options.isUndo ? "Preferences not reverted" : "Settings not saved",
+          description: conflict
+            ? options.isUndo
+              ? "Private data changed on another device. Reload before undoing."
+              : "Private data changed on another device. Reload before saving."
+            : options.isUndo
+              ? "The server could not confirm the restore. Please retry."
+              : "The server could not confirm the save. Please retry.",
+          actionLabel: "",
+          onAction: null,
+        });
+        return false;
+      }
+    }
+
+    updateToast(settingsToast.id, {
+      variant: "loading",
+      title: options.isUndo ? "Undoing preferences..." : "Updating preferences...",
+      description: `${options.isUndo ? "Restoring" : "Applying"} ${describeItems([
+        ...changedPrivateItems,
+        ...changedWorkspaceItems,
+      ])} ${options.isUndo ? "in" : "to"} your active session...`,
+      persistent: true,
+      actionLabel: "",
+      onAction: null,
+    });
+    setHolidays(draft.holidays);
+    setSelectedLocality(draft.selectedLocality);
+    setHolidayEligibilityConfirmed(draft.holidayEligibilityConfirmed);
+    setDailyWage(nextDailyWage === null ? "" : String(nextDailyWage));
+    setDailyAllowance(draft.dailyAllowance);
+    setOvertimeMultiplier(draft.overtimeMultiplier);
+    setNightDifferential(draft.nightDifferential);
+    setSettingsBalances(draft.settingsBalances);
+    setLeaveBalances({
+      VL: Number(draft.settingsBalances.VL) || 0,
+      SL: Number(draft.settingsBalances.SL) || 0,
+      EL: Number(draft.settingsBalances.EL) || 0,
+    });
+    if (options.isUndo) {
+      setSettingsRestoreRevision((revision) => revision + 1);
+    }
+    const savedPrivateRevision = privateFinancialDataRevisionRef.current;
+    updateToast(settingsToast.id, {
+      variant: "loading",
+      title: options.isUndo ? "Undoing preferences..." : "Updating preferences...",
+      description: options.isUndo
+        ? changedWorkspaceItems.length > 0
+          ? `Saving restored ${describeItems(changedWorkspaceItems)} to your workspace...`
+          : "Saving the restored workspace snapshot to the cloud..."
+        : workspaceSaveDescription,
+      persistent: true,
+      actionLabel: "",
+      onAction: null,
+    });
+
+    const undoAction = async () => {
+      if (settingsUndoInProgressRef.current) return false;
+      settingsUndoInProgressRef.current = true;
+      setSettingsUndoing(true);
+      updateToast(settingsToast.id, {
+        variant: "loading",
+        title: "Undoing preferences...",
+        description: "Waiting for confirmation to restore the previous settings.",
+        persistent: true,
+        actionLabel: "",
+        onAction: null,
+      });
+      try {
+        const confirmed = await requestConfirmation({
+          title: "Undo configuration save?",
+          message:
+            "This restores the previous saved settings and replaces any unsaved Settings changes.",
+          confirmLabel: "Undo configuration",
+          variant: "warning",
+        });
+        if (!confirmed) {
+          updateToast(settingsToast.id, {
+            variant: "success",
+            title: "Preferences updated",
+            description: updatedPreferencesDescription,
+            actionLabel: "Undo",
+            onAction: undoAction,
+            duration: 4500,
+          });
+          settingsUndoToastRef.current = settingsToast.id;
+          return false;
+        }
+
+        if (
+          privateSettingsChanged &&
+          privateFinancialDataRevisionRef.current !== savedPrivateRevision
+        ) {
+          settingsUndoToastRef.current = null;
+          updateToast(settingsToast.id, {
+            variant: "warning",
+            title: "Preferences not reverted",
+            description:
+              "Private data changed since this save. Reload before undoing.",
+            actionLabel: "",
+            onAction: null,
+          });
+          return false;
+        }
+
+        const saveHandler = saveSettingsHandlerRef.current;
+        if (!saveHandler) {
+          settingsUndoToastRef.current = null;
+          updateToast(settingsToast.id, {
+            variant: "error",
+            title: "Preferences not reverted",
+            description:
+              "No settings restore handler is available, so the previous configuration was not changed.",
+            actionLabel: "",
+            onAction: null,
+          });
+          return false;
+        }
+        await saveHandler(previousDraft, {
+          toastId: settingsToast.id,
+          isUndo: true,
+          restorePrivateFinancialData: privateSettingsChanged,
+          expectedPrivateRevision: savedPrivateRevision,
+          previousPrivateFinancialPayload,
+          awaitWorkspaceSave: true,
+        });
+        return false;
+      } catch {
+        settingsUndoToastRef.current = null;
+        updateToast(settingsToast.id, {
+          variant: "error",
+          title: "Preferences not reverted",
+          description:
+            "The restore request failed before the previous configuration could be confirmed.",
+          actionLabel: "",
+          onAction: null,
+        });
+        return false;
+      } finally {
+        settingsUndoInProgressRef.current = false;
+        setSettingsUndoing(false);
+      }
+    };
+
+    const outcomeToast = showToast(
+      options.isUndo
+        ? "Reverted preference change"
+        : "Preferences updated",
+      "success",
+      {
+        toastId: settingsToast.id,
+        description: options.isUndo
+          ? "Your previous configuration was restored."
+          : updatedPreferencesDescription,
+        actionLabel: options.isUndo ? "" : "Undo",
+        onAction: options.isUndo ? null : undoAction,
+        errorTitle: options.isUndo
+          ? "Preferences not reverted"
+          : "Preferences not saved",
+        errorDescription: options.isUndo
+          ? "The previous configuration could not be saved to your workspace. Check your connection and retry."
+          : "Your configuration is not confirmed as saved. Check your connection and retry.",
+        awaitConfirmation: options.awaitWorkspaceSave,
+      },
+    );
+    if (!options.isUndo) {
+      settingsUndoToastRef.current = settingsToast.id;
+    } else {
+      settingsUndoToastRef.current = null;
+    }
+    if (options.awaitWorkspaceSave && outcomeToast?.confirmation) {
+      return outcomeToast.confirmation;
+    }
+    return true;
+  };
+  saveSettingsHandlerRef.current = saveConfigurationSettings;
+
+  const handleLogout = async ({
+    toastId = null,
+    savePendingChanges = true,
+  } = {}) => {
+    if (signOutInProgressRef.current) return false;
+    signOutInProgressRef.current = true;
+    const signOutToast = toastId
+      ? { id: toastId }
+      : notify({
+          variant: "loading",
+          title: "Signing out...",
+          description: savePendingChanges
+            ? "Saving private financial data..."
+            : "Closing your authenticated session...",
+          persistent: true,
+        });
+    const updateSignOutToast = (variant, title, description, retryable = false) =>
+      updateToast(signOutToast.id, {
+        variant,
+        title,
+        description,
+        duration: variant === "loading" ? undefined : 4500,
+        persistent: variant === "loading",
+        actionLabel: retryable ? "Retry Sign Out" : "",
+        onAction: retryable
+          ? async () => {
+              await handleLogoutRef.current?.({
+                toastId: signOutToast.id,
+                savePendingChanges,
+              });
+              return false;
+            }
+          : null,
+      });
+
+    const setSignOutProgress = (status, description = status) => {
+      setSignOutStatus(status);
+      updateSignOutToast("loading", "Signing out...", description);
+    };
+
+    if (toastId) {
+      updateSignOutToast(
+        "loading",
+        "Signing out...",
+        savePendingChanges
+          ? "Saving private financial data..."
+          : "Closing your authenticated session...",
+      );
+    }
+
+    try {
+      if (savePendingChanges) {
+        setSignOutProgress("Saving private financial data...");
+        if (!(await flushPrivateFinancialData({ notifyError: false }))) {
+          updateSignOutToast(
+            "error",
+            "Sign-out incomplete",
+            "Private data could not be saved. Stay signed in and retry.",
+            true,
+          );
+          return false;
+        }
+
+        setSignOutProgress("Saving workspace changes...");
+        if (!(await flushWorkspace({ notifyError: false }))) {
+          updateSignOutToast(
+            "error",
+            "Sign-out incomplete",
+            "Workspace changes could not be saved. Stay signed in and retry.",
+            true,
+          );
+          return false;
+        }
+      }
+
+      setSignOutProgress("Signing out...", "Closing your authenticated session...");
+      const { error } = await authClient.signOut();
+      if (error) {
+        updateSignOutToast(
+          "error",
+          "Sign-out incomplete",
+          "Could not reach the auth server to revoke your session. Retry sign out.",
+          true,
+        );
+        return false;
+      }
+
+      updateSignOutToast(
+        "sync",
+        "Signed out",
+        "Your session was closed.",
+      );
+      return true;
+    } catch {
+      updateSignOutToast(
+        "error",
+        "Sign-out incomplete",
+        "The auth server could not confirm sign-out. Retry sign out.",
+        true,
+      );
+      return false;
+    } finally {
+      signOutInProgressRef.current = false;
+      setSignOutStatus("");
+    }
+  };
+  handleLogoutRef.current = handleLogout;
+
   return (
     <div
       className="min-h-screen flex flex-col overflow-x-clip bg-slate-50 font-sans text-textMain antialiased selection:bg-teal-500 selection:text-white"
@@ -5362,16 +6532,6 @@ export default function App() {
       onChange={handleChange}
       onSubmit={handleSubmit}
     >
-      {authLoading && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">
-          Restoring your secure session...
-        </div>
-      )}
-      {user && workspaceLoading && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">
-          Loading your private cloud workspace...
-        </div>
-      )}
       {workspaceError && user && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-50 p-6">
           <div className="max-w-md rounded-2xl bg-white p-8 text-center shadow-lg">
@@ -5387,22 +6547,7 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={async () => {
-                if (signOutInProgressRef.current) return;
-                signOutInProgressRef.current = true;
-                setSignOutStatus("Signing out...");
-                try {
-                  const { error } = await authClient.signOut();
-                  if (error) {
-                    showToast("Unable to sign out. Please try again.", "error");
-                  }
-                } catch {
-                  showToast("Unable to sign out. Please try again.", "error");
-                } finally {
-                  signOutInProgressRef.current = false;
-                  setSignOutStatus("");
-                }
-              }}
+              onClick={() => handleLogout({ savePendingChanges: false })}
               disabled={Boolean(signOutStatus)}
               className="ml-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 disabled:cursor-wait disabled:opacity-70"
             >
@@ -5422,47 +6567,8 @@ export default function App() {
                 user={user}
                 onViewPayslip={viewCurrentPayslip}
                 isSigningOut={Boolean(signOutStatus)}
-                onLogout={async () => {
-                  if (signOutInProgressRef.current) return;
-                  signOutInProgressRef.current = true;
-                  try {
-                    setSignOutStatus("Saving private financial data...");
-                    if (!(await flushPrivateFinancialData())) return;
-                    setSignOutStatus("Saving workspace changes...");
-                    if (!(await flushWorkspace())) return;
-                    setSignOutStatus("Signing out...");
-                    const { error } = await authClient.signOut();
-                    if (error) {
-                      showToast(
-                        "Unable to sign out. Please try again.",
-                        "error",
-                      );
-                    } else {
-                      addToast("Signed out successfully.", "info");
-                    }
-                  } catch {
-                    showToast("Unable to sign out. Please try again.", "error");
-                  } finally {
-                    signOutInProgressRef.current = false;
-                    setSignOutStatus("");
-                  }
-                }}
+                onLogout={handleLogout}
               />
-              {signOutStatus && (
-                <div
-                  className="flex items-center justify-center gap-2 border-b border-teal-200 bg-teal-50 px-4 py-2 text-sm font-medium text-teal-800"
-                  role="status"
-                  aria-live="polite"
-                  aria-busy="true"
-                >
-                  <LoaderCircle
-                    size={16}
-                    className="animate-spin"
-                    aria-hidden="true"
-                  />
-                  <span>{signOutStatus}</span>
-                </div>
-              )}
               {privateFinancialDataStatus !== "ready" && (
                 <div
                   className="flex flex-col gap-2 border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between"
@@ -5567,6 +6673,9 @@ export default function App() {
             <DashboardContent
               requestConfirmation={requestConfirmation}
               page={page}
+              payslipHistoryNavigationRequest={
+                payslipHistoryNavigationRequest
+              }
               monthTabs={monthTabs}
               monthCarouselOffset={monthCarouselMotion?.offset ?? 0}
               onMonthCarouselTransitionEnd={finishMonthCarouselMotion}
@@ -5816,6 +6925,8 @@ export default function App() {
                 privateFinancialDataError={privateFinancialDataError}
                 privateFinancialDataConflict={privateFinancialDataConflict}
                 privateFinancialDataSyncing={privateFinancialDataSyncing}
+                settingsRestoreRevision={settingsRestoreRevision}
+                settingsUndoing={settingsUndoing}
                 legacySalaryVaultAvailable={Boolean(legacySalaryVault)}
                 onMigrateLegacySalaryVault={migrateLegacySalaryVault}
                 onReloadPrivateFinancialData={retryWorkspaceLoad}
@@ -5825,160 +6936,11 @@ export default function App() {
                 onSettingsValidationError={(message) =>
                   showToast(message, "warning")
                 }
-                onSaveSettings={async (draft) => {
-                  const currentPayrollSettings = {
-                    ...localPrivateFinancialDefaults,
-                    ...getPayrollDeductionSettingsDefaults(
-                      privateFinancialSettings,
-                    ),
-                    ...privateFinancialSettings,
-                    dailyWage,
-                    dailyAllowance,
-                    overtimeMultiplier,
-                    nightDifferential,
-                  };
-                  const nextPayrollSettings = {
-                    ...currentPayrollSettings,
-                    dailyWage: draft.dailyWage,
-                    dailyAllowance: draft.dailyAllowance,
-                    workingDaysFactor: draft.workingDaysFactor,
-                    payrollBasis: draft.payrollBasis,
-                    monthlySalary: draft.monthlySalary,
-                    overtimeMultiplier: draft.overtimeMultiplier,
-                    regularHolidayMultiplier:
-                      draft.regularHolidayMultiplier,
-                    specialHolidayMultiplier:
-                      draft.specialHolidayMultiplier,
-                    shiftTimeFormat: draft.shiftTimeFormat,
-                    nightDifferential: draft.nightDifferential,
-                    primaryTimezone: draft.primaryTimezone,
-                    dateFormat: draft.dateFormat,
-                    displayCurrency: draft.displayCurrency,
-                    ...Object.fromEntries(
-                      payrollDeductionSettingKeys.map((key) => [
-                        key,
-                        draft[key],
-                      ]),
-                    ),
-                  };
-                  const nextDailyWage = getPayrollDailyWage(
-                    nextPayrollSettings,
-                  );
-                  const financialSettingsChanged =
-                    nextDailyWage !== Number(dailyWage) ||
-                    draft.dailyAllowance !== dailyAllowance ||
-                    draft.workingDaysFactor !==
-                      currentPayrollSettings.workingDaysFactor ||
-                    draft.payrollBasis !== currentPayrollSettings.payrollBasis ||
-                    ((draft.payrollBasis === "monthly" ||
-                      currentPayrollSettings.payrollBasis === "monthly") &&
-                      draft.monthlySalary !==
-                        currentPayrollSettings.monthlySalary) ||
-                    draft.overtimeMultiplier !== overtimeMultiplier ||
-                    draft.regularHolidayMultiplier !==
-                      currentPayrollSettings.regularHolidayMultiplier ||
-                    draft.specialHolidayMultiplier !==
-                      currentPayrollSettings.specialHolidayMultiplier ||
-                    draft.nightDifferential !== nightDifferential ||
-                    payrollDeductionSettingKeys.some(
-                      (key) =>
-                        draft[key] !== currentPayrollSettings[key],
-                    );
-                  const privatePreferencesChanged =
-                    draft.shiftTimeFormat !==
-                    currentPayrollSettings.shiftTimeFormat ||
-                    draft.primaryTimezone !==
-                      currentPayrollSettings.primaryTimezone ||
-                    draft.dateFormat !== currentPayrollSettings.dateFormat ||
-                    draft.displayCurrency !==
-                      currentPayrollSettings.displayCurrency;
-                  const privateSettingsChanged =
-                    financialSettingsChanged || privatePreferencesChanged;
-                  if (
-                    privateSettingsChanged &&
-                    privateFinancialDataStatus !== "ready"
-                  ) {
-                    addToast(
-                      "Private financial data is not ready to save yet.",
-                      "warning",
-                    );
-                    return false;
-                  }
-                  if (privateSettingsChanged) {
-                    window.clearTimeout(
-                      privateFinancialDataSyncTimerRef.current,
-                    );
-                    privateFinancialDataSyncTimerRef.current = null;
-                    try {
-                      const payrollUpdate = financialSettingsChanged
-                        ? createPayrollSettingsUpdate({
-                            currentSettings: currentPayrollSettings,
-                            nextSettings: nextPayrollSettings,
-                            effectiveDate: draft.payrollEffectiveDate,
-                            attendance,
-                            holidays: draft.holidays,
-                            selectedLocality: draft.selectedLocality,
-                            holidayEligibilityConfirmed:
-                              draft.holidayEligibilityConfirmed,
-                          })
-                        : null;
-                      await persistPrivateFinancialData({
-                        settings:
-                          payrollUpdate?.settings ?? nextPayrollSettings,
-                        attendance:
-                          payrollUpdate?.attendance ??
-                          createPrivateAttendancePayload(),
-                        payslips: historicalPayslipsRef.current,
-                      });
-                      privateFinancialDataSkipNextSyncRef.current = true;
-                      setPrivateFinancialSettings((current) => ({
-                        ...current,
-                        ...nextPayrollSettings,
-                        ...(payrollUpdate
-                          ? {
-                              payrollSettingsHistory:
-                                payrollUpdate.settings.payrollSettingsHistory,
-                            }
-                          : {}),
-                      }));
-                    } catch (error) {
-                      const conflict = error?.code === "REVISION_CONFLICT";
-                      const message = conflict
-                        ? "Private financial data changed on another device. Reload before saving."
-                        : error instanceof Error
-                          ? error.message
-                          : "Salary settings could not be saved. Your settings were not confirmed as saved.";
-                      setPrivateFinancialDataError(message);
-                      addToast(message, "error");
-                      return false;
-                    }
-                  }
-                  setHolidays(draft.holidays);
-                  setSelectedLocality(draft.selectedLocality);
-                  setHolidayEligibilityConfirmed(
-                    draft.holidayEligibilityConfirmed,
-                  );
-                  setDailyWage(
-                    nextDailyWage === null ? "" : String(nextDailyWage),
-                  );
-                  setDailyAllowance(draft.dailyAllowance);
-                  setOvertimeMultiplier(draft.overtimeMultiplier);
-                  setNightDifferential(draft.nightDifferential);
-                  setSettingsBalances(draft.settingsBalances);
-                  setLeaveBalances({
-                    VL: Number(draft.settingsBalances.VL) || 0,
-                    SL: Number(draft.settingsBalances.SL) || 0,
-                    EL: Number(draft.settingsBalances.EL) || 0,
-                  });
-                  setActiveModal(null);
-                  showToast("Settings saved successfully.", "success");
-                  return true;
-                }}
+                onSaveSettings={saveConfigurationSettings}
               />
             </FeatureErrorBoundary>
           </>
         )}
-      <ToastContainer toasts={toasts} dismissToast={dismissToast} />
       <ConfirmationDialog
         options={confirmation}
         onResolve={resolveConfirmation}
@@ -5986,6 +6948,16 @@ export default function App() {
       <AuthPage
         open={!authLoading && (!user || recoveryMode)}
         recoveryMode={recoveryMode}
+        onLoginStart={beginLoginToast}
+        onLoginFailure={(message, retrySignIn) =>
+          completeLoginToast({
+            title: "Authentication failed",
+            message,
+            type: "error",
+            actionLabel: "Retry Sign In",
+            onAction: retrySignIn,
+          })
+        }
         onRecoveryComplete={() => {
           setRecoveryMode(false);
           addToast("Password updated successfully.", "success");
