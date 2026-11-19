@@ -81,8 +81,6 @@ export default function DashboardContent(props) {
     workspaceSaveError,
     historicalPayslips,
     payslipHistorySaving,
-    currentPayrollPeriod,
-    onViewCurrentPayslip,
     onViewHistoricalPayslip,
     onDeleteHistoricalPayslip,
     travelPlans,
@@ -223,8 +221,6 @@ export default function DashboardContent(props) {
               payslipHistorySaving={payslipHistorySaving}
               privateFinancialDataStatus={privateFinancialDataStatus}
               privateFinancialDataError={privateFinancialDataError}
-              currentPayrollPeriod={currentPayrollPeriod}
-              onViewCurrentPayslip={onViewCurrentPayslip}
               onViewHistoricalPayslip={onViewHistoricalPayslip}
               onDeleteHistoricalPayslip={onDeleteHistoricalPayslip}
               travelPlans={travelPlans}

@@ -5654,8 +5654,6 @@ export default function App() {
               }
               payslipHistorySaving={payslipHistorySaving}
               privateFinancialDataStatus={privateFinancialDataStatus}
-              currentPayrollPeriod={payrollPeriod}
-              onViewCurrentPayslip={viewCurrentPayslip}
               onViewHistoricalPayslip={viewHistoricalPayslip}
               onDeleteHistoricalPayslip={deleteHistoricalPayslip}
               travelPlans={travelPlans}
@@ -5853,6 +5851,9 @@ export default function App() {
                       draft.specialHolidayMultiplier,
                     shiftTimeFormat: draft.shiftTimeFormat,
                     nightDifferential: draft.nightDifferential,
+                    primaryTimezone: draft.primaryTimezone,
+                    dateFormat: draft.dateFormat,
+                    displayCurrency: draft.displayCurrency,
                     ...Object.fromEntries(
                       payrollDeductionSettingKeys.map((key) => [
                         key,
@@ -5885,7 +5886,12 @@ export default function App() {
                     );
                   const privatePreferencesChanged =
                     draft.shiftTimeFormat !==
-                    currentPayrollSettings.shiftTimeFormat;
+                    currentPayrollSettings.shiftTimeFormat ||
+                    draft.primaryTimezone !==
+                      currentPayrollSettings.primaryTimezone ||
+                    draft.dateFormat !== currentPayrollSettings.dateFormat ||
+                    draft.displayCurrency !==
+                      currentPayrollSettings.displayCurrency;
                   const privateSettingsChanged =
                     financialSettingsChanged || privatePreferencesChanged;
                   if (

@@ -545,8 +545,6 @@ export default function FinancialDashboard({
   payslipHistorySaving,
   privateFinancialDataStatus,
   privateFinancialDataError,
-  currentPayrollPeriod,
-  onViewCurrentPayslip,
   onViewHistoricalPayslip,
   onDeleteHistoricalPayslip,
   travelPlans,
@@ -1235,47 +1233,6 @@ export default function FinancialDashboard({
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      {activeTab !== "expenses" && activeTab !== "payslips" && (
-        <div className="relative flex min-h-[115px] flex-col items-start justify-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-950 via-slate-900 to-slate-900 px-5 py-4 text-white shadow-md sm:flex-row sm:items-center sm:justify-between sm:gap-5 sm:px-5">
-          <div
-            className="pointer-events-none absolute inset-y-0 right-[31%] w-[34%] -skew-x-12 bg-slate-950/55"
-            aria-hidden="true"
-          ></div>
-          <div
-            className="pointer-events-none absolute inset-y-0 right-0 w-[32%] bg-teal-900/25"
-            aria-hidden="true"
-          ></div>
-          <div className="relative z-10 min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-md border border-emerald-400/30 bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
-                Current payroll cutoff
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-200">
-                <i
-                  className="fa-regular fa-clock text-emerald-400"
-                  aria-hidden="true"
-                ></i>
-                {formatPayrollPeriod(currentPayrollPeriod)}
-              </span>
-            </div>
-            <h1 className="mt-2 text-lg font-extrabold leading-tight text-white">
-              Financial &amp; Time Management Hub
-            </h1>
-            <p className="mt-1 text-[11px] leading-4 text-slate-200">
-              Estimate calculation based on current logged shifts &amp;
-              incentives. Snapshot updates automatically every cutoff.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onViewCurrentPayslip}
-            className="relative z-10 inline-flex shrink-0 items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-emerald-600"
-          >
-            <i className="fa-regular fa-eye" aria-hidden="true"></i>
-            View Current Estimate
-          </button>
-        </div>
-      )}
       <div className="space-y-5">
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs sm:p-4">
           <div className="flex min-w-0 flex-col gap-3 lg:w-full lg:flex-row lg:items-center lg:justify-between">

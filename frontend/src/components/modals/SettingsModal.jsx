@@ -52,8 +52,8 @@ const configurationDomains = [
   },
   {
     id: "general",
-    label: "Employee & Budget",
-    description: "Identity & cutoff spending cap",
+    label: "General Preference",
+    description: "Timezone, vault & account privacy",
     icon: BriefcaseBusiness,
   },
 ];
@@ -153,6 +153,9 @@ export default function SettingsModal({
       specialHolidayMultiplier:
         payrollSettings?.specialHolidayMultiplier ?? "1.3",
       shiftTimeFormat: payrollSettings?.shiftTimeFormat ?? "24h",
+      primaryTimezone: payrollSettings?.primaryTimezone ?? "Asia/Manila",
+      dateFormat: payrollSettings?.dateFormat ?? "MM/DD/YYYY",
+      displayCurrency: payrollSettings?.displayCurrency ?? "PHP",
       ...getPayrollDeductionSettingsDefaults(payrollSettings),
       nightDifferential,
       payrollEffectiveDate,
@@ -193,6 +196,9 @@ export default function SettingsModal({
             specialHolidayMultiplier:
               payrollSettings?.specialHolidayMultiplier ?? "1.3",
             shiftTimeFormat: payrollSettings?.shiftTimeFormat ?? "24h",
+            primaryTimezone: payrollSettings?.primaryTimezone ?? "Asia/Manila",
+            dateFormat: payrollSettings?.dateFormat ?? "MM/DD/YYYY",
+            displayCurrency: payrollSettings?.displayCurrency ?? "PHP",
             ...getPayrollDeductionSettingsDefaults(payrollSettings),
             nightDifferential,
           }
@@ -1891,33 +1897,83 @@ export default function SettingsModal({
                     : "space-y-5 text-xs hidden"
                 }
               >
-                <div className="text-xs">
-                  <span className="font-semibold text-slate-700">
-                    Primary Timezone:
-                  </span>{" "}
-                  <span className="text-slate-600">Manila (Asia/Manila)</span>
-                </div>
+                <section className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-3">
+                  <label className="block">
+                    <span className="mb-2 block text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                      Primary timezone
+                    </span>
+                    <select
+                      value={settingsDraft.primaryTimezone}
+                      onChange={(event) =>
+                        updateDraft("primaryTimezone", event.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    >
+                      <option value="Asia/Manila">Manila (Asia/Manila)</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                      Date format
+                    </span>
+                    <select
+                      value={settingsDraft.dateFormat}
+                      onChange={(event) =>
+                        updateDraft("dateFormat", event.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    >
+                      <option value="MM/DD/YYYY">MM/DD/YYYY (11/19/2026)</option>
+                      <option value="DD/MM/YYYY">DD/MM/YYYY (19/11/2026)</option>
+                      <option value="YYYY-MM-DD">YYYY-MM-DD (2026-11-19)</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                      Display currency
+                    </span>
+                    <select
+                      value={settingsDraft.displayCurrency}
+                      onChange={(event) =>
+                        updateDraft("displayCurrency", event.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    >
+                      <option value="PHP">Philippine Peso (₱ PHP)</option>
+                      <option value="USD">US Dollar ($ USD)</option>
+                      <option value="EUR">Euro (€ EUR)</option>
+                      <option value="JPY">Japanese Yen (¥ JPY)</option>
+                    </select>
+                  </label>
+                </section>
                 <section
-                  className="space-y-3 rounded-xl border border-teal-200 bg-teal-50 p-4"
+                  className="rounded-xl border border-teal-200 bg-teal-50 p-4"
                   aria-labelledby="privateFinancialDataHeading"
                 >
-                  <div>
-                    <h4
-                      id="privateFinancialDataHeading"
-                      className="font-bold text-teal-900"
-                    >
-                      Private financial data
-                    </h4>
-                    <p className="mt-1 text-[11px] leading-relaxed text-teal-800">
-                      Financial data is encrypted by the server and associated
-                      with your account. Your legacy vault passphrase is needed
-                      only once to migrate existing encrypted data.
-                    </p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h4
+                        id="privateFinancialDataHeading"
+                        className="font-bold text-teal-900"
+                      >
+                        Private financial data
+                      </h4>
+                      <p className="mt-1 text-[11px] leading-relaxed text-teal-800">
+                        Financial data is encrypted by the server and associated
+                        with your account. Your legacy vault passphrase is needed
+                        only once to migrate existing encrypted data.
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-teal-200 bg-white px-2.5 py-1 text-[10px] font-bold text-teal-700">
+                      <span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                      Cloud Sync On
+                    </span>
                   </div>
                   <p
-                    className="text-[11px] font-semibold text-teal-900"
+                    className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-teal-900"
                     role="status"
                   >
+                    <ShieldCheck size={13} aria-hidden="true" />
                     {privateFinancialDataStatus === "ready" &&
                       (privateFinancialDataSyncing
                         ? "Private financial changes are syncing..."
