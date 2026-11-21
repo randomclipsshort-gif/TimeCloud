@@ -11,6 +11,21 @@ export function parseAuthActivityTimestamp(value) {
   return Number.isSafeInteger(timestamp) && timestamp > 0 ? timestamp : null;
 }
 
+export function getInitialAuthActivityTimestamp(
+  storedActivityAt,
+  sessionCreatedAt,
+  now = Date.now(),
+) {
+  if (Number.isFinite(sessionCreatedAt) && sessionCreatedAt > 0) {
+    return Number.isFinite(storedActivityAt) && storedActivityAt >= sessionCreatedAt
+      ? storedActivityAt
+      : sessionCreatedAt;
+  }
+  return Number.isFinite(storedActivityAt) && storedActivityAt > 0
+    ? storedActivityAt
+    : now;
+}
+
 export function isAuthSessionExpired(
   lastActivityAt,
   now = Date.now(),

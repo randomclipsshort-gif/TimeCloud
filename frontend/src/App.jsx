@@ -26,6 +26,7 @@ import { getAttendancePunchAvailability } from "./utils/attendancePunchRules.js"
 import {
   AUTH_ACTIVITY_WRITE_INTERVAL_MS,
   AUTH_IDLE_TIMEOUT_MS,
+  getInitialAuthActivityTimestamp,
   getAuthActivityStorageKey,
   isAuthSessionExpired,
   parseAuthActivityTimestamp,
@@ -2203,7 +2204,7 @@ export default function App() {
       const toast = notify({
         variant: "loading",
         title: "Signing in...",
-        description: "Verifying your SSO assertion and session token...",
+        description: "Verifying your email and password and establishing your session...",
         persistent: true,
       });
       loginToastFlowRef.current = toast?.id ?? null;
@@ -2638,10 +2639,12 @@ export default function App() {
 
     const storedActivityAt = readStoredActivity();
     const lastSignInAt = Date.parse(authSession?.session?.createdAt || "");
-    lastActivityAt =
-      storedActivityAt ||
-      (Number.isFinite(lastSignInAt) ? lastSignInAt : Date.now());
-    lastPersistedActivityAt = storedActivityAt || 0;
+    lastActivityAt = getInitialAuthActivityTimestamp(
+      storedActivityAt,
+      Number.isFinite(lastSignInAt) ? lastSignInAt : null,
+    );
+    lastPersistedActivityAt =
+      storedActivityAt === lastActivityAt ? storedActivityAt : 0;
 
     const expireSession = () => {
       if (signOutStarted) return;
@@ -2721,7 +2724,7 @@ export default function App() {
       return false;
     };
 
-    if (!storedActivityAt) writeStoredActivity(lastActivityAt);
+    if (!lastPersistedActivityAt) writeStoredActivity(lastActivityAt);
     if (checkExpiration()) return undefined;
 
     const handleActivity = () => {
