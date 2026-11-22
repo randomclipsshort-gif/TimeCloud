@@ -22,7 +22,7 @@ export default function GrantLeaveModal({ open, balances, selectedDate }) {
             type="button"
             aria-label="Close modal"
             data-action="closeModal(&#x27;grantLeaveModal&#x27;)"
-            className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+            className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 sm:h-9 sm:w-9"
           >
             <i className="fa-solid fa-xmark text-lg"></i>
           </button>

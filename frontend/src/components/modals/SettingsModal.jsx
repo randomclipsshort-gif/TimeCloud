@@ -664,21 +664,21 @@ export default function SettingsModal({
             </span>
           </div>
         )}
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-3 py-2 sm:px-6 sm:py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700">
               <SlidersHorizontal size={19} aria-hidden="true" />
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-lg font-bold tracking-tight text-slate-900">
+                <h3 className="text-base font-bold tracking-tight text-slate-900 sm:text-lg">
                   Settings Configuration
                 </h3>
                 <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                  Timekeep Cloud
+                  TimeCloud
                 </span>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="hidden text-xs text-slate-500 sm:block">
                 Configure compensation rules, shift templates, and Philippine
                 statutory parameters.
               </p>
@@ -688,19 +688,19 @@ export default function SettingsModal({
             type="button"
             aria-label="Close modal"
             data-action="closeModal(&#x27;settingsModal&#x27;)"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 sm:h-9 sm:w-9"
           >
             <X size={18} aria-hidden="true" />
           </button>
         </div>
-        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[28%_minmax(0,1fr)]">
-          <aside className="flex min-h-0 flex-col border-b border-slate-200 bg-slate-50/80 p-4 md:border-b-0 md:border-r md:p-5">
-            <p className="mb-3 px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] md:grid-cols-[28%_minmax(0,1fr)] md:grid-rows-1">
+          <aside className="flex min-h-0 flex-col border-b border-slate-200 bg-slate-50/80 p-2 sm:p-4 md:border-b-0 md:border-r md:p-5">
+            <p className="mb-2 hidden px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 sm:mb-3 sm:block">
               Configuration domains
             </p>
             <nav
               aria-label="Configuration domains"
-              className="flex min-w-0 gap-2 overflow-x-auto pb-2 md:block md:space-y-1 md:overflow-visible md:pb-0"
+              className="flex min-w-0 gap-2 overflow-x-auto pb-1 md:block md:space-y-1 md:overflow-visible md:pb-0"
             >
               {configurationDomains.map((domain) => {
                 const Icon = domain.icon;
@@ -711,7 +711,7 @@ export default function SettingsModal({
                     type="button"
                     aria-current={isSelected ? "page" : undefined}
                     data-action={`switchSettingsTab('${domain.id}')`}
-                    className={`flex w-[11rem] shrink-0 items-center justify-between gap-2 rounded-xl border px-3 py-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 md:w-full ${
+                    className={`flex w-[11rem] shrink-0 items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 sm:py-3 md:w-full ${
                       isSelected
                         ? "border-emerald-300 bg-emerald-50/70 text-emerald-900 shadow-sm"
                         : "border-transparent bg-transparent text-slate-700 hover:border-slate-200 hover:bg-white"
@@ -731,7 +731,7 @@ export default function SettingsModal({
                         <span className="block text-xs font-semibold">
                           {domain.label}
                         </span>
-                        <span className="mt-0.5 block text-[10px] leading-tight text-slate-500">
+                        <span className="mt-0.5 hidden text-[10px] leading-tight text-slate-500 sm:block">
                           {domain.description}
                         </span>
                       </span>
@@ -814,10 +814,10 @@ export default function SettingsModal({
               </dl>
             </section>
           </aside>
-          <main className="flex-1 min-h-0 min-w-0 flex-col">
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
             {activeSettingsTab !== "shiftTemplates" && (
               <div
-                className="shrink-0 pt-5"
+                className="shrink-0 pt-3 sm:pt-5"
               >
                 <div
                   className={
@@ -2179,7 +2179,7 @@ export default function SettingsModal({
 
                   <div
                     aria-hidden={!holidayFormOpen}
-                    inert={!holidayFormOpen}
+                    inert={!holidayFormOpen ? "" : undefined}
                     className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none ${
                       holidayFormOpen
                         ? "pointer-events-auto opacity-100"
@@ -2555,17 +2555,17 @@ export default function SettingsModal({
             </div>
           </main>
         </div>
-        <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p className="text-slate-500">
+        <div className="flex shrink-0 flex-col gap-2 border-t border-slate-200 bg-slate-50 px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-6 sm:py-3">
+          <p className="hidden text-[10px] leading-snug text-slate-500 sm:block sm:text-xs">
             Changes immediately recalculate active cutoff payroll and calendar
             schedules.
           </p>
-          <div className="flex shrink-0 flex-col-reverse gap-2 sm:flex-row">
+          <div className="flex shrink-0 flex-row flex-wrap justify-end gap-2">
             <button
               type="button"
               onClick={resetSettings}
               disabled={settingsSaving || settingsUndoing}
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-11 rounded-lg border border-slate-200 bg-white px-4 py-2.5 font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Reset
             </button>
@@ -2573,7 +2573,7 @@ export default function SettingsModal({
               type="button"
               onClick={handleSaveSettings}
               disabled={settingsSaving || settingsUndoing}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-teal-800 to-emerald-700 px-5 py-2.5 font-bold text-white shadow-md shadow-emerald-900/15 transition hover:from-teal-900 hover:to-emerald-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/25 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-teal-800 to-emerald-700 px-5 py-2.5 font-bold text-white shadow-md shadow-emerald-900/15 transition hover:from-teal-900 hover:to-emerald-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/25 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
             >
               {settingsSaving || settingsUndoing ? (
                 <LoaderCircle

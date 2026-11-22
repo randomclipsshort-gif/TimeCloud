@@ -24,7 +24,7 @@ export default function Header({
         </span>
         <div>
           <h1 className="text-sm font-bold leading-tight text-textMain">
-            Timekeep Cloud
+            TimeCloud
           </h1>
           <span className="text-[10px] font-medium text-textMuted">
             Personal Time &amp; Financial Hub
@@ -41,7 +41,7 @@ export default function Header({
             </span>
           </span>
         </div>
-        <button type="button" onClick={onViewPayslip} aria-label="View Payslip" title="View Payslip" className="flex h-8 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg bg-teal-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-700 sm:px-3">
+        <button type="button" onClick={onViewPayslip} aria-label="View Payslip" title="View Payslip" className="flex h-11 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg bg-teal-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 sm:h-9 sm:px-3">
           <FileText size={14} aria-hidden="true" />
           <span className="hidden sm:inline">
             View Payslip
@@ -66,7 +66,7 @@ export default function Header({
           <button
             type="button"
             data-action="exportWorkspace()"
-            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-800"
+            className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 sm:h-9 sm:w-9"
             title="Export my data"
             aria-label="Export my data"
           >
@@ -75,7 +75,7 @@ export default function Header({
           <button
             type="button"
             data-action="openModal(&#x27;settingsModal&#x27;)"
-            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-800"
+            className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 sm:h-9 sm:w-9"
             title="Settings"
             aria-label="Settings"
           >
@@ -86,7 +86,7 @@ export default function Header({
               type="button"
               onClick={onLogout}
               disabled={isSigningOut}
-              className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-wait disabled:opacity-70"
+              className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70 sm:h-9 sm:w-9"
               title={isSigningOut ? "Signing out..." : "Sign out"}
               aria-label={isSigningOut ? "Signing out..." : "Sign out"}
               aria-busy={isSigningOut}

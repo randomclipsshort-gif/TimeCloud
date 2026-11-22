@@ -178,7 +178,7 @@ export default function AssignShiftModal({
               type="button"
               aria-label="Close modal"
               data-action="closeModal('assignShiftModal')"
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+              className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 sm:h-9 sm:w-9"
             >
               <i className="fa-solid fa-xmark text-lg" aria-hidden="true" />
             </button>

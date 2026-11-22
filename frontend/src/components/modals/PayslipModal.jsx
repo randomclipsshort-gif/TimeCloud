@@ -661,7 +661,7 @@ export default function PayslipModal({
             type="button"
             aria-label="Close payslip"
             data-action="closeModal(&#x27;payslipModal&#x27;)"
-            className="ml-3 shrink-0 cursor-pointer rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            className="ml-3 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 sm:h-9 sm:w-9"
           >
             <i className="fa-solid fa-xmark text-lg" aria-hidden="true"></i>
           </button>

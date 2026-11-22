@@ -153,7 +153,7 @@ export default function ManualEntryModal({
             type="button"
             aria-label="Close modal"
             data-action="closeModal(&#x27;manualEntryModal&#x27;)"
-            className="ml-3 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            className="ml-3 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 sm:h-9 sm:w-9"
           >
             <i className="fa-solid fa-xmark text-base" aria-hidden="true"></i>
           </button>

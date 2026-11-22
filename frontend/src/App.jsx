@@ -1,12 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Header from "./components/layout/Header.jsx";
 import AuthPage from "./components/AuthPage.jsx";
-import DashboardContent from "./components/DashboardContent.jsx";
 import ManualEntryModal from "./components/modals/ManualEntryModal.jsx";
 import AssignShiftModal from "./components/modals/AssignShiftModal.jsx";
 import GrantLeaveModal from "./components/modals/GrantLeaveModal.jsx";
 import PayslipModal from "./components/modals/PayslipModal.jsx";
-import SettingsModal from "./components/modals/SettingsModal.jsx";
 import ConfirmationDialog from "./components/ui/ConfirmationDialog.jsx";
 import ShiftIcon from "./components/ui/ShiftIcon.jsx";
 import FeatureErrorBoundary from "./components/ui/FeatureErrorBoundary.jsx";
@@ -124,6 +130,11 @@ import {
   serializeWorkspaceForCloud,
 } from "./lib/privateFinancialData.js";
 import { unlockLegacySalaryVault } from "./lib/legacySalaryVault.js";
+
+const DashboardContent = lazy(() => import("./components/DashboardContent.jsx"));
+const SettingsModal = lazy(() =>
+  import("./components/modals/SettingsModal.jsx"),
+);
 
 const months = [
   "January",
@@ -6673,111 +6684,124 @@ export default function App() {
                 </div>
               </div>
             )}
-            <DashboardContent
-              requestConfirmation={requestConfirmation}
-              page={page}
-              payslipHistoryNavigationRequest={
-                payslipHistoryNavigationRequest
-              }
-              monthTabs={monthTabs}
-              monthCarouselOffset={monthCarouselMotion?.offset ?? 0}
-              onMonthCarouselTransitionEnd={finishMonthCarouselMotion}
-              yearOptions={yearOptions}
-              onYearChange={changeYear}
-              calendarCells={calendarCells}
-              calendarRangeMode={calendarRangeMode}
-              calendarRangeStatus={calendarRangeStatus}
-              onCalendarRangeModeToggle={handleCalendarRangeModeToggle}
-              monthLabel={monthLabel}
-              monthValue={calendarPayrollMonth}
-              year={year}
-              selectedDate={selectedDate}
-              selectedCalendarRange={selectedCalendarRange}
-              leaveBalances={leaveBalances}
-              canClearShift={canClearSelectedShift}
-              canMarkAbsent={canMarkAbsent}
-              isTimedIn={Boolean(
-                activeTimeEntry &&
-                (activeTimeEntry.date === selectedDate || canTimeOut),
-              )}
-              canTimeIn={canTimeIn}
-              canTimeOut={canTimeOut}
-              earlyPunchWindowMinutes={earlyPunchWindowMinutes}
-              holidayPayEstimate={selectedHolidayPay}
-              estimatedEarnings={selectedEstimatedEarnings}
-              selectedDateIncentives={selectedDateIncentives}
-              onAddIncentive={addEmployeeIncentive}
-              dailyAllowance={selectedPayrollSettings.dailyAllowance}
-              holidayWorkedHours={selectedWorkedHours}
-              nightDifferentialPay={selectedNightDifferentialPay}
-              overtimePay={selectedOvertimePay}
-              overtimeCalculation={selectedOvertimeCalculation}
-              workHours={selectedPayrollCalculation.hours}
-              configuredDailyWage={selectedPayrollSettings.dailyWage}
-              onOpenHolidayPaySettings={() => {
-                setActiveSettingsTab("earnings");
-                setActiveModal("settingsModal");
-              }}
-              onTimeClockClick={handleTimeClockClick}
-              record={selectedRecordWithNightDifferential}
-              monthExpenses={financeExpenses}
-              expenses={expenses}
-              totalExpenses={financeTotalExpenses}
-              grossPay={financeGrossPay}
-              payrollDeductions={financePayrollDeductions}
-              pendingPayrollRecords={financePendingPayrollCount}
-              remaining={financeRemaining}
-              percentage={financePercentage}
-              netPay={financeNetPay}
-              totalHours={financeTotalHours}
-              financeTrackingScope={financeTrackingScope}
-              setFinanceTrackingScope={setFinanceTrackingScope}
-              financeCustomRange={financeCustomRange}
-              setFinanceCustomRange={setFinanceCustomRange}
-              financePeriodLabel={financePeriodLabel}
-              financeCutoffHistory={financeCutoffHistory}
-              financeActivePeriodOptions={financeActivePeriodOptions}
-              formatCurrency={formatCurrency}
-              expenseName={expenseName}
-              setExpenseName={setExpenseName}
-              expenseAmount={expenseAmount}
-              setExpenseAmount={setExpenseAmount}
-              expenseDate={expenseDate}
-              setExpenseDate={setExpenseDate}
-              expenseCategory={expenseCategory}
-              setExpenseCategory={setExpenseCategory}
-              expensePaymentMethod={expensePaymentMethod}
-              setExpensePaymentMethod={setExpensePaymentMethod}
-              expenseNote={expenseNote}
-              setExpenseNote={setExpenseNote}
-              editingExpenseId={editingExpenseId}
-              onEditExpense={editExpense}
-              onDuplicateExpense={duplicateExpense}
-              onCancelExpenseEdit={cancelExpenseEdit}
-              onDeleteExpense={deleteExpense}
-              employeeIncentives={availableEmployeeIncentives}
-              onDeleteIncentive={deleteEmployeeIncentive}
-              privateFinancialDataError={privateFinancialDataError}
-              workspaceLoading={workspaceLoading}
-              workspaceError={workspaceError}
-              workspaceSaveError={workspaceSaveError}
-              historicalPayslips={
-                privateFinancialDataStatus === "ready" ? historicalPayslips : []
-              }
-              payslipHistorySaving={payslipHistorySaving}
-              privateFinancialDataStatus={privateFinancialDataStatus}
-              onViewHistoricalPayslip={viewHistoricalPayslip}
-              onDeleteHistoricalPayslip={deleteHistoricalPayslip}
-              travelPlans={travelPlans}
-              today={manilaNow.date}
-              onCreateTravelPlan={createTravelPlan}
-              onUpdateTravelPlan={updateTravelPlan}
-              onCompleteTravelPlan={completeTravelPlan}
-              onDeleteTravelPlan={deleteTravelPlan}
-              onAddTravelExpense={addTravelExpense}
-              onUpdateTravelExpense={updateTravelExpense}
-              onDeleteTravelExpense={deleteTravelExpense}
-            />
+            <FeatureErrorBoundary name="Dashboard">
+              <Suspense
+                fallback={
+                  <div
+                    className="flex min-h-[50vh] items-center justify-center text-sm text-slate-500"
+                    role="status"
+                  >
+                    Loading your workspace...
+                  </div>
+                }
+              >
+                <DashboardContent
+                  requestConfirmation={requestConfirmation}
+                  page={page}
+                  payslipHistoryNavigationRequest={
+                    payslipHistoryNavigationRequest
+                  }
+                  monthTabs={monthTabs}
+                  monthCarouselOffset={monthCarouselMotion?.offset ?? 0}
+                  onMonthCarouselTransitionEnd={finishMonthCarouselMotion}
+                  yearOptions={yearOptions}
+                  onYearChange={changeYear}
+                  calendarCells={calendarCells}
+                  calendarRangeMode={calendarRangeMode}
+                  calendarRangeStatus={calendarRangeStatus}
+                  onCalendarRangeModeToggle={handleCalendarRangeModeToggle}
+                  monthLabel={monthLabel}
+                  monthValue={calendarPayrollMonth}
+                  year={year}
+                  selectedDate={selectedDate}
+                  selectedCalendarRange={selectedCalendarRange}
+                  leaveBalances={leaveBalances}
+                  canClearShift={canClearSelectedShift}
+                  canMarkAbsent={canMarkAbsent}
+                  isTimedIn={Boolean(
+                    activeTimeEntry &&
+                    (activeTimeEntry.date === selectedDate || canTimeOut),
+                  )}
+                  canTimeIn={canTimeIn}
+                  canTimeOut={canTimeOut}
+                  earlyPunchWindowMinutes={earlyPunchWindowMinutes}
+                  holidayPayEstimate={selectedHolidayPay}
+                  estimatedEarnings={selectedEstimatedEarnings}
+                  selectedDateIncentives={selectedDateIncentives}
+                  onAddIncentive={addEmployeeIncentive}
+                  dailyAllowance={selectedPayrollSettings.dailyAllowance}
+                  holidayWorkedHours={selectedWorkedHours}
+                  nightDifferentialPay={selectedNightDifferentialPay}
+                  overtimePay={selectedOvertimePay}
+                  overtimeCalculation={selectedOvertimeCalculation}
+                  workHours={selectedPayrollCalculation.hours}
+                  configuredDailyWage={selectedPayrollSettings.dailyWage}
+                  onOpenHolidayPaySettings={() => {
+                    setActiveSettingsTab("earnings");
+                    setActiveModal("settingsModal");
+                  }}
+                  onTimeClockClick={handleTimeClockClick}
+                  record={selectedRecordWithNightDifferential}
+                  monthExpenses={financeExpenses}
+                  expenses={expenses}
+                  totalExpenses={financeTotalExpenses}
+                  grossPay={financeGrossPay}
+                  payrollDeductions={financePayrollDeductions}
+                  pendingPayrollRecords={financePendingPayrollCount}
+                  remaining={financeRemaining}
+                  percentage={financePercentage}
+                  netPay={financeNetPay}
+                  totalHours={financeTotalHours}
+                  financeTrackingScope={financeTrackingScope}
+                  setFinanceTrackingScope={setFinanceTrackingScope}
+                  financeCustomRange={financeCustomRange}
+                  setFinanceCustomRange={setFinanceCustomRange}
+                  financePeriodLabel={financePeriodLabel}
+                  financeCutoffHistory={financeCutoffHistory}
+                  financeActivePeriodOptions={financeActivePeriodOptions}
+                  formatCurrency={formatCurrency}
+                  expenseName={expenseName}
+                  setExpenseName={setExpenseName}
+                  expenseAmount={expenseAmount}
+                  setExpenseAmount={setExpenseAmount}
+                  expenseDate={expenseDate}
+                  setExpenseDate={setExpenseDate}
+                  expenseCategory={expenseCategory}
+                  setExpenseCategory={setExpenseCategory}
+                  expensePaymentMethod={expensePaymentMethod}
+                  setExpensePaymentMethod={setExpensePaymentMethod}
+                  expenseNote={expenseNote}
+                  setExpenseNote={setExpenseNote}
+                  editingExpenseId={editingExpenseId}
+                  onEditExpense={editExpense}
+                  onDuplicateExpense={duplicateExpense}
+                  onCancelExpenseEdit={cancelExpenseEdit}
+                  onDeleteExpense={deleteExpense}
+                  employeeIncentives={availableEmployeeIncentives}
+                  onDeleteIncentive={deleteEmployeeIncentive}
+                  privateFinancialDataError={privateFinancialDataError}
+                  workspaceLoading={workspaceLoading}
+                  workspaceError={workspaceError}
+                  workspaceSaveError={workspaceSaveError}
+                  historicalPayslips={
+                    privateFinancialDataStatus === "ready" ? historicalPayslips : []
+                  }
+                  payslipHistorySaving={payslipHistorySaving}
+                  privateFinancialDataStatus={privateFinancialDataStatus}
+                  onViewHistoricalPayslip={viewHistoricalPayslip}
+                  onDeleteHistoricalPayslip={deleteHistoricalPayslip}
+                  travelPlans={travelPlans}
+                  today={manilaNow.date}
+                  onCreateTravelPlan={createTravelPlan}
+                  onUpdateTravelPlan={updateTravelPlan}
+                  onCompleteTravelPlan={completeTravelPlan}
+                  onDeleteTravelPlan={deleteTravelPlan}
+                  onAddTravelExpense={addTravelExpense}
+                  onUpdateTravelExpense={updateTravelExpense}
+                  onDeleteTravelExpense={deleteTravelExpense}
+                />
+              </Suspense>
+            </FeatureErrorBoundary>
             <ManualEntryModal
               key={`manual-${selectedDate}-${selectedCalendarRange?.startDate || ""}-${selectedCalendarRange?.endDate || ""}`}
               open={activeModal === "manualEntryModal"}
@@ -6908,39 +6932,41 @@ export default function App() {
               onSavePayslipToHistory={savePayslipToHistory}
             />
             <FeatureErrorBoundary name="Settings">
-              <SettingsModal
-                open={activeModal === "settingsModal"}
-                activeSettingsTab={activeSettingsTab}
-                holidays={holidays}
-                selectedLocality={selectedLocality}
-                holidayEligibilityConfirmed={holidayEligibilityConfirmed}
-                settingsBalances={settingsBalances}
-                dailyWage={dailyWage}
-                dailyAllowance={dailyAllowance}
-                overtimeMultiplier={overtimeMultiplier}
-                payrollSettings={privateFinancialSettings}
-                nightDifferential={nightDifferential}
-                payrollEffectiveDate={manilaNow.date}
-                shiftTemplates={shiftTemplates}
-                onDeleteAccount={deleteAccount}
-                accountDeletionLoading={accountDeletionLoading}
-                privateFinancialDataStatus={privateFinancialDataStatus}
-                privateFinancialDataError={privateFinancialDataError}
-                privateFinancialDataConflict={privateFinancialDataConflict}
-                privateFinancialDataSyncing={privateFinancialDataSyncing}
-                settingsRestoreRevision={settingsRestoreRevision}
-                settingsUndoing={settingsUndoing}
-                legacySalaryVaultAvailable={Boolean(legacySalaryVault)}
-                onMigrateLegacySalaryVault={migrateLegacySalaryVault}
-                onReloadPrivateFinancialData={retryWorkspaceLoad}
-                onCreateShiftTemplate={createShiftTemplateFromSettings}
-                onSetDefaultShiftTemplate={setDefaultShiftTemplate}
-                onDeleteShiftTemplate={deleteShiftTemplate}
-                onSettingsValidationError={(message) =>
-                  showToast(message, "warning")
-                }
-                onSaveSettings={saveConfigurationSettings}
-              />
+              <Suspense fallback={null}>
+                <SettingsModal
+                  open={activeModal === "settingsModal"}
+                  activeSettingsTab={activeSettingsTab}
+                  holidays={holidays}
+                  selectedLocality={selectedLocality}
+                  holidayEligibilityConfirmed={holidayEligibilityConfirmed}
+                  settingsBalances={settingsBalances}
+                  dailyWage={dailyWage}
+                  dailyAllowance={dailyAllowance}
+                  overtimeMultiplier={overtimeMultiplier}
+                  payrollSettings={privateFinancialSettings}
+                  nightDifferential={nightDifferential}
+                  payrollEffectiveDate={manilaNow.date}
+                  shiftTemplates={shiftTemplates}
+                  onDeleteAccount={deleteAccount}
+                  accountDeletionLoading={accountDeletionLoading}
+                  privateFinancialDataStatus={privateFinancialDataStatus}
+                  privateFinancialDataError={privateFinancialDataError}
+                  privateFinancialDataConflict={privateFinancialDataConflict}
+                  privateFinancialDataSyncing={privateFinancialDataSyncing}
+                  settingsRestoreRevision={settingsRestoreRevision}
+                  settingsUndoing={settingsUndoing}
+                  legacySalaryVaultAvailable={Boolean(legacySalaryVault)}
+                  onMigrateLegacySalaryVault={migrateLegacySalaryVault}
+                  onReloadPrivateFinancialData={retryWorkspaceLoad}
+                  onCreateShiftTemplate={createShiftTemplateFromSettings}
+                  onSetDefaultShiftTemplate={setDefaultShiftTemplate}
+                  onDeleteShiftTemplate={deleteShiftTemplate}
+                  onSettingsValidationError={(message) =>
+                    showToast(message, "warning")
+                  }
+                  onSaveSettings={saveConfigurationSettings}
+                />
+              </Suspense>
             </FeatureErrorBoundary>
           </>
         )}
